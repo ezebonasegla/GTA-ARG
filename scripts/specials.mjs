@@ -148,17 +148,51 @@ export function detectSpecials({ buildings, areas, rails, roads, pois, stadiumAr
       const d = Math.hypot(p.x - cx, p.z - cz);
       if (d < 170 && (!poi || d < Math.hypot(poi.x - cx, poi.z - cz))) poi = p;
     }
-    const inStadiumArea = stadiumAreas.some((s) => pointInPolygon(cx, cz, s));
-    if (!poi && !inStadiumArea) continue;
+    const ground = stadiumAreas.find((s) => pointInPolygon(cx, cz, s.pts));
+    if (!poi && !ground) continue;
+    a.stadium = true;
     const box = roundBox(orientedBox(a.pts));
-    const name = poi?.name || '';
+    // stands must fit inside the stadium ground when it is mapped
+    let depth;
+    if (ground) {
+      const g = orientedBox(ground.pts);
+      const room = Math.min(g.hu - box.hu, g.hv - box.hv) - 4;
+      depth = Math.max(6, Math.min(area > 6500 ? 24 : 12, room));
+    }
+    addStadium(box, ground?.name || poi?.name || '', area, depth);
+  }
+
+  // Stadium grounds with no pitch mapped inside (e.g. Argentino de Quilmes):
+  // put a pitch in the middle of the ground and the stands around it.
+  const stadiumSpecials = specials.filter((s) => s.type === 'stadium');
+  for (const g of stadiumAreas) {
+    const area = Math.abs(polygonArea(g.pts));
+    if (area < 5000) continue;
+    const o = orientedBox(g.pts);
+    if (stadiumSpecials.some((s) => pointInPolygon(s.box.cx, s.box.cz, g.pts))) continue;
+    let name = g.name;
+    if (!name) {
+      const p = stadiumPois.find((p) => pointInPolygon(p.x, p.z, g.pts));
+      name = p?.name || '';
+    }
+    const depth = area > 12000 ? 14 : 10;
+    const pitch = { ...o, hu: Math.min(55, o.hu - depth - 5), hv: Math.min(36, o.hv - depth - 5) };
+    if (pitch.hu < 20 || pitch.hv < 12) continue;
+    const box = roundBox(pitch);
+    const pts = boxCorners(box).map(([x, z]) => [r1(x), r1(z)]);
+    areas.push({ kind: 'pitch', pts, stadium: true });
+    addStadium(box, name, pitch.hu * pitch.hv * 4, depth);
+    specials.push({ type: 'pitch', box });
+  }
+
+  function addStadium(box, name, pitchArea, depth) {
     let colors = ['#d9d9d9', '#8c8c8c'];
     if (/centenario|quilmes atl/i.test(name)) colors = ['#ffffff', '#1b3a8c'];
     else if (/argentino/i.test(name)) colors = ['#75aadb', '#ffffff'];
     const hockey = /hockey/i.test(name);
-    const big = area > 6500;
-    const st = { type: 'stadium', name, box, colors, depth: big ? 24 : 12, height: big ? 14 : 6, turf: hockey ? '#2a64b8' : null };
-    a.stadium = true;
+    const big = pitchArea > 6500;
+    const st = { type: 'stadium', name, box, colors, depth: depth ?? (big ? 24 : 12), height: big ? 14 : 6, turf: hockey ? '#2a64b8' : null };
+    if (depth) st.height = Math.max(6, Math.min(14, depth * 0.7));
     specials.push(st);
     clear(boxCorners(box, st.depth + 4, st.depth + 4));
   }

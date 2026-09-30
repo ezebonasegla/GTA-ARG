@@ -430,7 +430,7 @@ function convert(osm) {
     }
     const area = { kind, pts: clipped };
     if (t.name) area.name = t.name;
-    if (t.leisure === 'stadium') stadiumAreas.push(clipped);
+    if (t.leisure === 'stadium') stadiumAreas.push({ pts: clipped, name: t.name || '' });
     areas.push(area);
     if (t.name && (kind === 'park' || kind === 'plaza') && Math.abs(polygonArea(clipped)) > 1500) {
       const b = bbox(clipped);

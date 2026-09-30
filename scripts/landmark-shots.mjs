@@ -22,13 +22,14 @@ const targets = await page.evaluate(() => {
   const add = (name, o, dist, h) => o && pick.push({ name, cx: o.cx, cz: o.cz, dist, h });
   add('catedral', b(/catedral/i, 'cathedral')?.special.box, 75, 30);
   add('municipalidad', b(/municipalidad/i, 'civic')?.special.box, 60, 20);
-  add('hospital', b(/iriarte/i, 'hospital')?.special.box, 55, 22);
+  add('hospital', b(/hospital zonal|iriarte/i, 'hospital')?.special.box, 55, 18);
   const st = s('station', /quilmes/i);
   add('estacion', st, 70, 18);
   add('estadio', s('stadium', /centenario/i)?.box, 150, 70);
   add('cerveceria', s('brewery')?.box, 260, 90);
   add('plaza-san-martin', s('plaza', /san mart/i)?.box, 45, 16);
-  add('iglesia', d.buildings.find((x) => x.special?.type === 'church')?.special.box, 45, 18);
+  add('iglesia', b(/parroquia/i, 'church')?.special.box, 45, 14);
+  add('estadio-argentino', s('stadium', /argentino/i)?.box, 130, 55);
   return pick;
 });
 for (const t of targets) {
@@ -39,7 +40,15 @@ for (const t of targets) {
     g.camera.updateProjectionMatrix();
     g.player.x = t.cx + 40;
     g.player.z = t.cz + 40;
-    g.camera.position.set(t.cx + t.dist * 0.7, t.h, t.cz + t.dist * 0.7);
+    // look at the place from the street in front of it
+    const near = g.world.graph.nearest(t.cx, t.cz, 150);
+    let dx = 0.7, dz = 0.7;
+    if (near) {
+      const l = Math.hypot(near.x - t.cx, near.z - t.cz) || 1;
+      dx = (near.x - t.cx) / l;
+      dz = (near.z - t.cz) / l;
+    }
+    g.camera.position.set(t.cx + dx * t.dist + dz * t.dist * 0.35, t.h, t.cz + dz * t.dist - dx * t.dist * 0.35);
     g.camera.lookAt(t.cx, t.h * 0.25, t.cz);
     g.hours = 16;
     if (t.name === 'estacion') {
