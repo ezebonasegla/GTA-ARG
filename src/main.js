@@ -383,6 +383,7 @@ async function main() {
     // ------------------------------------------------------------- environment
     const night = env.update(hours, { x: px, z: pz });
     world.setNight(night);
+    world.update(px, pz);
     world.waterMaterial.normalMap.offset.set(totalTime * 0.01, totalTime * 0.006);
     world.waterMaterial.envMapIntensity = 0.15 + 0.75 * (1 - night);
     headlightMaterial.emissiveIntensity = 0.3 + night * 3;

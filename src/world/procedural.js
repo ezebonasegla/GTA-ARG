@@ -89,6 +89,20 @@ export function generateQuilmes() {
     return { pts, w, name, kind: avenue ? 'primary' : 'residential', oneway };
   }
 
+  // --- House numbers --------------------------------------------------------
+  // Two made-up addresses per street; the corner signs propagate the "altura"
+  // (100 per block) from them. Cross streets grow towards the river, long
+  // streets towards the SE; even numbers on the right.
+  const addresses = [];
+  const addr = (u, v, number, street) => addresses.push({ x: W(u, v)[0], z: W(u, v)[1], number, street });
+  for (let i = I_MIN; i <= I_MAX; i++) {
+    for (const j of [2, 5]) addr(i * PITCH + 9, (j + 0.5) * PITCH, (j - J_MIN) * 100 + 50, crossName(i));
+  }
+  for (let j = J_MIN; j <= J_MAX; j++) {
+    if (j === RAIL_J) continue;
+    for (const i of [-3, 2]) addr((i + 0.5) * PITCH, j * PITCH - 9, (i - I_MIN) * 100 + 50, longName(j));
+  }
+
   // --- Railway (Línea Roca) ------------------------------------------------
   const railV = RAIL_J * PITCH;
   for (const off of [-2.2, 2.2]) {
@@ -234,6 +248,7 @@ export function generateQuilmes() {
     areas,
     rails,
     landmarks,
+    addresses,
     spawn: W(...spawnUV),
     spawnHeading: Math.atan2(vx, vz),
   };

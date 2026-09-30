@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { makeTextures } from './textures.js';
 import { buildLandmarks } from './landmarks.js';
+import { buildStreetSigns } from './streetSigns.js';
 import { CollisionWorld } from './collision.js';
 import { RoadGraph } from './roadGraph.js';
 import { mulberry32, hashString, polygonArea, pointInPolygon, bbox } from './geo.js';
@@ -371,6 +372,9 @@ export function buildWorld(data, renderer, scene) {
   const landmarks = buildLandmarks(data, { root, collision, graph, tex });
   const outside = (x, z) => !landmarks.keepOut.some(([kx, kz, r]) => (x - kx) ** 2 + (z - kz) ** 2 < r * r);
 
+  // ---------------------------------------------------------------- street corner signs
+  const streetSigns = buildStreetSigns(data, { root, collision });
+
   // ---------------------------------------------------------------- trees & lights
   const rng = mulberry32(99);
   const trees = [];
@@ -472,6 +476,12 @@ export function buildWorld(data, renderer, scene) {
       poolMat.opacity = n * 0.55;
       poolMat.visible = n > 0.05;
       landmarks.setNight(n);
+      streetSigns.setNight(n);
+    },
+    streetSigns,
+    // Per-frame work that depends on where the player is.
+    update(x, z) {
+      streetSigns.update(x, z);
     },
   };
 }
