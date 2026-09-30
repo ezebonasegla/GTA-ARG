@@ -8,6 +8,7 @@
 //   npm run fetch-osm -- --input raw.json      # convert a saved Overpass response
 //   npm run fetch-osm -- --no-infill           # don't fill blocks missing buildings
 //   npm run fetch-osm -- --no-split            # don't split merged row-house footprints
+//   npm run fetch-osm -- --no-conurbano        # no villas, descampados, rejas... (see conurbano.mjs)
 //
 // Map data © OpenStreetMap contributors, available under the ODbL.
 import fs from 'node:fs';
@@ -19,6 +20,7 @@ import {
 } from '../src/world/geo.js';
 import { detectSpecials } from './specials.mjs';
 import { computeStreetSigns } from '../src/world/alturas.js';
+import { conurbano } from './conurbano.mjs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const args = parseArgs(process.argv.slice(2));
@@ -278,7 +280,7 @@ function buildingStyle(tags, levels, rng, industrial) {
 
 function convert(osm) {
   const rng = mulberry32(1666);
-  const roads = [], buildings = [], areas = [], rails = [], landmarks = [], barriers = [];
+  const roads = [], buildings = [], areas = [], rails = [], landmarks = [], barriers = [], divisions = [];
   const shopNodes = [], addresses = [];
   const overture = osm.generator === 'overture';
   const lim = radius * 1.05;
@@ -395,6 +397,10 @@ function convert(osm) {
       }
       const ring = closedRing(pts);
       if (!ring) continue;
+      if (t.boundary === 'place' && t.name) {
+        divisions.push({ name: t.name, pts: ring });
+        continue;
+      }
       if (t.building) {
         addBuilding(ring, t, el.id);
         continue;
@@ -415,7 +421,10 @@ function convert(osm) {
     if (t.natural === 'beach' || t.natural === 'sand') return 'sand';
     if (t.leisure === 'pitch') return 'pitch';
     if (t.leisure || t.landuse === 'grass' || t.landuse === 'recreation_ground' || t.landuse === 'village_green' || t.landuse === 'meadow') return 'park';
-    if (t.natural === 'wood' || t.natural === 'scrub' || t.landuse === 'forest') return 'park';
+    if (t.natural === 'wood' || t.landuse === 'forest') return 'wood';
+    if (t.natural === 'wetland') return 'wetland';
+    if (t.natural === 'scrub' || t.natural === 'heath' || t.natural === 'grassland') return 'scrub';
+    if (['brownfield', 'greenfield', 'construction', 'landfill'].includes(t.landuse)) return 'waste';
     if (t.landuse === 'railway') return 'railway';
     if (t.place === 'square') return 'plaza';
     if (t.amenity === 'parking') return 'parking';
@@ -533,11 +542,22 @@ function convert(osm) {
 
   if (args.infill ?? !overture) infilled = infill(roads, buildings, areas, bIndex, rng, inside);
 
+  // Villas, pasillos, descampados, rejas and street fronts.
+  let extra = {};
+  if (args.conurbano !== false) {
+    const t0 = Date.now();
+    const c = conurbano({ roads, buildings, areas, rails, specials, divisions, radius });
+    roads.push(...c.pasillos);
+    delete c.pasillos;
+    extra = c;
+    console.log(`  conurbano: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  }
+
   // ------------------------------------------------------------ street corner signs
   const solidIndex = new SpatialHash(30);
   buildings.forEach((b) => solidIndex.insert(b.pts, bbox(b.pts)));
   for (const a of areas) if (a.kind === 'water' || a.kind === 'railway') solidIndex.insert(a.pts, bbox(a.pts));
-  const signs = computeStreetSigns(roads.filter((r) => inside(r.pts[0]) || inside(r.pts[r.pts.length - 1])), addresses, {
+  const signs = computeStreetSigns(roads.filter((r) => !r.pasillo && (inside(r.pts[0]) || inside(r.pts[r.pts.length - 1]))), addresses, {
     blocked: (x, z) => {
       if (!inside([x, z])) return true;
       for (const pts of solidIndex.query(x - 1, z - 1, x + 1, z + 1)) {
@@ -554,7 +574,7 @@ function convert(osm) {
   // ------------------------------------------------------------ spawn near the center
   let spawn = [0, 8], spawnHeading = 0, best = Infinity;
   for (const r of roads) {
-    if (r.kind === 'service') continue;
+    if (r.kind === 'service' || r.kind === 'footway') continue;
     for (let i = 0; i < r.pts.length - 1; i++) {
       const [a, b] = [r.pts[i], r.pts[i + 1]];
       const c = closestOnSegment(0, 0, a[0], a[1], b[0], b[1]);
@@ -596,6 +616,7 @@ function convert(osm) {
       radius,
       bounds,
       roads, buildings, areas, rails, barriers, specials,
+      ...extra,
       landmarks: dedupLandmarks.slice(0, 30),
       streetSigns: signs.posts,
       spawn, spawnHeading,
