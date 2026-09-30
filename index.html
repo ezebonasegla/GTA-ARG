@@ -55,6 +55,10 @@
       body.touch #fs-button { left: calc(50% + 30px); top: calc(12px + env(safe-area-inset-top)); transform: none; }
       body.touch .tb.help { transform: translateX(calc(-50% - 30px)); }
       #toast { max-width: min(420px, 80vw); }
+      .photo-panel { margin-top: 18px; display: grid; gap: 6px; width: min(460px, 100%); text-align: left; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 12px 14px; cursor: default; }
+      .photo-panel label { font-weight: bold; color: var(--accent); }
+      .photo-panel input { font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.08); color: #fff; }
+      .photo-panel small { opacity: 0.75; line-height: 1.4; }
       /* ---- touch controls ---- */
       body.touch { touch-action: none; -webkit-user-select: none; user-select: none; }
       #touch { position: fixed; inset: 0; z-index: 12; touch-action: none; }
@@ -130,6 +134,7 @@
         <b>T</b><span>adelantar 1 hora</span>
         <b>P</b><span>pausar el reloj</span>
         <b>O</b><span>pantalla completa</span>
+        <b>G</b><span>modo fotorrealista (Google 3D) / ciudad generada</span>
         <b>Tab</b><span>mostrar / ocultar ayuda</span>
       </div>
       <div class="keys touch-keys">
@@ -156,6 +161,11 @@
         <b>Tab</b><span>todos los controles</span>
       </div>
       <div class="cta">HACÉ CLIC PARA JUGAR</div>
+      <div id="photo-panel" class="photo-panel">
+        <label for="cesium-token">Modo fotorrealista (ciudad 3D de Google, gratis)</label>
+        <input id="cesium-token" type="password" autocomplete="off" spellcheck="false" placeholder="Pegá tu token de Cesium ion (opcional)" />
+        <small>Creá una cuenta gratuita en cesium.com/ion → Access Tokens → copiá el token. Queda guardado sólo en este navegador. Tecla G: cambiar de modo.</small>
+      </div>
     </div>
     <div id="rotate"><div style="font-size: 48px">⟳</div>Girá el celular para jugar en horizontal</div>
     <script type="module" src="/src/main.js"></script>

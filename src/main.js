@@ -14,6 +14,7 @@ import { Traffic } from './entities/traffic.js';
 import { Peds } from './entities/peds.js';
 import { Trains, trainHit } from './entities/train.js';
 import { Buses } from './entities/buses.js';
+import { Photoreal, savedToken, saveToken } from './world/photoreal.js';
 import { headlightMaterial } from './entities/models.js';
 
 const loadingText = document.getElementById('loading-text');
@@ -148,9 +149,42 @@ async function main() {
   const startOverlay = document.getElementById('start');
   startOverlay.classList.remove('hidden');
   if (mobile) startOverlay.querySelector('.cta').textContent = 'TOCÁ PARA JUGAR';
+  // Photorealistic mode (Google 3D Tiles via a free Cesium ion token)
+  let photo = null;
+  const tokenInput = document.getElementById('cesium-token');
+  const photoPanel = document.getElementById('photo-panel');
+  if (data.source === 'procedural') photoPanel.hidden = true;
+  tokenInput.value = savedToken();
+  for (const ev of ['click', 'touchend', 'keydown']) photoPanel.addEventListener(ev, (e) => e.stopPropagation());
+  const setPhotoMode = (on) => {
+    if (on && !photo) {
+      const token = tokenInput.value.trim() || savedToken();
+      if (!token) {
+        hud.toast('Para el modo fotorrealista pegá tu token de Cesium ion en la pantalla de inicio.', 6);
+        return;
+      }
+      photo = new Photoreal({ scene, camera, renderer, origin: data.origin, token, onError: (msg) => {
+        hud.toast(msg, 9);
+        setPhotoMode(false);
+      } });
+      hud.toast('Modo fotorrealista: cargando la ciudad 3D de Google…', 4);
+    }
+    const active = on && !!photo;
+    if (photo) photo.holder.visible = active;
+    world.root.visible = !active; // the generated city hides; gameplay stays
+    camera.far = active ? 4000 : 1200;
+    camera.updateProjectionMatrix();
+    scene.fog.far = active ? 3000 : 1100;
+    photoMode = active;
+  };
+  let photoMode = false;
+
   const start = () => {
     startOverlay.classList.add('hidden');
     audio.start();
+    const token = tokenInput.value.trim();
+    saveToken(token);
+    if (token) setPhotoMode(true);
     if (mobile) {
       // full screen and landscape where the browser allows it
       enterFullscreen();
@@ -221,6 +255,7 @@ async function main() {
 
     if (input.hit('Tab')) helpEl.classList.toggle('hidden');
     if (input.hit('KeyT')) hours = (hours + 1) % 24;
+    if (input.hit('KeyG')) setPhotoMode(!photoMode);
     if (input.hit('KeyO')) {
       if (fullscreenElement()) exitFullscreen();
       else enterFullscreen().then((ok) => ok && renderer.domElement.requestPointerLock?.());
@@ -424,6 +459,11 @@ async function main() {
     // ------------------------------------------------------------- environment
     const night = env.update(hours, { x: px, z: pz });
     world.setNight(night);
+    if (photoMode) {
+      const street = world.graph.nearest(px, pz, 40);
+      photo.update(dt, { x: px, z: pz, streetX: street?.x, streetZ: street?.z, night });
+      if (Math.floor(totalTime) !== Math.floor(totalTime - dt)) document.getElementById('source').textContent = photo.attribution();
+    }
     world.update(px, pz);
     world.waterMaterial.normalMap.offset.set(totalTime * 0.01, totalTime * 0.006);
     world.waterMaterial.envMapIntensity = 0.15 + 0.75 * (1 - night);
