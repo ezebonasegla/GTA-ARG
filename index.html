@@ -49,6 +49,12 @@
       #source { position: absolute; right: 12px; bottom: 4px; font-size: 11px; opacity: 0.7; text-shadow: 1px 1px 0 #000; max-width: 60vw; }
       #help { position: fixed; top: 60px; left: 18px; background: rgba(0, 0, 0, 0.78); padding: 14px 18px; border-radius: 6px; z-index: 11; font-size: 14px; }
       #help h3 { margin: 0 0 6px; color: var(--accent); }
+      #fs-button { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 13; width: 40px; height: 40px; border-radius: 8px; border: 2px solid rgba(255, 255, 255, 0.5); background: rgba(0, 0, 0, 0.45); color: #fff; font-size: 22px; line-height: 1; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+      #fs-button:hover, #fs-button:focus-visible { background: rgba(117, 170, 219, 0.6); outline: none; }
+      #fs-button.on { background: rgba(117, 170, 219, 0.45); }
+      body.touch #fs-button { left: calc(50% + 30px); top: calc(12px + env(safe-area-inset-top)); transform: none; }
+      body.touch .tb.help { transform: translateX(calc(-50% - 30px)); }
+      #toast { max-width: min(420px, 80vw); }
       /* ---- touch controls ---- */
       body.touch { touch-action: none; -webkit-user-select: none; user-select: none; }
       #touch { position: fixed; inset: 0; z-index: 12; touch-action: none; }
@@ -123,9 +129,11 @@
         <b>C</b><span>cambiar cámara</span>
         <b>T</b><span>adelantar 1 hora</span>
         <b>P</b><span>pausar el reloj</span>
+        <b>O</b><span>pantalla completa</span>
         <b>Tab</b><span>mostrar / ocultar ayuda</span>
       </div>
       <div class="keys touch-keys">
+        <b>⛶</b><span>pantalla completa</span>
         <b>Joystick</b><span>tocá y arrastrá del lado izquierdo para caminar (al máximo, corrés)</span>
         <b>Arrastrar</b><span>del lado derecho para mover la cámara</span>
         <b>Subir / Bajar</b><span>subir, bajar o robar un auto</span>

@@ -5,6 +5,7 @@ import { mulberry32 } from './world/geo.js';
 import { Environment } from './environment.js';
 import { Input } from './input.js';
 import { TouchControls, isTouchDevice } from './touch.js';
+import { enterFullscreen, exitFullscreen, fullscreenElement, setupFullscreenButton } from './fullscreen.js';
 import { Hud } from './hud.js';
 import { Audio } from './audio.js';
 import { Player, doorPoint } from './entities/player.js';
@@ -69,6 +70,7 @@ async function main() {
   const touch = mobile ? new TouchControls(input) : null;
   if (mobile) env.sun.shadow.mapSize.set(1024, 1024); // lighter on phones
   const hud = new Hud(data);
+  setupFullscreenButton((msg) => hud.toast(msg, 7));
   const audio = new Audio();
   const rng = mulberry32(Date.now() & 0xffff);
   const traffic = new Traffic(scene, world.graph, world.collision, rng);
@@ -151,8 +153,11 @@ async function main() {
     audio.start();
     if (mobile) {
       // full screen and landscape where the browser allows it
-      document.documentElement.requestFullscreen?.().then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
-    } else renderer.domElement.requestPointerLock?.();
+      enterFullscreen();
+    } else {
+      // same click: full screen first, then capture the mouse for the camera
+      enterFullscreen().finally(() => renderer.domElement.requestPointerLock?.());
+    }
   };
   startOverlay.addEventListener('click', start);
 
@@ -216,6 +221,10 @@ async function main() {
 
     if (input.hit('Tab')) helpEl.classList.toggle('hidden');
     if (input.hit('KeyT')) hours = (hours + 1) % 24;
+    if (input.hit('KeyO')) {
+      if (fullscreenElement()) exitFullscreen();
+      else enterFullscreen().then((ok) => ok && renderer.domElement.requestPointerLock?.());
+    }
     if (input.hit('KeyC')) cam.mode = (cam.mode + 1) % camModes.length;
     if (input.hit('KeyP')) timeScale = timeScale ? 0 : 1 / 45;
 

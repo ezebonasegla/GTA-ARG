@@ -32,6 +32,7 @@ También podés forzarla con `?mapa=procedural` en la URL.
 | `H` | bocina |
 | `F` | empujar |
 | `C` | cambiar distancia de cámara |
+| `O` | pantalla completa (también con el botón ⛶ arriba) |
 | `T` | adelantar el reloj 1 hora |
 | `P` | pausar el reloj |
 | `Tab` | ayuda |
