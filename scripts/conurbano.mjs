@@ -287,8 +287,9 @@ export function conurbano({ roads, buildings, areas, rails, specials = [], divis
     }
     return best;
   };
-  const houseAt = (x, z) => {
-    for (const b of bIndex.query(x - 0.1, z - 0.1, x + 0.1, z + 0.1)) if (pointInPolygon(x, z, b.pts)) return true;
+  // strict: any building; otherwise small villa houses may give way to the pasillo
+  const houseAt = (x, z, strict = true) => {
+    for (const b of bIndex.query(x - 0.1, z - 0.1, x + 0.1, z + 0.1)) if ((strict || !b.villa || b._area > 90) && pointInPolygon(x, z, b.pts)) return true;
     return false;
   };
   villas.forEach((vl) => {
@@ -316,19 +317,22 @@ export function conurbano({ roads, buildings, areas, rails, specials = [], divis
       const pts = [[r1(st.x), r1(st.z)]];
       let x = st.x, z = st.z, ang = st.ang;
       const STEP = 3;
-      const hw = st.w / 2 + 0.25;
+      const hw = st.w / 2 + 0.4;
       for (let step = 0; step < 70; step++) {
         let ok = false, nx = 0, nz = 0, na = ang;
         const wobble = (vr() - 0.5) * 0.45 + (vr() < 0.08 ? (vr() - 0.5) * 1.4 : 0);
-        for (const da of [wobble, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1]) {
-          na = ang + da;
+        const tries = [wobble, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1];
+        for (let t = 0; t < tries.length * 2 && !ok; t++) {
+          const strict = t < tries.length && step % 4 !== 3;
+          na = ang + tries[t % tries.length];
           const cx = Math.cos(na), cz = Math.sin(na);
           nx = x + cx * STEP;
           nz = z + cz * STEP;
           if (step > 1 && !inZone(nx, nz, v)) continue;
-          if (houseAt(nx, nz) || houseAt(nx - cz * hw, nz + cx * hw) || houseAt(nx + cz * hw, nz - cx * hw) || houseAt((x + nx) / 2, (z + nz) / 2)) continue;
+          const mx = (x + nx) / 2, mz = (z + nz) / 2;
+          const hit = (px, pz) => houseAt(px, pz, strict);
+          if (hit(nx, nz) || hit(nx - cz * hw, nz + cx * hw) || hit(nx + cz * hw, nz - cx * hw) || hit(mx, mz) || hit(mx - cz * hw, mz + cx * hw) || hit(mx + cz * hw, mz - cx * hw)) continue;
           ok = true;
-          break;
         }
         if (!ok) break;
         const joined = step > 1 ? nearPas(nx, nz, st.w / 2 + 1.6, id) : null;
@@ -356,6 +360,27 @@ export function conurbano({ roads, buildings, areas, rails, specials = [], divis
       }
     }
   });
+
+  // Existing footprints still in the way of a pasillo (joins, corners) give way.
+  {
+    const gone = new Set();
+    for (const p of pasillos) {
+      for (let s = 0; s < p.pts.length - 1; s++) {
+        const a = p.pts[s], b = p.pts[s + 1];
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (len < 0.05) continue;
+        const nx = (-(b[1] - a[1]) / len) * (p.w / 2 + 0.4), nz = ((b[0] - a[0]) / len) * (p.w / 2 + 0.4);
+        const corridor = [[a[0] + nx, a[1] + nz], [b[0] + nx, b[1] + nz], [b[0] - nx, b[1] - nz], [a[0] - nx, a[1] - nz]];
+        const cb = bbox(corridor);
+        for (const o of bIndex.query(cb.minX, cb.minZ, cb.maxX, cb.maxZ)) {
+          if (o.villa && !gone.has(o) && polysOverlap(corridor, o.pts)) gone.add(o);
+        }
+      }
+    }
+    for (let i = buildings.length - 1; i >= 0; i--) if (gone.has(buildings[i])) buildings.splice(i, 1);
+    for (const o of gone) o.pts = [];
+    restyled -= gone.size;
+  }
 
   // Self-built houses along the pasillos, the streets around and in every gap.
   const placed = new SpatialHash(16);
@@ -603,7 +628,7 @@ export function conurbano({ roads, buildings, areas, rails, specials = [], divis
         for (let t = 1; t < len - 1; t += 1) {
           const x = a[0] + dx * t + nx * off, z = a[1] + dz * t + nz * off;
           const k = kOf(x, z);
-          let open = k >= 0 && zone[k] < 0 && mask[k] !== 1 && mask[k] !== 2;
+          let open = k >= 0 && zone[k] < 0 && mask[k] !== 1 && mask[k] !== 2 && !nearPas(x, z, 2.5, -1);
           if (open) open = !insideBuilding(x + nx * 0.7, z + nz * 0.7) && !insideBuilding(x - nx * 0.3, z - nz * 0.3);
           if (open) open = lineClear(x, z, self) && !junctions.some((p) => Math.abs(p[0] - x) < 12 && Math.abs(p[1] - z) < 12 && Math.hypot(p[0] - x, p[1] - z) < 10);
           if (!open) {

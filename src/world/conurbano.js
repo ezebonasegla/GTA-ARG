@@ -35,7 +35,7 @@ const WRECKS = ['#7a5a3c', '#8c8f94', '#4d5f7a', '#9a3a2a', '#c8c2b0', '#3d4a3a'
 const WALLS = ['#efe6d6', '#e9dcc4', '#f1efe8', '#e2d4bd', '#d9dfd9', '#efd9c6', '#dfe6ea', '#e8e0a8'].map(hex);
 const GATES = ['#4a5a4a', '#2e2e2e', '#6b4a32', '#7a7f84', '#3c4f66', '#8a3b2a', '#e0e0e0', '#2f4f3f'].map(hex);
 
-export function buildConurbano(data, { root, chunks, collision, tex, flatMat, graph }) {
+export function buildConurbano(data, { root, chunks, collision, tex, flatMat, graph, nearPasillo = () => false }) {
   const L = tex.facades.layer;
   // not on a street, sidewalk or path
   const offRoad = (x, z, pad = 0.4) => {
@@ -199,8 +199,8 @@ export function buildConurbano(data, { root, chunks, collision, tex, flatMat, gr
     const [px, pz] = r.pts[0];
     const [qx, qz] = r.pts[1];
     const l0 = Math.hypot(qx - px, qz - pz) || 1;
-    const ex = px + ((qx - px) / l0) * 1.2 - ((qz - pz) / l0) * (r.w / 2 + 0.3), ez = pz + ((qz - pz) / l0) * 1.2 + ((qx - px) / l0) * (r.w / 2 + 0.3);
-    if (!collision.isBlocked(ex, ez, 0.2)) {
+    const ex = px + ((qx - px) / l0) * 1.2 - ((qz - pz) / l0) * (r.w / 2 + 0.7), ez = pz + ((qz - pz) / l0) * 1.2 + ((qx - px) / l0) * (r.w / 2 + 0.7);
+    if (!collision.isBlocked(ex, ez, 0.2) && !nearPasillo(ex, ez, 0.6)) {
       const ch = chunks.at(ex, ez);
       ch.props.add(TPL.pole, place(ex, 0, ez, 0.8, 0.8, 0.8), COL.wood, 0.2);
       collision.addCircle(ex, ez, 0.15, 'pole');
@@ -263,7 +263,7 @@ export function buildConurbano(data, { root, chunks, collision, tex, flatMat, gr
         next += 30 + rng() * 10;
         const off = road.w / 2 + 0.45;
         const x = ax + dx * t + nx * off, z = az + dz * t + nz * off;
-        if (collision.isBlocked(x, z, 0.5)) continue;
+        if (collision.isBlocked(x, z, 0.5) || nearPasillo(x, z, 0.8)) continue;
         const ch = chunks.at(x, z);
         const lean = (rng() - 0.5) * 0.05;
         ch.props.add(TPL.pole, place(x, 0, z, 1, 1, 1, 0, lean, lean), COL.wood, 0.25);

@@ -8,7 +8,7 @@ import { buildConurbano } from './conurbano.js';
 import { CollisionWorld } from './collision.js';
 import { RoadGraph } from './roadGraph.js';
 import { GeoBuf, ChunkSet } from './geobuf.js';
-import { mulberry32, hashString, polygonArea, pointInPolygon, bbox } from './geo.js';
+import { mulberry32, hashString, polygonArea, pointInPolygon, bbox, SpatialHash, closestOnSegment } from './geo.js';
 
 const CHUNK = 220;
 const SIDEWALK = 3;
@@ -238,8 +238,20 @@ export function buildWorld(data, renderer, scene) {
   const outside = (x, z) => !landmarks.keepOut.some(([kx, kz, r]) => (x - kx) ** 2 + (z - kz) ** 2 < r * r);
 
   // ---------------------------------------------------------------- conurbano
+  // keep the pasillos of the villas walkable: no poles or trees on them
+  const pasHash = new SpatialHash(12);
+  for (const r of data.roads) {
+    if (!r.pasillo) continue;
+    for (let i = 0; i < r.pts.length - 1; i++) pasHash.insert({ a: r.pts[i], b: r.pts[i + 1], w: r.w }, bbox([r.pts[i], r.pts[i + 1]]));
+  }
+  const nearPasillo = (x, z, r) => {
+    for (const s of pasHash.query(x - r - 2, z - r - 2, x + r + 2, z + r + 2)) {
+      if (closestOnSegment(x, z, s.a[0], s.a[1], s.b[0], s.b[1])[3] < (s.w / 2 + r) ** 2) return true;
+    }
+    return false;
+  };
   // villas, descampados, rejas and walls on the property line, poles and cables
-  buildConurbano(data, { root, chunks, collision, tex, flatMat, graph });
+  buildConurbano(data, { root, chunks, collision, tex, flatMat, graph, nearPasillo });
   chunks.build(root, chunkMats);
 
   // ---------------------------------------------------------------- trees & lights
@@ -261,13 +273,13 @@ export function buildWorld(data, renderer, scene) {
         for (let t = 8 + rng() * 4; t < len - 8; t += spacing + rng() * 4) {
           if (rng() > (road.kind === 'primary' ? 0.55 : 0.8)) continue;
           const x = ax + dx * t + nx * off * side, z = az + dz * t + nz * off * side;
-          if (collision.isBlocked(x, z, 1.2) || !outside(x, z)) continue;
+          if (collision.isBlocked(x, z, 1.2) || !outside(x, z) || nearPasillo(x, z, 1.2)) continue;
           trees.push([x, z, 0.8 + rng() * 0.6, rng()]);
         }
         if (side === 1 && !ped) {
           for (let t = 15; t < len - 5; t += 34) {
             const x = ax + dx * t + nx * (road.w / 2 + 0.4), z = az + dz * t + nz * (road.w / 2 + 0.4);
-            if (collision.isBlocked(x, z, 0.3)) continue;
+            if (collision.isBlocked(x, z, 0.3) || nearPasillo(x, z, 0.8)) continue;
             lights.push([x, z, Math.atan2(-nx, -nz)]);
           }
         }
