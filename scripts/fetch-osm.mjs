@@ -18,6 +18,7 @@ import {
   closestOnSegment, bbox, SpatialHash,
 } from '../src/world/geo.js';
 import { detectSpecials } from './specials.mjs';
+import { computeStreetSigns } from '../src/world/alturas.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const args = parseArgs(process.argv.slice(2));
@@ -65,6 +66,7 @@ async function download() {
   node["shop"](${bb});
   node["amenity"~"^(restaurant|cafe|bar|pharmacy|bank|fast_food|ice_cream|pub)$"](${bb});
   node["railway"="station"](${bb});
+  node["addr:housenumber"]["addr:street"](${bb});
 );
 out geom;`;
   for (const url of ENDPOINTS) {
@@ -277,7 +279,7 @@ function buildingStyle(tags, levels, rng, industrial) {
 function convert(osm) {
   const rng = mulberry32(1666);
   const roads = [], buildings = [], areas = [], rails = [], landmarks = [], barriers = [];
-  const shopNodes = [];
+  const shopNodes = [], addresses = [];
   const overture = osm.generator === 'overture';
   const lim = radius * 1.05;
   const inside = ([x, z]) => Math.abs(x) <= lim && Math.abs(z) <= lim;
@@ -290,6 +292,8 @@ function convert(osm) {
     if (el.type !== 'node') continue;
     const t = el.tags || {};
     const [x, z] = proj.toWorld(el.lat, el.lon);
+    const num = parseInt(t['addr:housenumber'], 10);
+    if (num > 0 && num < 30000 && t['addr:street']) addresses.push({ x, z, number: num, street: t['addr:street'] });
     if (t.shop || (t.amenity && t.amenity !== 'place_of_worship')) shopNodes.push([x, z]);
     if ((t.railway === 'station' || t.landmark) && t.name) landmarks.push({ name: t.name, pos: [r1(x), r1(z)], kind: t.landmark || 'train_station' });
     let kind = t.landmark || (t.railway === 'station' ? 'train_station' : null);
@@ -529,6 +533,24 @@ function convert(osm) {
 
   if (args.infill ?? !overture) infilled = infill(roads, buildings, areas, bIndex, rng, inside);
 
+  // ------------------------------------------------------------ street corner signs
+  const solidIndex = new SpatialHash(30);
+  buildings.forEach((b) => solidIndex.insert(b.pts, bbox(b.pts)));
+  for (const a of areas) if (a.kind === 'water' || a.kind === 'railway') solidIndex.insert(a.pts, bbox(a.pts));
+  const signs = computeStreetSigns(roads.filter((r) => inside(r.pts[0]) || inside(r.pts[r.pts.length - 1])), addresses, {
+    blocked: (x, z) => {
+      if (!inside([x, z])) return true;
+      for (const pts of solidIndex.query(x - 1, z - 1, x + 1, z + 1)) {
+        if (pointInPolygon(x, z, pts)) return true;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) if (closestOnSegment(x, z, pts[j][0], pts[j][1], pts[i][0], pts[i][1])[3] < 0.36) return true;
+      }
+      return false;
+    },
+  });
+  const ss = signs.stats;
+  console.log(`  carteles de esquina: ${ss.posts} postes, ${ss.plates} chapas (${ss.withNum} con altura)`);
+  console.log(`  direcciones: ${ss.addresses} (${ss.matched} ubicadas en su calle); cuadras: ${ss.blocks}, con altura real: ${ss.known}, estimada: ${ss.estimated}`);
+
   // ------------------------------------------------------------ spawn near the center
   let spawn = [0, 8], spawnHeading = 0, best = Infinity;
   for (const r of roads) {
@@ -575,6 +597,7 @@ function convert(osm) {
       bounds,
       roads, buildings, areas, rails, barriers, specials,
       landmarks: dedupLandmarks.slice(0, 30),
+      streetSigns: signs.posts,
       spawn, spawnHeading,
     },
     infilled,

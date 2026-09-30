@@ -20,6 +20,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
@@ -39,6 +40,7 @@ THEMES = {
     'water': 'theme=base/type=water',
     'land_use': 'theme=base/type=land_use',
     'place': 'theme=places/type=place',
+    'address': 'theme=addresses/type=address',
 }
 
 ROAD_CLASSES = {
@@ -112,6 +114,18 @@ def name_of(row):
     return n.get('primary') or ''
 
 
+def parse_freeform(text):
+    """'Av. Mitre 4935' / 'Salta, 603' / 'C. 331 Bis 1350, entre ...' -> (street, number)."""
+    parts = [p.strip() for p in text.split(',')]
+    first = parts[0]
+    if len(parts) > 1 and re.fullmatch(r'\d{1,5}', parts[1]) and not re.search(r'\d', first):
+        first = f'{first} {parts[1]}'
+    m = re.fullmatch(r'(.*\D)\s+(?:n[°ºo]\.?\s*)?(\d{1,5})(?:\s*(?:bis|[a-z]))?', first, re.I)
+    if not m or int(m.group(2)) == 0 or len(m.group(1).strip()) < 2:
+        return None
+    return m.group(1).strip(), m.group(2)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--lat', type=float, default=-34.7206)
@@ -119,6 +133,7 @@ def main():
     ap.add_argument('--radius', type=float, default=2500, help='metros')
     ap.add_argument('--release', default=None)
     ap.add_argument('--out', default=os.path.join(os.path.dirname(__file__), '..', '.cache', 'overture-raw.json'))
+    ap.add_argument('--only-addresses', action='store_true', help='solo actualizar las direcciones de un --out existente')
     a = ap.parse_args()
 
     dlat = a.radius / 110540 * 1.1
@@ -128,11 +143,20 @@ def main():
     release = a.release or latest_release(s3)
     print(f'Overture {release}, bbox {tuple(round(v, 4) for v in bb)}')
 
-    elements = []
-    rows = {}
-    for key, theme in THEMES.items():
-        rows[key] = read_theme(s3, release, theme, bb)
-        print(f'  {key}: {len(rows[key])}')
+    if a.only_addresses:
+        # Keep everything else from a previous download, refresh only the addresses.
+        with open(a.out) as f:
+            elements = [e for e in json.load(f)['elements'] if 'addr:housenumber' not in (e.get('tags') or {})]
+        rows = {k: [] for k in THEMES}
+        for key in ('address', 'place'):
+            rows[key] = read_theme(s3, release, THEMES[key], bb)
+            print(f'  {key}: {len(rows[key])}')
+    else:
+        elements = []
+        rows = {}
+        for key, theme in THEMES.items():
+            rows[key] = read_theme(s3, release, theme, bb)
+            print(f'  {key}: {len(rows[key])}')
 
     for r in rows['building']:
         if r.get('is_underground'):
@@ -219,7 +243,7 @@ def main():
         for i, poly in enumerate(polygons(wkb.loads(r['geometry']))):
             elements.append({'type': 'way', 'id': num_id(f"{r['id']}:{i}"), 'tags': tags, 'geometry': ring(poly.exterior.coords)})
 
-    for r in rows['place']:
+    for r in [] if a.only_addresses else rows['place']:
         cat = r.get('basic_category') or ''
         conf = r.get('confidence') or 0
         if conf < 0.5:
@@ -237,6 +261,31 @@ def main():
             tags['landmark'] = cat
         if tags:
             elements.append({'type': 'node', 'id': num_id(r['id']), 'lat': p.y, 'lon': p.x, 'tags': tags})
+
+    # House numbers: street corner signs show each block's "altura". The addresses
+    # theme has no Argentine data yet, so the street addresses of places (shops,
+    # offices...) fill in; fetch-osm.mjs matches them to nearby streets.
+    counts = {'address': 0, 'place': 0}
+
+    def add_address(key, rid, geom, num, street):
+        p = wkb.loads(geom)
+        if p.geom_type != 'Point':
+            return
+        elements.append({'type': 'node', 'id': num_id(rid + ':addr'), 'lat': round(p.y, 7), 'lon': round(p.x, 7),
+                         'tags': {'addr:housenumber': num, 'addr:street': street, 'addr:source': key}})
+        counts[key] += 1
+
+    for r in rows['address']:
+        num, street = (r.get('number') or '').strip(), (r.get('street') or '').strip()
+        if num[:1].isdigit() and street:
+            add_address('address', r['id'], r['geometry'], num, street)
+    for r in rows['place']:
+        for ad in r.get('addresses') or []:
+            parsed = parse_freeform(ad.get('freeform') or '')
+            if parsed and (ad.get('country') or 'AR') == 'AR':
+                add_address('place', r['id'], r['geometry'], parsed[1], parsed[0])
+                break
+    print(f"  direcciones: {counts['address']} (addresses) + {counts['place']} (de lugares)")
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, 'w') as f:
