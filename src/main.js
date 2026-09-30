@@ -14,7 +14,7 @@ import { Traffic } from './entities/traffic.js';
 import { Peds } from './entities/peds.js';
 import { Trains, trainHit } from './entities/train.js';
 import { Buses } from './entities/buses.js';
-import { Photoreal, savedToken, saveToken } from './world/photoreal.js';
+import { Photoreal, defaultToken, savedToken, saveToken } from './world/photoreal.js';
 import { headlightMaterial } from './entities/models.js';
 
 const loadingText = document.getElementById('loading-text');
@@ -151,16 +151,17 @@ async function main() {
   if (mobile) startOverlay.querySelector('.cta').textContent = 'TOCÁ PARA JUGAR';
   // Photorealistic mode (Google 3D Tiles via a free Cesium ion token)
   let photo = null;
+  const configuredToken = defaultToken();
   const tokenInput = document.getElementById('cesium-token');
   const photoPanel = document.getElementById('photo-panel');
   if (data.source === 'procedural') photoPanel.hidden = true;
-  tokenInput.value = savedToken();
+  tokenInput.value = savedToken() || configuredToken;
   for (const ev of ['click', 'touchend', 'keydown']) photoPanel.addEventListener(ev, (e) => e.stopPropagation());
   const setPhotoMode = (on) => {
     if (on && !photo) {
-      const token = tokenInput.value.trim() || savedToken();
+      const token = tokenInput.value.trim() || savedToken() || configuredToken;
       if (!token) {
-        hud.toast('Para el modo fotorrealista pegá tu token de Cesium ion en la pantalla de inicio.', 6);
+        hud.toast('Para ver el mapa real 3D de Google, pegá tu token de Cesium ion (o configurá VITE_CESIUM_ION_TOKEN).', 7);
         return;
       }
       photo = new Photoreal({ scene, camera, renderer, origin: data.origin, token, onError: (msg) => {
@@ -172,9 +173,9 @@ async function main() {
     const active = on && !!photo;
     if (photo) photo.holder.visible = active;
     world.root.visible = !active; // the generated city hides; gameplay stays
-    camera.far = active ? 4000 : 1200;
+    camera.far = active ? 5000 : 1200;
     camera.updateProjectionMatrix();
-    scene.fog.far = active ? 3000 : 1100;
+    scene.fog.far = active ? 3800 : 1100;
     photoMode = active;
   };
   let photoMode = false;
@@ -183,8 +184,9 @@ async function main() {
     startOverlay.classList.add('hidden');
     audio.start();
     const token = tokenInput.value.trim();
-    saveToken(token);
-    if (token) setPhotoMode(true);
+    if (token && token !== configuredToken) saveToken(token);
+    else if (!token && !configuredToken) saveToken('');
+    if (token || configuredToken) setPhotoMode(true);
     if (mobile) {
       // full screen and landscape where the browser allows it
       enterFullscreen();

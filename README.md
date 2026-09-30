@@ -77,6 +77,12 @@ de sesiones):
 3. En *Access Tokens* copiá el token (el *Default Token* sirve).
 4. Pegalo en la pantalla de inicio del juego, en "Modo fotorrealista". Queda guardado sólo en tu navegador.
 
+También podés dejarlo fijo al desarrollar/publicar con variable de entorno:
+
+```bash
+VITE_CESIUM_ION_TOKEN=tu_token npm run dev
+```
+
 Limitaciones: la página publicada en claude.ai bloquea las descargas de otros sitios, así que este modo funciona
 jugando en tu computadora (`npm run dev`) o desde una página propia (por ejemplo GitHub Pages). A nivel de calle
 la malla se ve algo "derretida" (árboles y autos pegados a las paredes), de noche las fotos se oscurecen pero
