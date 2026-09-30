@@ -4,6 +4,7 @@ import { buildWorld } from './world/builder.js';
 import { mulberry32 } from './world/geo.js';
 import { Environment } from './environment.js';
 import { Input } from './input.js';
+import { TouchControls, isTouchDevice } from './touch.js';
 import { Hud } from './hud.js';
 import { Audio } from './audio.js';
 import { Player } from './entities/player.js';
@@ -35,7 +36,8 @@ async function loadCityData() {
 
 async function main() {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  const mobile = isTouchDevice();
+  renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1 : 1.5));
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -63,6 +65,8 @@ async function main() {
   world.waterMaterial.envMap = env.bakeEnvMap(12);
   world.waterMaterial.envMapIntensity = 0.9;
   const input = new Input(renderer.domElement);
+  const touch = mobile ? new TouchControls(input) : null;
+  if (mobile) env.sun.shadow.mapSize.set(1024, 1024); // lighter on phones
   const hud = new Hud(data);
   const audio = new Audio();
   const rng = mulberry32(Date.now() & 0xffff);
@@ -129,10 +133,14 @@ async function main() {
   document.getElementById('loading').classList.add('hidden');
   const startOverlay = document.getElementById('start');
   startOverlay.classList.remove('hidden');
+  if (mobile) startOverlay.querySelector('.cta').textContent = 'TOCÁ PARA JUGAR';
   const start = () => {
     startOverlay.classList.add('hidden');
     audio.start();
-    renderer.domElement.requestPointerLock?.();
+    if (mobile) {
+      // full screen and landscape where the browser allows it
+      document.documentElement.requestFullscreen?.().then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
+    } else renderer.domElement.requestPointerLock?.();
   };
   startOverlay.addEventListener('click', start);
 
@@ -196,6 +204,7 @@ async function main() {
     if (input.down('KeyQ')) cam.yaw += dt * 2;
 
     const inCar = !!player.vehicle;
+    touch?.update(inCar);
     const horn = inCar && input.down('KeyH');
     let throttle = 0;
 

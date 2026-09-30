@@ -163,6 +163,8 @@ export class Hud {
   }
 
   hint(text) {
+    // on phones there is no E key: "E: robar el auto" -> "Robar el auto"
+    if (text && document.body.classList.contains('touch')) text = text.replace(/^E: (\w)/, (_, c) => c.toUpperCase());
     this.hintEl.textContent = text || '';
     this.hintEl.style.display = text ? 'block' : 'none';
   }

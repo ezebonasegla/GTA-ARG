@@ -15,7 +15,7 @@ export class Input {
     addEventListener('keyup', (e) => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
     canvas.addEventListener('click', () => {
-      if (!this.locked) canvas.requestPointerLock?.();
+      if (!this.locked && !document.body.classList.contains('touch')) canvas.requestPointerLock?.();
     });
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === canvas;

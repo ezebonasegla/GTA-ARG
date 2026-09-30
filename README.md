@@ -36,6 +36,17 @@ También podés forzarla con `?mapa=procedural` en la URL.
 | `P` | pausar el reloj |
 | `Tab` | ayuda |
 
+### En el celular
+
+Abrilo desde el navegador del celular (o tablet) y ponelo en **horizontal**. Aparecen controles en pantalla:
+joystick a la izquierda (tocá y arrastrá; empujado al máximo, corrés), arrastrar del lado derecho mueve la
+cámara, y botones para subir/bajar del auto, saltar, empujar y cambiar de cámara. Manejando aparecen los
+pedales **Acelerar** y **Freno**, el joystick dobla y "Saltar" pasa a ser el freno de mano. En celulares
+el juego baja la resolución y la calidad de las sombras para andar más fluido.
+
+Para probarlo desde el celular en la misma red Wi-Fi: `npm run dev -- --host` y abrí la dirección
+"Network" que muestra Vite.
+
 ### Qué hay en el juego
 
 - Ciudad 3D con fachadas típicas del conurbano: casas de revoque con rejas y persianas, ladrillo a la vista,
@@ -150,6 +161,8 @@ src/world/landmarks.js   modelos de los lugares conocidos (catedral, estaciones,
 src/entities/            jugador, vehículos (física arcade), tránsito, policía, peatones y trenes
 scripts/specials.mjs     detecta los lugares conocidos al convertir el mapa
 scripts/landmark-shots.mjs capturas de cada lugar conocido (con navegador headless)
+src/touch.js             controles táctiles para celular
+scripts/mobile-test.mjs  prueba en un celular emulado con toques (joystick, botones, pedales)
 scripts/fetch_overture.py descarga Quilmes de Overture Maps
 scripts/fetch-osm.mjs    conversor al formato del juego (y descarga directa de OpenStreetMap)
 scripts/smoke.mjs        prueba automática con navegador headless (capturas de pantalla)

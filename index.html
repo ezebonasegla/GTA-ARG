@@ -2,7 +2,9 @@
 <html lang="es-AR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
     <title>GTA Quilmes</title>
     <style>
       :root {
@@ -47,6 +49,43 @@
       #source { position: absolute; right: 12px; bottom: 4px; font-size: 11px; opacity: 0.7; text-shadow: 1px 1px 0 #000; max-width: 60vw; }
       #help { position: fixed; top: 60px; left: 18px; background: rgba(0, 0, 0, 0.78); padding: 14px 18px; border-radius: 6px; z-index: 11; font-size: 14px; }
       #help h3 { margin: 0 0 6px; color: var(--accent); }
+      /* ---- touch controls ---- */
+      body.touch { touch-action: none; -webkit-user-select: none; user-select: none; }
+      #touch { position: fixed; inset: 0; z-index: 12; touch-action: none; }
+      #touch button { -webkit-tap-highlight-color: transparent; font-family: inherit; }
+      .stick-base { position: absolute; left: 40px; bottom: 40px; width: 120px; height: 120px; border-radius: 50%; background: rgba(255, 255, 255, 0.12); border: 2px solid rgba(255, 255, 255, 0.35); opacity: 0.55; pointer-events: none; }
+      .stick-base:not(.active) { left: calc(40px + env(safe-area-inset-left)) !important; top: auto !important; bottom: 40px; }
+      .stick-base.active { opacity: 0.9; }
+      .stick-knob { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255, 255, 255, 0.75); }
+      .tb { position: relative; border: 2px solid rgba(255, 255, 255, 0.5); background: rgba(0, 0, 0, 0.45); color: #fff; font-weight: 800; font-size: 13px; border-radius: 50%; width: 64px; height: 64px; padding: 0; line-height: 1.05; }
+      .tb.big { width: 78px; height: 78px; font-size: 14px; }
+      .tb.down { background: rgba(117, 170, 219, 0.75); }
+      .tbuttons { position: absolute; right: calc(18px + env(safe-area-inset-right)); bottom: 22px; display: grid; grid-template-columns: repeat(2, auto); gap: 10px; justify-items: center; align-items: center; }
+      .pedals { position: absolute; right: calc(210px + env(safe-area-inset-right)); bottom: 22px; display: flex; gap: 12px; }
+      .tb.pedal { border-radius: 14px; width: 74px; height: 96px; font-size: 13px; }
+      .tb.gas { background: rgba(46, 204, 113, 0.35); }
+      .tb.help { position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); width: 40px; height: 40px; font-size: 18px; }
+      #touch .car-only { display: none; }
+      #touch.in-car .car-only { display: flex; }
+      #touch.in-car button.car-only { display: block; }
+      #touch.in-car .foot-only { display: none; }
+      body.touch #minimap { left: calc(12px + env(safe-area-inset-left)); top: 12px; bottom: auto; width: 120px; height: 120px; }
+      body.touch #health { left: calc(22px + env(safe-area-inset-left)); top: 138px; bottom: auto; width: 100px; }
+      body.touch #street { left: 150px; top: 14px; bottom: auto; font-size: 17px; }
+      body.touch #hint { top: 60px; left: 150px; }
+      body.touch #speed { right: 50%; transform: translateX(50%); bottom: auto; top: 58px; font-size: 32px; }
+      body.touch #topright { top: 10px; }
+      body.touch #clock { font-size: 20px; }
+      body.touch #stars { font-size: 20px; }
+      body.touch #start .keys, body.touch #help .keys { display: none; }
+      body.touch #help .touch-keys { display: grid; }
+      .touch-keys { display: none; }
+      body.touch #help { top: 60px; max-height: 70vh; overflow: auto; }
+      body.touch #source { display: none; }
+      #rotate { display: none; }
+      @media (orientation: portrait) {
+        body.touch #rotate { display: flex; position: fixed; inset: 0; z-index: 30; background: rgba(5, 8, 14, 0.92); align-items: center; justify-content: center; text-align: center; padding: 24px; font-size: 20px; flex-direction: column; gap: 12px; }
+      }
       @media (max-width: 700px) {
         #minimap { width: 130px; height: 130px; left: 12px; bottom: 16px; }
         #health { left: 16px; width: 120px; bottom: 6px; }
@@ -86,6 +125,14 @@
         <b>P</b><span>pausar el reloj</span>
         <b>Tab</b><span>mostrar / ocultar ayuda</span>
       </div>
+      <div class="keys touch-keys">
+        <b>Joystick</b><span>tocá y arrastrá del lado izquierdo para caminar (al máximo, corrés)</span>
+        <b>Arrastrar</b><span>del lado derecho para mover la cámara</span>
+        <b>Subir / Bajar</b><span>subir, bajar o robar un auto</span>
+        <b>Acelerar / Freno</b><span>pedales al manejar (el joystick dobla)</span>
+        <b>Saltar</b><span>a pie; en el auto es el freno de mano</span>
+        <b>Empujar · Bocina · Cámara</b><span></span>
+      </div>
     </div>
     <div id="loading">
       <div class="logo">GTA<span>QUILMES</span></div>
@@ -102,6 +149,7 @@
       </div>
       <div class="cta">HACÉ CLIC PARA JUGAR</div>
     </div>
+    <div id="rotate"><div style="font-size: 48px">⟳</div>Girá el celular para jugar en horizontal</div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
