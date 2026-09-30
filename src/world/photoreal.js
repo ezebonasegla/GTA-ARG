@@ -70,7 +70,10 @@ export class Photoreal {
       height: 0,
       recenter: true,
     }));
-    tiles.errorTarget = window.matchMedia('(max-width: 900px)').matches ? 9 : 6;
+    const mobile = window.matchMedia('(max-width: 900px)').matches;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    // Smaller errorTarget = tighter geometric error tolerance (sharper nearby tiles).
+    tiles.errorTarget = (mobile ? 6 : 3) / dpr;
     tiles.setCamera(camera);
     tiles.setResolutionFromRenderer(camera, renderer);
 
