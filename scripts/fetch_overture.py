@@ -39,6 +39,8 @@ THEMES = {
     'water': 'theme=base/type=water',
     'land_use': 'theme=base/type=land_use',
     'place': 'theme=places/type=place',
+    'land': 'theme=base/type=land',
+    'division': 'theme=divisions/type=division_area',
 }
 
 ROAD_CLASSES = {
@@ -212,12 +214,36 @@ def main():
             tags = {'natural': 'beach'}
         elif cls == 'railway':
             tags = {'landuse': 'railway'}
+        elif cls in ('brownfield', 'greenfield', 'construction', 'landfill'):
+            tags = {'landuse': cls}  # descampados
         else:
             continue
         if name_of(r):
             tags['name'] = name_of(r)
         for i, poly in enumerate(polygons(wkb.loads(r['geometry']))):
             elements.append({'type': 'way', 'id': num_id(f"{r['id']}:{i}"), 'tags': tags, 'geometry': ring(poly.exterior.coords)})
+
+    # Natural land cover: woods, pastizales and bañados along the river.
+    for r in rows['land']:
+        cls = r.get('class') or ''
+        if cls in ('forest', 'wood'):
+            tags = {'natural': 'wood'}
+        elif cls in ('scrub', 'heath', 'grassland', 'grass', 'meadow'):
+            tags = {'natural': 'grassland' if cls in ('grassland', 'grass', 'meadow') else 'scrub'}
+        elif cls in ('wetland', 'marsh', 'reedbed', 'swamp', 'wet_meadow'):
+            tags = {'natural': 'wetland'}
+        else:
+            continue
+        for i, poly in enumerate(polygons(wkb.loads(r['geometry']))):
+            elements.append({'type': 'way', 'id': num_id(f"{r['id']}:{i}"), 'tags': tags, 'geometry': ring(poly.exterior.coords)})
+
+    # Neighbourhood names (to name the villas and barrios).
+    for r in rows['division']:
+        if r.get('subtype') not in ('neighborhood', 'microhood', 'locality') or r.get('class') != 'land' or not name_of(r):
+            continue
+        for i, poly in enumerate(polygons(wkb.loads(r['geometry']))):
+            elements.append({'type': 'way', 'id': num_id(f"{r['id']}:{i}"), 'tags': {'boundary': 'place', 'place': r['subtype'], 'name': name_of(r)},
+                             'geometry': ring(poly.simplify(0.00005).exterior.coords)})
 
     for r in rows['place']:
         cat = r.get('basic_category') or ''
