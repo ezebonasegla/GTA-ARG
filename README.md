@@ -35,6 +35,8 @@ También podés forzarla con `?mapa=procedural` en la URL.
 | `O` | pantalla completa (también con el botón ⛶ arriba) |
 | `T` | adelantar el reloj 1 hora |
 | `P` | pausar el reloj |
+| `V` | activar/desactivar modo fantasma (vuelo libre) |
+| En modo fantasma: `W A S D` + `Espacio`/`Shift` (`Control` acelera) | volar por el cielo |
 | `Tab` | ayuda |
 
 ### En el celular
