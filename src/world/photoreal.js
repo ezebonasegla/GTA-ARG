@@ -39,6 +39,17 @@ export class Photoreal {
     this.raycaster = new THREE.Raycaster();
     this.raycaster.firstHitOnly = true;
     this.probeTimer = 0;
+    this.probeOffsets = [
+      [0, 0],
+      [2.2, 0],
+      [-2.2, 0],
+      [0, 2.2],
+      [0, -2.2],
+      [1.5, 1.5],
+      [1.5, -1.5],
+      [-1.5, 1.5],
+      [-1.5, -1.5],
+    ];
 
     const tiles = (this.tiles = new TilesRenderer());
     tiles.registerPlugin(new CesiumIonAuthPlugin({ apiToken: token, assetId: GOOGLE_3D_TILES_ASSET, autoRefreshToken: true }));
@@ -93,10 +104,17 @@ export class Photoreal {
   // roofs and tree tops don't count.
   probeGround(x, z) {
     this.holder.updateMatrixWorld(true);
-    this.raycaster.set(new THREE.Vector3(x, 400, z), new THREE.Vector3(0, -1, 0));
+    const ys = [];
     this.raycaster.far = 900;
-    const hit = this.raycaster.intersectObject(this.tiles.group, true)[0];
-    return hit ? hit.point.y : null;
+    for (const [ox, oz] of this.probeOffsets) {
+      this.raycaster.set(new THREE.Vector3(x + ox, 400, z + oz), new THREE.Vector3(0, -1, 0));
+      const hit = this.raycaster.intersectObject(this.tiles.group, true)[0];
+      if (hit) ys.push(hit.point.y);
+    }
+    if (!ys.length) return null;
+    ys.sort((a, b) => a - b);
+    // lower quartile: avoids rooftops / tree crowns while keeping street-level terrain.
+    return ys[Math.max(0, Math.floor((ys.length - 1) * 0.25))];
   }
 
   update(dt, { x, z, streetX, streetZ, night }) {
@@ -111,7 +129,12 @@ export class Photoreal {
       const y = this.probeGround(streetX ?? x, streetZ ?? z);
       if (y !== null) {
         const target = this.holder.position.y - y;
-        this.groundOffset = this.groundOffset === null ? target : this.groundOffset + (target - this.groundOffset) * 0.3;
+        if (this.groundOffset === null) this.groundOffset = target;
+        else {
+          const next = this.groundOffset + (target - this.groundOffset) * 0.25;
+          const maxStep = 1.3; // cap correction speed so noisy probes don't jump
+          this.groundOffset += THREE.MathUtils.clamp(next - this.groundOffset, -maxStep, maxStep);
+        }
         this.holder.position.y = this.groundOffset;
       }
     }
