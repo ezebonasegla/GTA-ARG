@@ -10,6 +10,7 @@ import { Player } from './entities/player.js';
 import { Vehicle } from './entities/vehicle.js';
 import { Traffic } from './entities/traffic.js';
 import { Peds } from './entities/peds.js';
+import { Trains, trainHit } from './entities/train.js';
 import { headlightMaterial } from './entities/models.js';
 
 const loadingText = document.getElementById('loading-text');
@@ -67,6 +68,7 @@ async function main() {
   const rng = mulberry32(Date.now() & 0xffff);
   const traffic = new Traffic(scene, world.graph, world.collision, rng);
   const peds = new Peds(scene, world.graph, world.collision, rng);
+  const trains = new Trains(scene, data);
   document.getElementById('source').textContent =
     data.source !== 'procedural'
       ? `Mapa: ${data.attribution || '© colaboradores de OpenStreetMap'} · ${data.buildings.length.toLocaleString('es-AR')} edificios`
@@ -265,8 +267,50 @@ async function main() {
       }
     }
 
+    // trains: move, then push/hurt whatever is on the tracks
+    const trainBoxes = trains.update(dt);
+    for (const box of trainBoxes) {
+      const moving = Math.hypot(box.vx, box.vz) > 1;
+      if (!player.vehicle && deadTimer <= 0) {
+        const h = trainHit(box, player.x, player.z, 0.35);
+        if (h) {
+          player.x += h.nx * h.push;
+          player.z += h.nz * h.push;
+          if (moving) {
+            player.health = 0;
+            audio.thump(20);
+          }
+        }
+      }
+      for (const v of traffic.vehicles) {
+        if (Math.abs(v.x - box.x) > 25 || Math.abs(v.z - box.z) > 25) continue;
+        for (const [cx, cz] of v.circles()) {
+          const h = trainHit(box, cx, cz, v.radius);
+          if (!h) continue;
+          v.x += h.nx * h.push;
+          v.z += h.nz * h.push;
+          if (moving) {
+            v.vx = box.vx * 1.2 + h.nx * 6;
+            v.vz = box.vz * 1.2 + h.nz * 6;
+            v.health = Math.max(0, v.health - 40);
+            if (v === player.vehicle) audio.thump(25);
+          }
+          v.sync();
+          break;
+        }
+      }
+      for (const p of peds.list) {
+        if (!p.dead && moving && trainHit(box, p.x, p.z, 0.3)) peds.knockDown(p, box.vx, box.vz, 5);
+      }
+    }
+    if (player.health <= 0 && deadTimer <= 0) {
+      hud.message('WASTED', '#c0392b', 4);
+      wanted = 0;
+      deadTimer = 4;
+    }
+
     const px = player.x, pz = player.z;
-    const ctx = { px, pz, playerVehicle: player.vehicle, peds: peds.list, wanted, time: totalTime, horn, onCrime };
+    const ctx = { px, pz, playerVehicle: player.vehicle, peds: peds.list, wanted, time: totalTime, horn, onCrime, trainBoxes };
     const carHit = traffic.update(dt, ctx);
     if (carHit > 3) audio.thump(carHit);
     peds.update(dt, { px, pz, vehicles: traffic.vehicles, playerVehicle: player.vehicle, onCrime });
@@ -342,6 +386,7 @@ async function main() {
     }
     hud.hint(hint);
     const blips = [];
+    for (const t of trainBoxes) blips.push({ x: t.x, z: t.z, color: '#1d4fa0', r: 3 });
     for (const v of traffic.vehicles) if (v.driver === 'police') blips.push({ x: v.x, z: v.z, color: Math.floor(totalTime * 4) % 2 ? '#e74c3c' : '#3498db', r: 4 });
     hud.drawMinimap(px, pz, player.heading, cam.yaw, blips);
     hud.update(dt);
@@ -351,7 +396,7 @@ async function main() {
     input.endFrame();
     requestAnimationFrame(frame);
   }
-  window.__game = { hud, scene, camera, renderer, player, traffic, peds, world, data, get hours() { return hours; }, set hours(h) { hours = h; } };
+  window.__game = { trains, hud, scene, camera, renderer, player, traffic, peds, world, data, get hours() { return hours; }, set hours(h) { hours = h; } };
   requestAnimationFrame(frame);
 }
 

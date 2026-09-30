@@ -213,6 +213,10 @@ export class Traffic {
       for (const [cx, cz] of o.circles()) check(cx, cz, o.radius * 0.6);
     }
     if (!ctx.playerVehicle) check(ctx.px, ctx.pz, 0.3);
+    for (const t of ctx.trainBoxes || []) {
+      if (Math.abs(t.x - v.x) > range + 20 || Math.abs(t.z - v.z) > range + 20) continue;
+      for (const k of [-1, 0, 1]) check(t.x + t.dx * t.hl * k, t.z + t.dz * t.hl * k, t.hw + 1);
+    }
     for (const p of ctx.peds) if (!p.dead && Math.abs(p.x - v.x) < range && Math.abs(p.z - v.z) < range) check(p.x, p.z, 0.3);
     return nearest;
   }

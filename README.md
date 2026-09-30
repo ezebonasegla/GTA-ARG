@@ -48,6 +48,28 @@ También podés forzarla con `?mapa=procedural` en la URL.
   patrulleros te persiguen por las calles. Alejate para perderlos o te agarran (BUSTED).
 - Ciclo de día y noche con el recorrido del sol para la latitud de Quilmes, ventanas y faroles que se prenden.
 - Minimapa con los puntos de referencia, velocímetro, reloj y nombre de la calle actual.
+- **Trenes de la línea Roca** que circulan por las vías reales y paran en las estaciones Quilmes y Bernal
+  (cuidado: atropellan).
+
+### Lugares con forma propia
+
+Los lugares conocidos se detectan en los datos (`scripts/specials.mjs`) y se modelan sobre su ubicación y
+huella reales (`src/world/landmarks.js`):
+
+| Lugar | Cómo se ve en el juego |
+| --- | --- |
+| Catedral de Quilmes | nave central con naves laterales y contrafuertes, ábside, frente con columnas, rosetón y frontón mirando a la plaza, campanario con cúpula, linterna y cruz |
+| Iglesias y parroquias | nave con techo a dos aguas, frontón y campanario con aguja |
+| Municipalidad, Teatro Municipal, Museo, Departamento Judicial | pórtico de columnas con frontón y escalinata hacia la calle; la Municipalidad con bandera argentina y cartel |
+| Hospitales y clínicas | cruces rojas, marquesina de acceso y cartel iluminado de noche |
+| Estaciones Quilmes y Bernal | andenes a ambos lados de las vías, techos de estilo inglés sobre columnas, carteles con el nombre, bancos y edificio de ladrillo con techo de tejas |
+| Estadio Centenario (Quilmes A.C.) y otros estadios | tribunas escalonadas blancas y azules, platea techada, torres de iluminación; el Estadio Nacional de Hockey con césped azul |
+| Cervecería y Maltería Quilmes | complejo de ladrillo, silos, chimenea y el cartel "Quilmes" en el techo |
+| Plazas (San Martín, Bicentenario, 9 de Julio…) | senderos perimetrales, diagonales y en cruz, bancos, faroles y monumento: ecuestre de San Martín, obelisco, fuente o busto |
+| Canchas de fútbol | líneas, áreas, círculo central y arcos |
+
+Las formas son **representativas**, no copias exactas de cada edificio: siguen la ubicación, el tamaño y la
+orientación reales, pero los detalles (cantidad de columnas, altura de la torre, etc.) son aproximados.
 
 ## Mapa real de Quilmes
 
@@ -124,7 +146,10 @@ src/world/textures.js    texturas generadas por código (fachadas, asfalto, bald
 src/world/roadGraph.js   grafo de calles (tránsito, peatones, rutas de la policía)
 src/world/collision.js   colisiones 2D contra edificios y objetos
 src/world/geo.js         proyección lat/lon ↔ metros y utilidades geométricas
-src/entities/            jugador, vehículos (física arcade), tránsito, policía y peatones
+src/world/landmarks.js   modelos de los lugares conocidos (catedral, estaciones, estadios…)
+src/entities/            jugador, vehículos (física arcade), tránsito, policía, peatones y trenes
+scripts/specials.mjs     detecta los lugares conocidos al convertir el mapa
+scripts/landmark-shots.mjs capturas de cada lugar conocido (con navegador headless)
 scripts/fetch_overture.py descarga Quilmes de Overture Maps
 scripts/fetch-osm.mjs    conversor al formato del juego (y descarga directa de OpenStreetMap)
 scripts/smoke.mjs        prueba automática con navegador headless (capturas de pantalla)

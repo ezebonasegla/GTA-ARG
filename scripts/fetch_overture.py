@@ -232,7 +232,7 @@ def main():
             tags['amenity'] = 'place_of_worship'
         if cat == 'train_station':
             tags['railway'] = 'station'
-        if cat in LANDMARK_CATEGORIES and conf >= 0.9 and name_of(r):
+        if cat in LANDMARK_CATEGORIES and conf >= (0.75 if cat in ('stadium_arena', 'train_station') else 0.9) and name_of(r):
             tags['name'] = name_of(r)
             tags['landmark'] = cat
         if tags:

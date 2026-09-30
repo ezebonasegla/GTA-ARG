@@ -108,3 +108,39 @@ export class SpatialHash {
     return out;
   }
 }
+
+// Minimum-area oriented bounding box. u is the long axis.
+// Returns { cx, cz, ux, uz, vx, vz, hu, hv }.
+export function orientedBox(pts) {
+  let best = null;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (l < 1e-6) continue;
+    const ux = (b[0] - a[0]) / l, uz = (b[1] - a[1]) / l;
+    const vx = -uz, vz = ux;
+    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+    for (const p of pts) {
+      const u = p[0] * ux + p[1] * uz, v = p[0] * vx + p[1] * vz;
+      if (u < u0) u0 = u;
+      if (u > u1) u1 = u;
+      if (v < v0) v0 = v;
+      if (v > v1) v1 = v;
+    }
+    const area = (u1 - u0) * (v1 - v0);
+    if (!best || area < best.area) best = { area, ux, uz, vx, vz, u0, u1, v0, v1 };
+  }
+  let { ux, uz, vx, vz, u0, u1, v0, v1 } = best;
+  if (v1 - v0 > u1 - u0) {
+    [ux, uz, vx, vz] = [vx, vz, -ux, -uz];
+    [u0, u1, v0, v1] = [v0, v1, -u1, -u0];
+  }
+  const cu = (u0 + u1) / 2, cv = (v0 + v1) / 2;
+  return { cx: cu * ux + cv * vx, cz: cu * uz + cv * vz, ux, uz, vx, vz, hu: (u1 - u0) / 2, hv: (v1 - v0) / 2 };
+}
+
+// Corners of an oriented box expanded by (du, dv), counter-clockwise order.
+export function boxCorners(o, du = 0, dv = 0) {
+  const hu = o.hu + du, hv = o.hv + dv;
+  return [[-hu, -hv], [hu, -hv], [hu, hv], [-hu, hv]].map(([a, b]) => [o.cx + o.ux * a + o.vx * b, o.cz + o.uz * a + o.vz * b]);
+}

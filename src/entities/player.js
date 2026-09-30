@@ -39,12 +39,17 @@ export class Player {
     }
     this.x += Math.sin(this.heading) * this.speed * dt;
     this.z += Math.cos(this.heading) * this.speed * dt;
-    if (input.hit('Space') && this.y <= 0) this.vy = 5.2;
-    this.vy -= 18 * dt;
-    this.y = Math.max(0, this.y + this.vy * dt);
-    const r = collision.resolve(this.x, this.z, 0.35);
+    const r = collision.resolve(this.x, this.z, 0.35, 'platform');
     this.x = r.x;
     this.z = r.z;
+    const floor = collision.floorAt(this.x, this.z);
+    if (input.hit('Space') && this.y <= floor + 0.01) this.vy = 5.2;
+    this.vy -= 18 * dt;
+    this.y += this.vy * dt;
+    if (this.y <= floor) {
+      this.y = floor; // steps up onto platforms
+      this.vy = 0;
+    }
     this.phase += dt * this.speed * 2.8;
     animatePerson(this.mesh, this.phase, Math.min(1.3, this.speed / 2.5));
     this.sync();

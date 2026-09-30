@@ -401,8 +401,6 @@ export function makeTextures(renderer) {
     ctx.fillStyle = '#6b8a3c';
     ctx.fillRect(0, 0, S, S);
     noise(ctx, S, S, 6000, rng, 0.1);
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.fillRect(0, S / 2 - 2, S, 4);
     tex.pitch = toTexture(c, renderer);
   }
   return tex;

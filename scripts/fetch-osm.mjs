@@ -17,6 +17,7 @@ import {
   QUILMES_CENTER, makeProjection, mulberry32, polygonArea, pointInPolygon,
   closestOnSegment, bbox, SpatialHash,
 } from '../src/world/geo.js';
+import { detectSpecials } from './specials.mjs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const args = parseArgs(process.argv.slice(2));
@@ -277,20 +278,69 @@ function convert(osm) {
   const rng = mulberry32(1666);
   const roads = [], buildings = [], areas = [], rails = [], landmarks = [], barriers = [];
   const shopNodes = [];
-  const churchNodes = [];
   const overture = osm.generator === 'overture';
   const lim = radius * 1.05;
   const inside = ([x, z]) => Math.abs(x) <= lim && Math.abs(z) <= lim;
 
+  // Points of interest first, so buildings that contain a known place keep their
+  // whole footprint (they are not split into lots) and get a special shape.
+  const pois = [];
+  const poiIndex = new SpatialHash(40);
+  for (const el of osm.elements) {
+    if (el.type !== 'node') continue;
+    const t = el.tags || {};
+    const [x, z] = proj.toWorld(el.lat, el.lon);
+    if (t.shop || (t.amenity && t.amenity !== 'place_of_worship')) shopNodes.push([x, z]);
+    if ((t.railway === 'station' || t.landmark) && t.name) landmarks.push({ name: t.name, pos: [r1(x), r1(z)], kind: t.landmark || 'train_station' });
+    let kind = t.landmark || (t.railway === 'station' ? 'train_station' : null);
+    if (t.amenity === 'place_of_worship') kind = 'church';
+    if (kind) {
+      const poi = { x, z, kind, name: t.name || '' };
+      pois.push(poi);
+      poiIndex.insert(poi, { minX: x, minZ: z, maxX: x, maxZ: z });
+    }
+  }
+  // Named places win over anonymous ones inside the same footprint.
+  const poiIn = (ring, id) => {
+    const b = bbox(ring);
+    let found = null;
+    for (const p of poiIndex.query(b.minX, b.minZ, b.maxX, b.maxZ)) {
+      if (p.kind !== 'train_station' && pointInPolygon(p.x, p.z, ring) && (!found || (!found.name && p.name))) found = p;
+    }
+    return found || nearbyPoi.get(id) || null;
+  };
+  // Important places whose point falls just outside every footprint (e.g. on the
+  // sidewalk): attach them to the biggest nearby building.
+  const nearbyPoi = new Map();
+  {
+    const important = pois.filter((p) => p.name && /government_office|theatre_venue|museum|hospital|church/.test(p.kind));
+    const best = new Map();
+    for (const el of osm.elements) {
+      if (el.type !== 'way' || !el.tags?.building || !el.geometry) continue;
+      const ring = closedRing(toPts(el.geometry));
+      if (!ring) continue;
+      const b = bbox(ring);
+      for (const p of important) {
+        if (p.x < b.minX - 35 || p.x > b.maxX + 35 || p.z < b.minZ - 35 || p.z > b.maxZ + 35) continue;
+        if (pointInPolygon(p.x, p.z, ring)) {
+          best.set(p, { inside: true });
+          continue;
+        }
+        if (best.get(p)?.inside) continue;
+        let d = Infinity;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) d = Math.min(d, Math.sqrt(closestOnSegment(p.x, p.z, ring[j][0], ring[j][1], ring[i][0], ring[i][1])[3]));
+        if (d > 30) continue;
+        const score = Math.abs(polygonArea(ring)) / (1 + d / 8);
+        if (!best.has(p) || score > best.get(p).score) best.set(p, { score, id: el.id });
+      }
+    }
+    for (const [p, v] of best) if (!v.inside) nearbyPoi.set(v.id, p);
+  }
+  const stadiumAreas = [];
+
   for (const el of osm.elements) {
     const t = el.tags || {};
-    if (el.type === 'node') {
-      const [x, z] = proj.toWorld(el.lat, el.lon);
-      if (t.shop || (t.amenity && t.amenity !== 'place_of_worship')) shopNodes.push([x, z]);
-      if (t.amenity === 'place_of_worship') churchNodes.push([x, z]);
-      if ((t.railway === 'station' || t.landmark) && t.name) landmarks.push({ name: t.name, pos: [r1(x), r1(z)], kind: t.landmark || 'train_station' });
-      continue;
-    }
+    if (el.type === 'node') continue;
     if (el.type === 'way' && el.geometry) {
       const pts = toPts(el.geometry);
       if (t.highway) {
@@ -314,7 +364,25 @@ function convert(osm) {
         continue;
       }
       if (t.railway) {
-        rails.push({ pts });
+        // keep only the runs inside the playable area (plus a margin)
+        const m = lim + 300;
+        let run = [], hasInside = false;
+        const flush = () => {
+          if (hasInside && run.length > 1) rails.push({ pts: run });
+          run = [];
+          hasInside = false;
+        };
+        for (const p of pts) {
+          if (Math.abs(p[0]) <= m && Math.abs(p[1]) <= m) {
+            run.push(p);
+            hasInside = true;
+          } else {
+            run.push(p); // close the run just outside the area
+            flush();
+            run = [p]; // and start the next one from here, in case the track comes back
+          }
+        }
+        flush();
         continue;
       }
       if (t.natural === 'coastline') {
@@ -361,6 +429,8 @@ function convert(osm) {
       return;
     }
     const area = { kind, pts: clipped };
+    if (t.name) area.name = t.name;
+    if (t.leisure === 'stadium') stadiumAreas.push(clipped);
     areas.push(area);
     if (t.name && (kind === 'park' || kind === 'plaza') && Math.abs(polygonArea(clipped)) > 1500) {
       const b = bbox(clipped);
@@ -376,7 +446,8 @@ function convert(osm) {
     // Satellite footprints often merge a whole row of attached houses into one
     // polygon: split those into ~8.66 m lots so every house gets its own height.
     const untagged = !t.height && !t['building:levels'] && !t.name && (!t.building || t.building === 'yes' || t.building === 'residential' || t.building === 'house');
-    if (!piece && untagged && args.split !== false && area > 260) {
+    const poi = piece ? null : poiIn(ring, id);
+    if (!piece && !poi && untagged && args.split !== false && area > 260) {
       const cdist = Math.hypot((b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2);
       const parts = splitIntoLots(ring, mulberry32((id + 7) % 2147483647), cdist < 900);
       if (parts.length > 1) {
@@ -389,6 +460,7 @@ function convert(osm) {
     const { h, levels, industrial } = buildingHeight(t, area, brng, dist);
     const bld = { pts: ring, h: r1(h), levels, style: buildingStyle(t, levels, brng, industrial) };
     if (t.shop || ['retail', 'commercial', 'kiosk', 'supermarket'].includes(t.building)) bld.shop = true;
+    if (poi) bld.poi = poi;
     const shape = t['roof:shape'];
     if ((shape === 'gabled' || shape === 'hipped') && ring.length === 4) bld.roof = 'gable';
     if (t.building === 'cathedral' || (t.building === 'church' && area > 400)) bld.roof = 'gable';
@@ -448,15 +520,12 @@ function convert(osm) {
 
   // ------------------------------------------------------------ infill
   let infilled = 0;
-  // Churches: the footprint containing a place-of-worship POI gets a church look.
-  for (const [x, z] of churchNodes) {
-    for (const b of bIndex.query(x - 1, z - 1, x + 1, z + 1)) {
-      if (!pointInPolygon(x, z, b.pts) || Math.abs(polygonArea(b.pts)) < 150) continue;
-      b.style = 'church';
-      b.h = Math.max(b.h, 14);
-      delete b.shop;
-    }
-  }
+  // Well-known places get their own shapes in the game.
+  const sp = detectSpecials({ buildings, areas, rails, roads, pois, stadiumAreas });
+  buildings.length = 0;
+  buildings.push(...sp.buildings);
+  const specials = sp.specials;
+  console.log(`  lugares especiales: ${specials.length + buildings.filter((b) => b.special).length} (${sp.removed} edificios reemplazados)`);
 
   if (args.infill ?? !overture) infilled = infill(roads, buildings, areas, bIndex, rng, inside);
 
@@ -504,7 +573,7 @@ function convert(osm) {
       origin: center,
       radius,
       bounds,
-      roads, buildings, areas, rails, barriers,
+      roads, buildings, areas, rails, barriers, specials,
       landmarks: dedupLandmarks.slice(0, 30),
       spawn, spawnHeading,
     },

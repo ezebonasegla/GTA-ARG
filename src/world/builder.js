@@ -1,6 +1,7 @@
 // Turns city data (OSM export or procedural) into Three.js meshes + collision.
 import * as THREE from 'three';
 import { makeTextures } from './textures.js';
+import { buildLandmarks } from './landmarks.js';
 import { CollisionWorld } from './collision.js';
 import { RoadGraph } from './roadGraph.js';
 import { mulberry32, hashString, polygonArea, pointInPolygon, bbox } from './geo.js';
@@ -21,7 +22,7 @@ const PALETTES = {
 const STYLE_MAP = {
   house: 'house', ph: 'house', apartments: 'apartments', brick: 'brick', office: 'office',
   church: 'church', civic: 'church', station: 'brick', mall: 'office', monument: 'church',
-  industrial: 'brick', school: 'brick', hospital: 'apartments',
+  industrial: 'brick', school: 'brick', hospital: 'apartments', brewery: 'brick',
 };
 
 class GeoBuf {
@@ -276,6 +277,8 @@ export function buildWorld(data, renderer, scene) {
   data.buildings.forEach((bld, idx) => {
     let pts = bld.pts;
     if (pts.length < 3) return;
+    // cathedral and churches are modelled entirely in landmarks.js
+    if (bld.special && (bld.special.type === 'cathedral' || bld.special.type === 'church')) return;
     if (polygonArea(pts) < 0) pts = pts.slice().reverse();
     const rng = mulberry32(hashString(`${idx}:${pts[0][0].toFixed(1)}`));
     const style = STYLE_MAP[bld.style] || 'house';
@@ -364,6 +367,10 @@ export function buildWorld(data, renderer, scene) {
     instancedChunks(root, legs, new THREE.MeshStandardMaterial({ color: 0x9a968f }), tanks, tankMatrix, { cast: true });
   }
 
+  // ---------------------------------------------------------------- landmarks
+  const landmarks = buildLandmarks(data, { root, collision, graph, tex });
+  const outside = (x, z) => !landmarks.keepOut.some(([kx, kz, r]) => (x - kx) ** 2 + (z - kz) ** 2 < r * r);
+
   // ---------------------------------------------------------------- trees & lights
   const rng = mulberry32(99);
   const trees = [];
@@ -383,7 +390,7 @@ export function buildWorld(data, renderer, scene) {
         for (let t = 8 + rng() * 4; t < len - 8; t += spacing + rng() * 4) {
           if (rng() > (road.kind === 'primary' ? 0.55 : 0.8)) continue;
           const x = ax + dx * t + nx * off * side, z = az + dz * t + nz * off * side;
-          if (collision.isBlocked(x, z, 1.2)) continue;
+          if (collision.isBlocked(x, z, 1.2) || !outside(x, z)) continue;
           trees.push([x, z, 0.8 + rng() * 0.6, rng()]);
         }
         if (side === 1 && !ped) {
@@ -402,7 +409,7 @@ export function buildWorld(data, renderer, scene) {
     const count = Math.min(400, Math.abs(polygonArea(area.pts)) / (area.kind === 'plaza' ? 120 : 220));
     for (let k = 0; k < count; k++) {
       const x = bb.minX + rng() * (bb.maxX - bb.minX), z = bb.minZ + rng() * (bb.maxZ - bb.minZ);
-      if (!pointInPolygon(x, z, area.pts) || collision.isBlocked(x, z, 2)) continue;
+      if (!pointInPolygon(x, z, area.pts) || collision.isBlocked(x, z, 2) || !outside(x, z)) continue;
       trees.push([x, z, 0.9 + rng() * 0.9, rng()]);
     }
   }
@@ -464,6 +471,7 @@ export function buildWorld(data, renderer, scene) {
       lampMat.emissiveIntensity = n * 3;
       poolMat.opacity = n * 0.55;
       poolMat.visible = n > 0.05;
+      landmarks.setNight(n);
     },
   };
 }

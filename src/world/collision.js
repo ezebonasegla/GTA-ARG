@@ -46,14 +46,25 @@ export class CollisionWorld {
     return h;
   }
 
+  // Height of walkable raised surfaces (station platforms) under a point.
+  floorAt(x, z) {
+    let h = 0;
+    for (const s of this.hash.query(x, z, x, z)) {
+      if (s.tag === 'platform' && s.height > h && pointInPolygon(x, z, s.pts)) h = s.height;
+    }
+    return h;
+  }
+
   // Push a circle out of every solid it overlaps. Returns the corrected position
-  // and the accumulated contact normal (zero when no contact).
-  resolve(x, z, r) {
+  // and the accumulated contact normal (zero when no contact). Solids tagged
+  // `ignoreTag` are skipped (the player walks onto platforms).
+  resolve(x, z, r, ignoreTag) {
     let nx = 0, nz = 0, hit = false;
     const cands = this.hash.query(x - r - 1, z - r - 1, x + r + 1, z + r + 1);
     for (let iter = 0; iter < 3; iter++) {
       let moved = false;
       for (const s of cands) {
+        if (ignoreTag && s.tag === ignoreTag) continue;
         if (s.type === 'circle') {
           const dx = x - s.x, dz = z - s.z;
           const d = Math.hypot(dx, dz);
