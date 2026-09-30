@@ -40,7 +40,16 @@ También podés forzarla con `?mapa=procedural` en la URL.
 
 - Ciudad 3D con fachadas típicas del conurbano: casas de revoque con rejas y persianas, ladrillo a la vista,
   PH, edificios de departamentos con balcones, locales con carteles y persianas metálicas, tanques de agua
-  en los techos, techos de tejas, veredas de baldosas y árboles en las calles.
+  en los techos, techos de tejas, veredas de baldosas y árboles en las calles. Las casas que dan a la calle
+  tienen puerta, ventanas con reja, portón de garage y medianeras sin revocar; hay terrazas con baranda,
+  plantas altas sin terminar (ladrillo hueco, columnas y hierros), chalets con tejas, almacenes y kioscos en
+  las esquinas, rejas, muros con pintadas, portones y ligustros sobre la línea municipal, calles de hormigón
+  y postes de luz de madera con cables.
+- **Villas / asentamientos** detectados en los datos: casas autoconstruidas de ladrillo hueco o pintadas,
+  techos de chapa con piedras y cubiertas, hierros de las columnas, tanques sobre torres, pasillos de tierra
+  y cemento (caminables) con ropa colgada y cables enredados.
+- **Descampados y baldíos** con pasto seco, cortaderas, basura, escombros, autos abandonados, alambrados y
+  potreros con arcos de madera.
 - Tránsito que respeta las calles de **mano única** y circula por la derecha: autos, taxis negro y amarillo,
   camionetas y **colectivos**. Autos estacionados junto al cordón.
 - Peatones que caminan por las veredas y se asustan con la bocina.
@@ -94,6 +103,15 @@ conocidos (Catedral, Municipalidad, Estación Quilmes, Cervecería Quilmes, esta
 Opciones: `python3 scripts/fetch_overture.py --lat -34.72 --lon -58.27 --radius 3000` (y el mismo
 `--radius` para `fetch-osm.mjs`).
 
+`scripts/conurbano.mjs` (lo usa el conversor; se desactiva con `--no-conurbano`) agrega lo que no está en
+los datos pero se deduce de ellos: las **villas** son supermanzanas sin calles internas llenas de huellas
+chicas y torcidas respecto de la calle (se nombran con los barrios de Overture Divisions); se les trazan
+pasillos desde las calles que las rodean y se completan con casas pegadas. Los **descampados** son terrenos
+sin edificios que no son plazas ni calles (más los pastizales, bañados y predios de Overture Land). Sobre la
+línea municipal de cada calle decide si hay casa, reja, muro, portón, ligustro o alambrado (si atrás hay un
+baldío), qué paredes de cada edificio dan a la calle (las demás son medianeras) y algunos almacenes de esquina.
+Con `DEBUG_VILLAS=1` muestra las supermanzanas candidatas.
+
 ### OpenStreetMap directo (Overpass)
 
 ```bash
@@ -141,14 +159,19 @@ src/hud.js               minimapa, velocímetro, estrellas, mensajes
 src/audio.js             sonidos sintetizados (motor, bocina, sirena, golpes)
 src/input.js             teclado y mouse
 src/world/procedural.js  aproximación procedural de Quilmes centro
-src/world/builder.js     convierte los datos en mallas (calles, veredas, edificios, árboles, faroles)
+src/world/builder.js     convierte los datos en mallas (calles, veredas, árboles, faroles…)
+src/world/buildings.js   paredes y techos de los edificios, casas de villa (un material por sector)
+src/world/conurbano.js   villas, descampados, rejas y muros, postes y cables
+src/world/geobuf.js      acumuladores de geometría por sector (fachadas, objetos, recortes, cables)
 src/world/textures.js    texturas generadas por código (fachadas, asfalto, baldosas…)
+src/world/conurbanoTextures.js texturas del conurbano y el arreglo de texturas de fachadas
 src/world/roadGraph.js   grafo de calles (tránsito, peatones, rutas de la policía)
 src/world/collision.js   colisiones 2D contra edificios y objetos
 src/world/geo.js         proyección lat/lon ↔ metros y utilidades geométricas
 src/world/landmarks.js   modelos de los lugares conocidos (catedral, estaciones, estadios…)
 src/entities/            jugador, vehículos (física arcade), tránsito, policía, peatones y trenes
 scripts/specials.mjs     detecta los lugares conocidos al convertir el mapa
+scripts/conurbano.mjs    detecta villas, descampados, frentes y rejas al convertir el mapa
 scripts/landmark-shots.mjs capturas de cada lugar conocido (con navegador headless)
 scripts/fetch_overture.py descarga Quilmes de Overture Maps
 scripts/fetch-osm.mjs    conversor al formato del juego (y descarga directa de OpenStreetMap)
@@ -165,7 +188,13 @@ Coordenadas en metros (`x` = este, `z` = sur) respecto de `origin`:
   "origin": { "lat": -34.7206, "lon": -58.2546 },
   "roads": [{ "pts": [[x, z], ...], "w": 9, "name": "Rivadavia", "kind": "residential", "oneway": true }],
   "buildings": [{ "pts": [[x, z], ...], "h": 6.3, "levels": 2, "style": "house", "shop": true, "roof": "gable" }],
-  "areas": [{ "kind": "park|plaza|water|sand|pitch|railway|parking", "pts": [[x, z], ...] }],
+  "areas": [{ "kind": "park|plaza|water|sand|pitch|railway|parking|wood|scrub|wetland|waste", "pts": [[x, z], ...] }],
+  // conurbano.mjs: footways with "pasillo": true, buildings with "villa" and "front" (bits of the edges facing
+  // the street), cells of a 10 m grid for villas and descampados, fences as [ax, az, bx, bz, type] runs
+  "grid": { "x0": -2670, "z0": -2670, "cell": 10, "n": 534 },
+  "villas": [{ "name": "Monte Matadero", "center": [x, z], "cells": [start, count, ...], "houses": 1384 }],
+  "wastes": [{ "center": [x, z], "big": false, "cells": [start, count, ...], "potrero": { "c": [x, z], "a": 0.5 } }],
+  "fences": [ax, az, bx, bz, type, ...], "fenceTypes": ["reja", "muro", "bajo", "ligustro", "alambre", "porton"],
   "rails": [{ "pts": [[x, z], ...] }],
   "landmarks": [{ "name": "Catedral de Quilmes", "pos": [x, z] }],
   "spawn": [x, z]

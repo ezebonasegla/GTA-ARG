@@ -537,6 +537,30 @@ export function groundTextures(renderer, toTexture) {
     out.pasillo = toTexture(c, renderer);
   }
   {
+    // calle de hormigón: losas con juntas cada 4 m, fisuras y parches
+    const rng = mulberry32(35);
+    const [c, ctx] = canvas();
+    ctx.fillStyle = '#8f8d87';
+    ctx.fillRect(0, 0, S, S);
+    for (let y = 0; y < S; y += S / 3) {
+      for (const x of [0, S / 2]) {
+        ctx.fillStyle = `hsl(40,${3 + rng() * 4}%,${50 + rng() * 8}%)`;
+        ctx.fillRect(x + 1, y + 1, S / 2 - 2, S / 3 - 2);
+      }
+    }
+    noise(ctx, S, S, 9000, rng, 0.12);
+    for (let i = 0; i < 8; i++) blotch(ctx, rng, rng() * S, rng() * S, 10 + rng() * 25, 'rgba(40,40,40,0.25)');
+    cracks(ctx, rng, S, S, 6);
+    ctx.fillStyle = 'rgba(30,30,30,0.55)';
+    for (let y = 0; y < S; y += S / 3) ctx.fillRect(0, y, S, 2);
+    ctx.fillRect(S / 2 - 1, 0, 2, S);
+    // cordón cuneta
+    ctx.fillStyle = 'rgba(200,198,190,0.6)';
+    ctx.fillRect(0, 0, 10, S);
+    ctx.fillRect(S - 10, 0, 10, S);
+    out.concrete = toTexture(c, renderer);
+  }
+  {
     // bañado
     const rng = mulberry32(34);
     const [c, ctx] = canvas();

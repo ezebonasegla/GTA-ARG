@@ -8,7 +8,7 @@ import { buildConurbano } from './conurbano.js';
 import { CollisionWorld } from './collision.js';
 import { RoadGraph } from './roadGraph.js';
 import { GeoBuf, ChunkSet } from './geobuf.js';
-import { mulberry32, polygonArea, pointInPolygon, bbox } from './geo.js';
+import { mulberry32, hashString, polygonArea, pointInPolygon, bbox } from './geo.js';
 
 const CHUNK = 220;
 const SIDEWALK = 3;
@@ -84,7 +84,7 @@ export function buildWorld(data, renderer, scene) {
 
   // Road and sidewalk ribbons (with miter joints), then intersection patches.
   const sidewalkBuf = new GeoBuf();
-  const roadBufs = { road1: new GeoBuf(), road2: new GeoBuf(), ped: new GeoBuf(), pasillo: new GeoBuf(), dirt: new GeoBuf() };
+  const roadBufs = { road1: new GeoBuf(), road2: new GeoBuf(), ped: new GeoBuf(), pasillo: new GeoBuf(), dirt: new GeoBuf(), concrete: new GeoBuf() };
   const white = new THREE.Color(1, 1, 1);
   function ribbon(buf, pts, w, y, vScale) {
     const n = pts.length;
@@ -137,7 +137,9 @@ export function buildWorld(data, renderer, scene) {
       continue;
     }
     if (road.kind !== 'service') ribbon(sidewalkBuf, road.pts, road.w + SIDEWALK * 2, 0.04, 1 / 6);
-    ribbon(road.oneway || road.w < 8 ? roadBufs.road1 : roadBufs.road2, road.pts, road.w, 0.06, 1 / 12);
+    // many residential streets of the conurbano are concrete slabs
+    const concrete = road.kind === 'residential' && (hashString(`${road.pts[0][0]},${road.pts[0][1]}`) % 100) < 45;
+    ribbon(concrete ? roadBufs.concrete : road.oneway || road.w < 8 ? roadBufs.road1 : roadBufs.road2, road.pts, road.w, 0.06, 1 / 12);
   }
   const patchBuf = new GeoBuf();
   const walkPatchBuf = new GeoBuf();
@@ -167,6 +169,7 @@ export function buildWorld(data, renderer, scene) {
   addFlat(walkPatchBuf, sidewalkMat, -7.5);
   addFlat(roadBufs.road2, flatMat(tex.road2), -7);
   addFlat(roadBufs.road1, flatMat(tex.road1), -7);
+  addFlat(roadBufs.concrete, flatMat(tex.concrete), -7);
   addFlat(roadBufs.ped, flatMat(tex.sidewalk, 0xe8d8c8), -7);
   addFlat(roadBufs.pasillo, flatMat(tex.pasillo), -7);
   addFlat(roadBufs.dirt, flatMat(tex.dirt, 0xd0c0a8), -7);
