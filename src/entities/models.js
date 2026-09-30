@@ -1,4 +1,4 @@
-// Low-poly procedural models: cars, colectivos, taxis, patrulleros and people.
+// Low-poly procedural models: cars, colectivos, taxis and patrulleros (people: person.js).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
@@ -142,68 +142,4 @@ function makeSignMaterial(text) {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.6 });
-}
-
-// ------------------------------------------------------------------- people
-const skinTones = [0xf1c9a5, 0xe0ac86, 0xc68e62, 0x8d5a3b, 0xf6d7bd];
-const shirtColors = [0xffffff, 0x75aadb, 0x1d3f7a, 0xc0392b, 0x2e7d32, 0x222222, 0xf1c40f, 0x8e44ad, 0x7f8c8d, 0xe67e22];
-const pantsColors = [0x1f2a44, 0x2b2b2b, 0x4a4a4a, 0x6b5b45, 0x1d3557];
-
-export function createPersonMesh(opts = {}) {
-  const pick = (a) => a[Math.floor(Math.random() * a.length)];
-  const g = new THREE.Group();
-  const skin = new THREE.MeshStandardMaterial({ color: opts.skin ?? pick(skinTones), roughness: 0.8 });
-  const shirt = new THREE.MeshStandardMaterial({ color: opts.shirt ?? pick(shirtColors), roughness: 0.9 });
-  const pants = new THREE.MeshStandardMaterial({ color: opts.pants ?? pick(pantsColors), roughness: 0.9 });
-  const hair = new THREE.MeshStandardMaterial({ color: pick([0x1b1b1b, 0x3b2716, 0x6b4a2b, 0x999999]) });
-
-  const hips = new THREE.Group();
-  hips.position.y = 0.95;
-  g.add(hips);
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.6, 0.24), shirt);
-  torso.position.y = 0.32;
-  hips.add(torso);
-  if (opts.stripes) {
-    // camiseta a rayas (Argentina)
-    const white = new THREE.MeshStandardMaterial({ color: 0xffffff });
-    for (const x of [-0.12, 0.12]) {
-      const s = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.6, 0.25), white);
-      s.position.set(x, 0.32, 0);
-      hips.add(s);
-    }
-  }
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.26, 0.24), skin);
-  head.position.y = 0.78;
-  hips.add(head);
-  const hairM = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.08, 0.26), hair);
-  hairM.position.y = 0.93;
-  hips.add(hairM);
-
-  const limb = (w, h, mat, x, y, parent) => {
-    const pivot = new THREE.Group();
-    pivot.position.set(x, y, 0);
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), mat);
-    m.position.y = -h / 2;
-    m.castShadow = true;
-    pivot.add(m);
-    parent.add(pivot);
-    return pivot;
-  };
-  const armL = limb(0.12, 0.58, shirt, -0.29, 0.6, hips);
-  const armR = limb(0.12, 0.58, shirt, 0.29, 0.6, hips);
-  const legL = limb(0.16, 0.92, pants, -0.11, 0, hips);
-  const legR = limb(0.16, 0.92, pants, 0.11, 0, hips);
-  for (const m of [torso, head, hairM]) m.castShadow = true;
-  g.userData.rig = { hips, armL, armR, legL, legR };
-  return g;
-}
-
-export function animatePerson(mesh, phase, amount) {
-  const { armL, armR, legL, legR, hips } = mesh.userData.rig;
-  const s = Math.sin(phase) * amount;
-  legL.rotation.x = s * 0.8;
-  legR.rotation.x = -s * 0.8;
-  armL.rotation.x = -s * 0.7;
-  armR.rotation.x = s * 0.7;
-  hips.position.y = 0.95 + Math.abs(Math.cos(phase)) * 0.05 * amount;
 }

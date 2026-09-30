@@ -6,7 +6,7 @@ import { Environment } from './environment.js';
 import { Input } from './input.js';
 import { Hud } from './hud.js';
 import { Audio } from './audio.js';
-import { Player } from './entities/player.js';
+import { Player, doorPoint } from './entities/player.js';
 import { Vehicle } from './entities/vehicle.js';
 import { Traffic } from './entities/traffic.js';
 import { Peds } from './entities/peds.js';
@@ -82,6 +82,7 @@ async function main() {
     player.x = sx;
     player.z = sz;
     player.health = 100;
+    player.revive();
     player.sync();
   };
   // a car waiting for the player on the nearest street
@@ -149,25 +150,37 @@ async function main() {
       }
     }
     if (!best) return;
-    if (best.driver === 'npc' || best.driver === 'police') {
-      const lx = Math.cos(best.heading), lz = -Math.sin(best.heading);
-      peds.addFleeing(best.x + lx * 2, best.z + lz * 2, player.x, player.z);
-      if (best.driver === 'police') onCrime('robo de patrullero', 2);
-      else if (traffic.vehicles.some((v) => v.driver === 'police' && Math.hypot(v.x - player.x, v.z - player.z) < 80)) onCrime('robo de auto', 1);
-      hud.toast('¡Auto robado!');
-    }
+    const stolen = best.driver === 'npc' || best.driver === 'police' ? best.driver : null;
+    if (stolen === 'police') onCrime('robo de patrullero', 2);
+    else if (stolen && traffic.vehicles.some((v) => v.driver === 'police' && Math.hypot(v.x - player.x, v.z - player.z) < 80)) onCrime('robo de auto', 1);
+    // claim the car now (it stops), climb in after a short walk to the door
     traffic.npc.delete(best);
     best.driver = 'player';
     best.parked = false;
-    player.vehicle = best;
-    player.mesh.visible = false;
-    cam.yaw = best.heading;
+    player.startEnter(best, {
+      onDoor: () => {
+        if (!stolen) return;
+        // the driver gets yanked out and runs off
+        const d = doorPoint(best, 1, 1.4);
+        const fx = Math.sin(best.heading), fz = Math.cos(best.heading);
+        peds.addFleeing(d.x + fx * 0.8, d.z + fz * 0.8, player.x, player.z);
+        hud.toast('¡Auto robado!');
+      },
+    });
   }
 
   function exitVehicle() {
     const v = player.vehicle;
-    const lx = Math.cos(v.heading), lz = -Math.sin(v.heading); // driver side (left)
-    const r = world.collision.resolve(v.x + lx * (v.spec.width / 2 + 0.7), v.z + lz * (v.spec.width / 2 + 0.7), 0.35);
+    player.vehicle = null;
+    v.driver = null;
+    player.startExit(v);
+  }
+
+  // Instant version (busted, respawn).
+  function exitVehicleNow() {
+    const v = player.vehicle;
+    const d = doorPoint(v, 1, 0.7);
+    const r = world.collision.resolve(d.x, d.z, 0.35);
     player.x = r.x;
     player.z = r.z;
     player.heading = v.heading;
@@ -195,13 +208,28 @@ async function main() {
     else cam.idle += dt;
     if (input.down('KeyQ')) cam.yaw += dt * 2;
 
-    const inCar = !!player.vehicle;
+    let inCar = !!player.vehicle;
     const horn = inCar && input.down('KeyH');
     let throttle = 0;
 
     if (deadTimer > 0) {
       deadTimer -= dt;
+      player.updateDead(dt, world.collision);
       if (deadTimer <= 0) respawn();
+    } else if (player.transition) {
+      const tr = player.transition;
+      const done = player.updateTransition(dt, input, world.collision);
+      if (done === 'entered') {
+        player.vehicle = tr.v;
+        cam.yaw = tr.v.heading;
+      }
+      if (tr.kind === 'enter' && !done) {
+        // ease the camera behind the car while climbing in
+        let d = tr.v.heading - cam.yaw;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        if (cam.idle > 0.3) cam.yaw += d * Math.min(1, dt * 3);
+      }
     } else if (inCar) {
       const v = player.vehicle;
       throttle = input.down('KeyW', 'ArrowUp') ? 1 : 0;
@@ -236,6 +264,7 @@ async function main() {
       if (input.hit('KeyE')) tryEnterVehicle();
       if (input.hit('KeyF')) {
         // empujón
+        player.push();
         for (const p of peds.list) {
           if (p.dead) continue;
           const dx = p.x - player.x, dz = p.z - player.z;
@@ -253,17 +282,13 @@ async function main() {
         for (const [cx, cz] of v.circles()) {
           if (Math.hypot(player.x - cx, player.z - cz) < v.radius + 0.35) {
             player.health -= sp * 5;
+            player.lastHit = [v.vx, v.vz];
             player.x += v.vx * 0.15;
             player.z += v.vz * 0.15;
             audio.thump(sp);
             break;
           }
         }
-      }
-      if (player.health <= 0 && deadTimer <= 0) {
-        hud.message('WASTED', '#c0392b', 4);
-        wanted = 0;
-        deadTimer = 4;
       }
     }
 
@@ -278,6 +303,7 @@ async function main() {
           player.z += h.nz * h.push;
           if (moving) {
             player.health = 0;
+            player.lastHit = [box.vx + h.nx * 4, box.vz + h.nz * 4];
             audio.thump(20);
           }
         }
@@ -307,6 +333,9 @@ async function main() {
       hud.message('WASTED', '#c0392b', 4);
       wanted = 0;
       deadTimer = 4;
+      player.cancelTransition();
+      player.die(...(player.lastHit || [0, 0]));
+      player.lastHit = null;
     }
 
     const px = player.x, pz = player.z;
@@ -332,7 +361,8 @@ async function main() {
       if (bustedTimer > 2) {
         bustedTimer = 0;
         wanted = 0;
-        if (player.vehicle) exitVehicle();
+        player.cancelTransition();
+        if (player.vehicle) exitVehicleNow();
         hud.message('BUSTED', '#2e86de', 4);
         respawn();
       }
@@ -340,9 +370,11 @@ async function main() {
     hud.setWanted(evadeTimer > 0 && wanted > 0 && Math.floor(totalTime * 3) % 2 ? 0 : wanted);
 
     // ------------------------------------------------------------- camera
+    inCar = !!player.vehicle; // may have changed this frame (got in/out, busted)
     const focusY = inCar ? 1.6 : 1.5 + player.y;
     const baseDist = inCar ? 5 + player.vehicle.spec.length * 0.9 : 4.2;
-    const dist = baseDist * camModes[cam.mode];
+    cam.base = cam.base ? cam.base + (baseDist - cam.base) * Math.min(1, dt * 3) : baseDist; // smooth zoom on enter/exit
+    const dist = cam.base * camModes[cam.mode];
     const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
     const dirX = Math.sin(cam.yaw) * cp, dirZ = Math.cos(cam.yaw) * cp;
     let d = dist;
@@ -380,7 +412,7 @@ async function main() {
     hud.setClock(hours);
     hud.setHealth(inCar ? player.vehicle.health : player.health);
     let hint = '';
-    if (!inCar && deadTimer <= 0) {
+    if (!inCar && deadTimer <= 0 && !player.transition) {
       const v = traffic.vehicles.find((v) => Math.min(...v.circles().map(([x, z]) => Math.hypot(x - px, z - pz))) < 4.5);
       if (v) hint = v.driver === 'npc' ? 'E: robar el auto' : v.driver === 'police' ? 'E: robar el patrullero' : 'E: subir al auto';
     }

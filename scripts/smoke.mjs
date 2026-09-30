@@ -32,7 +32,8 @@ await page.evaluate(() => {
   g.player.z = car.z - 2.2 * Math.sin(car.heading);
 });
 await page.keyboard.press('KeyE');
-await page.waitForTimeout(500);
+// the player walks to the door and climbs in (~0.8 s of game time)
+await page.waitForFunction(() => window.__game.player.vehicle, null, { timeout: 120000 });
 await page.keyboard.down('KeyW');
 await page.waitForTimeout(5000);
 console.log('speed km/h:', await page.evaluate(() => (window.__game.player.vehicle?.speed * 3.6).toFixed(1)));

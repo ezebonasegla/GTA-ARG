@@ -1,6 +1,5 @@
 // Pedestrians walking along the sidewalks of the road graph.
-import * as THREE from 'three';
-import { createPersonMesh, animatePerson } from './models.js';
+import { createPersonMesh, animatePerson, disposePerson } from './person.js';
 
 const MAX_PEDS = 42;
 const SPAWN_MIN = 40, SPAWN_MAX = 160, DESPAWN = 200;
@@ -38,13 +37,14 @@ export class Peds {
       const d = Math.hypot(x - px, z - pz);
       if (d < minD || d > maxD) continue;
       if (this.collision.isBlocked(x, z, 0.4)) continue;
-      const mesh = createPersonMesh({ stripes: this.rng() < 0.08 });
+      const mesh = createPersonMesh({ rng: this.rng });
       mesh.position.set(x, 0, z);
       this.scene.add(mesh);
+      const look = mesh.userData.look;
       const p = {
         mesh, x, z, heading: 0, from: a, to: b, side,
-        speed: 1.1 + this.rng() * 0.5, phase: this.rng() * 6, state: 'walk', timer: 0,
-        vy: 0, y: 0, vx: 0, vz: 0, dead: false,
+        speed: (look.age === 'elder' ? 0.8 : 1.1) + this.rng() * (look.age === 'kid' ? 0.8 : 0.45), state: 'walk', timer: 0,
+        vy: 0, y: 0, vx: 0, vz: 0, dead: false, panic: this.rng() < 0.3, spin: 0, spinV: 0, back: true,
       };
       this.list.push(p);
       return p;
@@ -53,17 +53,21 @@ export class Peds {
   }
 
   addFleeing(x, z, fromX, fromZ) {
-    const mesh = createPersonMesh();
+    const mesh = createPersonMesh({ rng: this.rng, age: 'adult' });
     this.scene.add(mesh);
     const node = this.graph.nearestNode(x, z) || this.graph.nodes[0];
     const to = [...node.neighbors][0] || node;
-    const p = { mesh, x, z, heading: 0, from: node, to, side: 1, speed: 1.3, phase: 0, state: 'flee', timer: 6, fx: fromX, fz: fromZ, vy: 0, y: 0, vx: 0, vz: 0, dead: false };
+    const p = {
+      mesh, x, z, heading: Math.atan2(x - fromX, z - fromZ), from: node, to, side: 1, speed: 1.3, state: 'flee', timer: 6, fx: fromX, fz: fromZ,
+      vy: 0, y: 0, vx: 0, vz: 0, dead: false, panic: true, spin: 0, spinV: 0, back: true,
+    };
     this.list.push(p);
     return p;
   }
 
   remove(p) {
     this.scene.remove(p.mesh);
+    disposePerson(p.mesh);
     this.list.splice(this.list.indexOf(p), 1);
   }
 
@@ -86,6 +90,11 @@ export class Peds {
     p.vx = vx;
     p.vz = vz;
     p.vy = up;
+    // face the impact and go over backwards (or get spun round and land face down)
+    const sp = Math.hypot(vx, vz);
+    if (sp > 0.3) p.heading = Math.atan2(-vx, -vz);
+    p.back = this.rng() < 0.75;
+    p.spinV = -(3 + sp * 0.6) * (p.back ? 1 : -1);
   }
 
   // ctx: { px, pz, vehicles, playerVehicle, onCrime, initial }
@@ -110,8 +119,24 @@ export class Peds {
         const r = this.collision.resolve(p.x, p.z, 0.3);
         p.x = r.x;
         p.z = r.z;
-        p.mesh.position.set(p.x, p.y + 0.15, p.z);
-        p.mesh.rotation.x = THREE.MathUtils.lerp(p.mesh.rotation.x, -Math.PI / 2, Math.min(1, dt * 6));
+        // tumble while airborne, then settle flat on the back (or face down)
+        const air = p.y > 0.02;
+        const lie = p.back ? -Math.PI / 2 : Math.PI / 2;
+        if (air && p.vy > -2) p.spin += p.spinV * dt;
+        else p.spin += (lie - p.spin) * Math.min(1, dt * 8);
+        p.spin = Math.max(-Math.PI * 0.7, Math.min(Math.PI * 0.7, p.spin));
+        animatePerson(p.mesh, dt, { down: true, downAir: air });
+        p.mesh.position.set(p.x, p.y + 0.13 * Math.abs(Math.sin(p.spin)), p.z);
+        p.mesh.rotation.set(p.spin, p.heading, 0);
+        continue;
+      }
+      if (p.state === 'idle') {
+        // standing around (chatting, drinking mate...)
+        p.timer -= dt;
+        if (p.timer <= 0) p.state = 'walk';
+        animatePerson(p.mesh, dt, { speed: 0 });
+        p.mesh.position.set(p.x, 0, p.z);
+        p.mesh.rotation.y = p.heading;
         continue;
       }
       let tx, tz, speed = p.speed;
@@ -140,6 +165,10 @@ export class Peds {
           p.from = p.to;
           p.to = next;
           if (this.rng() < 0.1) p.side = -p.side; // crosses the street
+          else if (this.rng() < 0.18) {
+            p.state = 'idle';
+            p.timer = 2 + this.rng() * 6;
+          }
         }
       }
       const dx = tx - p.x, dz = tz - p.z;
@@ -154,8 +183,7 @@ export class Peds {
       const r = this.collision.resolve(p.x, p.z, 0.3);
       p.x = r.x;
       p.z = r.z;
-      p.phase += dt * speed * 3.2;
-      animatePerson(p.mesh, p.phase, Math.min(1, speed / 1.5));
+      animatePerson(p.mesh, dt, { speed, panic: p.state === 'flee' && p.panic });
       p.mesh.position.set(p.x, 0, p.z);
       p.mesh.rotation.y = p.heading;
     }
