@@ -7,7 +7,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "fetch-osm": "node scripts/fetch-osm.mjs",
+    "fetch-osm:max": "node scripts/fetch-osm.mjs --fidelity max --out public/data/quilmes-max.json",
     "fetch-overture": "python3 scripts/fetch_overture.py --radius 2500 && node scripts/fetch-osm.mjs --input .cache/overture-raw.json --radius 2500",
+    "fetch-overture:max": "python3 scripts/fetch_overture.py --radius 2500 && node scripts/fetch-osm.mjs --input .cache/overture-raw.json --radius 2500 --fidelity max --out public/data/quilmes-max.json",
     "fetch-buses": "python3 scripts/fetch_buses.py"
   },
   "repository": {

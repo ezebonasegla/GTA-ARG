@@ -8,6 +8,7 @@
 //   npm run fetch-osm -- --input raw.json      # convert a saved Overpass response
 //   npm run fetch-osm -- --no-infill           # don't fill blocks missing buildings
 //   npm run fetch-osm -- --no-split            # don't split merged row-house footprints
+//   npm run fetch-osm -- --fidelity max        # max fidelity: no synthetic infill/splitting by default
 //
 // Map data © OpenStreetMap contributors, available under the ODbL.
 import fs from 'node:fs';
@@ -22,6 +23,8 @@ import { computeStreetSigns } from '../src/world/alturas.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const args = parseArgs(process.argv.slice(2));
+const fidelityArg = String(args.fidelity || '').toLowerCase();
+const fidelityMode = /^(max|maximum|maxima|máxima|ultra)$/.test(fidelityArg) || args['fidelity-max'] ? 'max' : 'balanced';
 const center = { lat: +(args.lat ?? QUILMES_CENTER.lat), lon: +(args.lon ?? QUILMES_CENTER.lon) };
 const radius = +(args.radius ?? 2000);
 const outFile = path.resolve(root, args.out ?? 'public/data/quilmes.json');
@@ -180,6 +183,7 @@ function buildingHeight(tags, area, rng, dist) {
     return weights[0][0];
   };
   let levels;
+  const zone = dist < 650 ? 'center' : dist < 1400 ? 'mid' : 'outer';
   if (['house', 'detached', 'residential', 'semidetached_house', 'terrace', 'bungalow'].includes(b)) levels = pick([[1, 0.55], [2, 0.4], [3, 0.05]]);
   else if (b === 'apartments') levels = 4 + Math.floor(rng() * 9);
   else if (['commercial', 'retail', 'kiosk', 'supermarket'].includes(b)) levels = area > 800 ? 2 : pick([[1, 0.5], [2, 0.5]]);
@@ -190,14 +194,14 @@ function buildingHeight(tags, area, rng, dist) {
   else if (['school', 'university', 'college', 'hospital', 'civic', 'public', 'government'].includes(b)) levels = 2 + Math.floor(rng() * 3);
   else if (b === 'train_station') return { h: 9, levels: 2 };
   else {
-    // No data (most satellite-detected footprints): guess from footprint size and
-    // distance to the center, where Quilmes has most of its apartment towers.
-    const towerChance = dist < 450 ? 0.33 : dist < 900 ? 0.12 : dist < 1500 ? 0.04 : 0.012;
+    // No data (most satellite-detected footprints): estimate by footprint size and
+    // zone profile (center/mid/periphery) so each area keeps a plausible skyline.
+    const towerChance = zone === 'center' ? 0.3 : zone === 'mid' ? 0.1 : 0.025;
     if (area < 35) return { h: 2.8, levels: 1 };
-    if (area < 150) levels = pick(dist < 900 ? [[1, 0.4], [2, 0.5], [3, 0.1]] : [[1, 0.6], [2, 0.37], [3, 0.03]]);
+    if (area < 150) levels = pick(zone === 'center' ? [[1, 0.35], [2, 0.5], [3, 0.15]] : zone === 'mid' ? [[1, 0.5], [2, 0.43], [3, 0.07]] : [[1, 0.66], [2, 0.31], [3, 0.03]]);
     else if (area < 900 && rng() < towerChance) levels = dist < 700 ? 6 + Math.floor(rng() * 10) : 4 + Math.floor(rng() * 6);
-    else if (area < 900) levels = pick([[1, 0.35], [2, 0.45], [3, 0.2]]);
-    else if (dist > 900 && rng() < 0.7) return { h: 7 + rng() * 4, levels: 1, industrial: true };
+    else if (area < 900) levels = pick(zone === 'outer' ? [[1, 0.48], [2, 0.39], [3, 0.13]] : [[1, 0.35], [2, 0.45], [3, 0.2]]);
+    else if (zone !== 'center' && rng() < 0.7) return { h: 7 + rng() * 4, levels: 1, industrial: true };
     else levels = pick([[2, 0.5], [3, 0.3], [4, 0.2]]);
   }
   return { h: levels * 3 + 0.3 + rng() * 0.5, levels };
@@ -262,7 +266,7 @@ function clipHalf(pts, dx, dz, c, sign) {
   }
 }
 
-function buildingStyle(tags, levels, rng, industrial) {
+function buildingStyle(tags, levels, rng, industrial, dist) {
   const b = tags.building;
   if (industrial) return 'industrial';
   if (['church', 'cathedral', 'chapel'].includes(b) || tags.amenity === 'place_of_worship') return 'church';
@@ -272,8 +276,9 @@ function buildingStyle(tags, levels, rng, industrial) {
   if (['school', 'university', 'college'].includes(b)) return 'school';
   if (b === 'hospital') return 'hospital';
   if (b === 'office' || (levels >= 10 && rng() < 0.3)) return 'office';
-  if (b === 'apartments' || levels >= 4) return rng() < 0.7 ? 'apartments' : 'brick';
-  return rng() < 0.7 ? 'house' : 'brick';
+  if (b === 'apartments' || levels >= 5) return rng() < 0.7 ? 'apartments' : 'brick';
+  if (levels >= 4) return dist < 1000 ? (rng() < 0.65 ? 'apartments' : 'brick') : (rng() < 0.65 ? 'brick' : 'house');
+  return dist < 1000 ? (rng() < 0.7 ? 'house' : 'brick') : (rng() < 0.8 ? 'house' : 'brick');
 }
 
 function convert(osm) {
@@ -281,6 +286,8 @@ function convert(osm) {
   const roads = [], buildings = [], areas = [], rails = [], landmarks = [], barriers = [];
   const shopNodes = [], addresses = [];
   const overture = osm.generator === 'overture';
+  const splitEnabled = args.split !== false && fidelityMode !== 'max';
+  const infillEnabled = args.infill !== false && (!overture || fidelityMode !== 'max');
   const lim = radius * 1.05;
   const inside = ([x, z]) => Math.abs(x) <= lim && Math.abs(z) <= lim;
 
@@ -451,7 +458,7 @@ function convert(osm) {
     // polygon: split those into ~8.66 m lots so every house gets its own height.
     const untagged = !t.height && !t['building:levels'] && !t.name && (!t.building || t.building === 'yes' || t.building === 'residential' || t.building === 'house');
     const poi = piece ? null : poiIn(ring, id);
-    if (!piece && !poi && untagged && args.split !== false && area > 260) {
+    if (!piece && !poi && untagged && splitEnabled && area > 260) {
       const cdist = Math.hypot((b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2);
       const parts = splitIntoLots(ring, mulberry32((id + 7) % 2147483647), cdist < 900);
       if (parts.length > 1) {
@@ -462,14 +469,31 @@ function convert(osm) {
     const brng = mulberry32(id % 2147483647);
     const dist = Math.hypot((b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2);
     const { h, levels, industrial } = buildingHeight(t, area, brng, dist);
-    const bld = { pts: ring, h: r1(h), levels, style: buildingStyle(t, levels, brng, industrial) };
+    const bld = {
+      pts: ring,
+      h: r1(h),
+      levels,
+      style: buildingStyle(t, levels, brng, industrial, dist),
+      usage: t.building || t.amenity || undefined,
+      source: t.source || (overture ? 'overture' : 'osm'),
+    };
+    const explicitHeight = parseNum(t.height);
+    if (explicitHeight > 1) bld.heightSource = 'height';
+    else if (parseNum(t['building:levels']) > 0) bld.heightSource = 'levels';
+    else bld.heightSource = 'estimated';
     if (t.shop || ['retail', 'commercial', 'kiosk', 'supermarket'].includes(t.building)) bld.shop = true;
     if (poi) bld.poi = poi;
     const shape = t['roof:shape'];
-    if ((shape === 'gabled' || shape === 'hipped') && ring.length === 4) bld.roof = 'gable';
+    if ((shape === 'gabled' || shape === 'hipped') && ring.length === 4) {
+      bld.roof = 'gable';
+      bld.roofSource = 'osm';
+    }
     if (t.building === 'cathedral' || (t.building === 'church' && area > 400)) bld.roof = 'gable';
     const colour = t['building:colour'] || t['building:color'];
-    if (colour && /^#?[0-9a-f]{6}$|^[a-z]+$/i.test(colour)) bld.color = colour.startsWith('#') || /^[a-z]+$/i.test(colour) ? colour : `#${colour}`;
+    if (colour && /^#?[0-9a-f]{6}$|^[a-z]+$/i.test(colour)) {
+      bld.color = colour.startsWith('#') || /^[a-z]+$/i.test(colour) ? colour : `#${colour}`;
+      bld.colorSource = 'osm';
+    }
     if (t.name) {
       bld.name = t.name;
       if (['church', 'cathedral', 'train_station', 'civic', 'public', 'government', 'stadium', 'hospital', 'university'].includes(t.building) || t.amenity || t.tourism) {
@@ -531,7 +555,7 @@ function convert(osm) {
   const specials = sp.specials;
   console.log(`  lugares especiales: ${specials.length + buildings.filter((b) => b.special).length} (${sp.removed} edificios reemplazados)`);
 
-  if (args.infill ?? !overture) infilled = infill(roads, buildings, areas, bIndex, rng, inside);
+  if (infillEnabled) infilled = infill(roads, buildings, areas, bIndex, rng, inside);
 
   // ------------------------------------------------------------ street corner signs
   const solidIndex = new SpatialHash(30);
@@ -591,6 +615,7 @@ function convert(osm) {
       attribution: overture
         ? '© OpenStreetMap contributors, Overture Maps Foundation, Google Open Buildings, Microsoft'
         : '© OpenStreetMap contributors (ODbL)',
+      fidelity: fidelityMode,
       generated: new Date().toISOString(),
       origin: center,
       radius,
@@ -676,6 +701,7 @@ function infill(roads, buildings, areas, bIndex, rng, inside) {
 // ---------------------------------------------------------------------------
 const osm = args.input ? JSON.parse(fs.readFileSync(path.resolve(args.input), 'utf8')) : await download();
 console.log(`Procesando ${osm.elements.length.toLocaleString('es-AR')} elementos de OSM…`);
+console.log(`Modo de fidelidad: ${fidelityMode === 'max' ? 'máxima (sin geometría sintética por defecto)' : 'equilibrado'}`);
 const { data, infilled } = convert(osm);
 fs.mkdirSync(path.dirname(outFile), { recursive: true });
 fs.writeFileSync(outFile, JSON.stringify(data));

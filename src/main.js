@@ -20,15 +20,24 @@ import { headlightMaterial } from './entities/models.js';
 const loadingText = document.getElementById('loading-text');
 const setLoading = (t) => (loadingText.textContent = t);
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
+const qualityFromQuery = (value) => {
+  const q = String(value || '').toLowerCase();
+  return /^(max|maxima|máxima|ultra)$/.test(q) ? 'max' : 'balanced';
+};
 
-async function loadCityData() {
+async function loadCityData(qualityMode) {
   const params = new URLSearchParams(location.search);
   if (params.get('mapa') !== 'procedural') {
+    const candidates = qualityMode === 'max'
+      ? ['data/quilmes-max.json', 'data/quilmes.json']
+      : ['data/quilmes.json', 'data/quilmes-max.json'];
     try {
-      const res = await fetch(`${import.meta.env.BASE_URL}data/quilmes.json`);
-      if (res.ok && res.headers.get('content-type')?.includes('json')) {
-        const data = await res.json();
-        if (data?.roads?.length) return data;
+      for (const file of candidates) {
+        const res = await fetch(`${import.meta.env.BASE_URL}${file}`);
+        if (res.ok && res.headers.get('content-type')?.includes('json')) {
+          const data = await res.json();
+          if (data?.roads?.length) return data;
+        }
       }
     } catch {
       /* fall back to procedural */
@@ -38,9 +47,10 @@ async function loadCityData() {
 }
 
 async function main() {
+  const qualityMode = qualityFromQuery(new URLSearchParams(location.search).get('calidad'));
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   const mobile = isTouchDevice();
-  renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1 : 1.5));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1 : qualityMode === 'max' ? 2 : 1.5));
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -58,11 +68,11 @@ async function main() {
 
   setLoading('Cargando datos de Quilmes…');
   await nextFrame();
-  const data = await loadCityData();
+  const data = await loadCityData(qualityMode);
   setLoading(`Construyendo ${data.buildings.length.toLocaleString('es-AR')} edificios y ${data.roads.length.toLocaleString('es-AR')} calles…`);
   await nextFrame();
   const t0 = performance.now();
-  const world = buildWorld(data, renderer, scene);
+  const world = buildWorld(data, renderer, scene, { qualityMode });
   console.info(`Ciudad construida en ${Math.round(performance.now() - t0)} ms`);
   const env = new Environment(scene, renderer);
   world.waterMaterial.envMap = env.bakeEnvMap(12);
@@ -87,9 +97,11 @@ async function main() {
       /* no bus data: the game runs without colectivos */
     }
   }
+  const activeQuality = data.fidelity || qualityMode;
+  const qualityLabel = activeQuality === 'max' ? 'máxima fidelidad' : 'equilibrado';
   document.getElementById('source').textContent =
     data.source !== 'procedural'
-      ? `Mapa: ${data.attribution || '© colaboradores de OpenStreetMap'} · ${data.buildings.length.toLocaleString('es-AR')} edificios`
+      ? `Mapa: ${data.attribution || '© colaboradores de OpenStreetMap'} · ${data.buildings.length.toLocaleString('es-AR')} edificios · modo ${qualityLabel}`
       : 'Mapa: aproximación procedural de Quilmes centro (ejecutá "npm run fetch-osm" para el mapa real)';
 
   // ------------------------------------------------------------- player

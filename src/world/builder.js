@@ -69,7 +69,10 @@ class GeoBuf {
   }
 }
 
-export function buildWorld(data, renderer, scene) {
+export function buildWorld(data, renderer, scene, opts = {}) {
+  const qualityMode = opts.qualityMode === 'max' ? 'max' : 'balanced';
+  const lodNear = qualityMode === 'max' ? 950 : 700;
+  const lodFar = qualityMode === 'max' ? 2200 : 1550;
   const tex = makeTextures(renderer);
   const collision = new CollisionWorld();
   const graph = new RoadGraph(data.roads);
@@ -346,13 +349,18 @@ export function buildWorld(data, renderer, scene) {
   });
 
   const chunkGroup = new THREE.Group();
-  for (const [, mats] of chunks) {
+  const buildingChunks = [];
+  for (const [key, mats] of chunks) {
+    const [ix, iz] = key.split(',').map(Number);
+    const group = new THREE.Group();
     for (const [mat, buf] of mats) {
       const mesh = new THREE.Mesh(buf.geometry(), mat);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      chunkGroup.add(mesh);
+      group.add(mesh);
     }
+    chunkGroup.add(group);
+    buildingChunks.push({ group, cx: (ix + 0.5) * CHUNK, cz: (iz + 0.5) * CHUNK, state: -1 });
   }
   root.add(chunkGroup);
   chunks.clear(); // the JS arrays are no longer needed once uploaded to typed arrays
@@ -479,8 +487,22 @@ export function buildWorld(data, renderer, scene) {
       streetSigns.setNight(n);
     },
     streetSigns,
+    updateBuildingLod(x, z) {
+      const near2 = lodNear * lodNear;
+      const far2 = lodFar * lodFar;
+      for (const c of buildingChunks) {
+        const d2 = (c.cx - x) ** 2 + (c.cz - z) ** 2;
+        const state = d2 > far2 ? 0 : d2 > near2 ? 1 : 2; // hidden / mid / near
+        if (state === c.state) continue;
+        c.state = state;
+        c.group.visible = state > 0;
+        const cast = state === 2;
+        for (const mesh of c.group.children) mesh.castShadow = cast;
+      }
+    },
     // Per-frame work that depends on where the player is.
     update(x, z) {
+      this.updateBuildingLod(x, z);
       streetSigns.update(x, z);
     },
   };

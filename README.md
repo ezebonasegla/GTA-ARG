@@ -19,6 +19,7 @@ Para regenerarlo o ampliarlo mirá [Mapa real](#mapa-real-de-quilmes).
 
 Si el archivo no está, el juego arranca con una **aproximación procedural** del centro de Quilmes.
 También podés forzarla con `?mapa=procedural` en la URL.
+Y podés elegir calidad de ciudad con `?calidad=equilibrado` (default) o `?calidad=max` (más detalle, más pesado).
 
 ### Controles
 
@@ -135,6 +136,7 @@ Hay dos fuentes, y las dos terminan en el mismo conversor (`scripts/fetch-osm.mj
 ```bash
 pip install pyarrow shapely
 npm run fetch-overture      # = python3 scripts/fetch_overture.py && node scripts/fetch-osm.mjs --input .cache/overture-raw.json
+npm run fetch-overture:max  # máxima fidelidad: guarda public/data/quilmes-max.json (sin split/infill sintético)
 ```
 
 [Overture Maps](https://overturemaps.org/) publica gratis (bucket S3 público, sin API key) las calles de
@@ -145,6 +147,7 @@ al centro (donde están las torres), y **divide las huellas que agrupan varias c
 ~8,66 m, cada uno con su propia altura (se desactiva con `--no-split`). Los comercios de Overture Places
 marcan qué edificios tienen local en planta baja, las iglesias toman estilo de iglesia y los lugares
 conocidos (Catedral, Municipalidad, Estación Quilmes, Cervecería Quilmes, estadio de Quilmes…) aparecen en el minimapa.
+Con `--fidelity max` el conversor prioriza huella real y evita por defecto split + infill para no inventar geometría.
 
 Opciones: `python3 scripts/fetch_overture.py --lat -34.72 --lon -58.27 --radius 3000` (y el mismo
 `--radius` para `fetch-osm.mjs`).
@@ -157,6 +160,7 @@ npm run fetch-osm -- --radius 3000            # área más grande (más pesada)
 npm run fetch-osm -- --lat -34.72 --lon -58.27 # centrar en otro punto (p. ej. Quilmes Oeste)
 npm run fetch-osm -- --input respuesta.json   # convertir una respuesta de Overpass guardada
 npm run fetch-osm -- --no-infill              # no completar lotes faltantes
+npm run fetch-osm:max                          # máxima fidelidad (genera public/data/quilmes-max.json)
 ```
 
 El script consulta la API de Overpass y genera `public/data/quilmes.json` con:
@@ -164,7 +168,8 @@ El script consulta la API de Overpass y genera `public/data/quilmes.json` con:
 - **Calles** con su nombre, ancho (según tipo, `lanes` o `width`) y sentido (`oneway`).
 - **Edificios** con su huella real. La altura sale de `height` o `building:levels`; si no está cargada se estima
   según el tipo de edificio. Usa `building:colour` y `roof:shape` cuando existen, y marca planta baja comercial
-  en los edificios que tienen comercios (`shop`, bares, farmacias, etc.) mapeados.
+  en los edificios que tienen comercios (`shop`, bares, farmacias, etc.) mapeados. También guarda metadatos
+  por edificio (`source`, `usage`, y si altura/color/techo fueron medidos o estimados).
 - **Plazas, parques, canchas, playas, agua y la costa del Río de la Plata**, vías del tren y estaciones.
 - **Relleno de manzanas**: en OSM muchas casas del conurbano no están dibujadas. El script completa el frente de
   las manzanas vacías con lotes de ~8,66 m típicos de la zona (se puede desactivar con `--no-infill`).
