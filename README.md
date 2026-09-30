@@ -62,6 +62,21 @@ Para probarlo desde el celular en la misma red Wi-Fi: `npm run dev -- --host` y 
 - **Trenes de la línea Roca** que circulan por las vías reales y paran en las estaciones Quilmes y Bernal
   (cuidado: atropellan).
 
+### Colectivos reales
+
+Los colectivos recorren los **recorridos reales** de las líneas que pasan por Quilmes y paran en sus **paradas
+reales**, con el número de línea y el destino en el cartel (adelante, al costado y atrás). Cada parada tiene su
+poste; al acercarte a pie, la pantalla muestra la dirección de la parada y qué líneas paran ahí.
+
+Líneas incluidas (22): 22, 85, 98, 129, 148, 159, 178, 195, 219, 257, 263, 266, 278, 281, 293, 295, 300,
+324, 372, 570, 580 y 585, con sus ramales en ambos sentidos (185 recorridos y 1.286 paradas).
+
+Los datos salen del **GTFS oficial de colectivos del AMBA** (Gobierno de la Ciudad de Buenos Aires, vía la
+copia de Mobility Database) con `npm run fetch-buses` (`scripts/fetch_buses.py` → `public/data/buses.json`).
+La copia disponible corresponde al **último trimestre de 2019**: algunos recorridos pueden haber cambiado desde
+entonces, y las líneas municipales (582, 583, 584) no están en ese archivo. Los colores de cada empresa son
+representativos (el GTFS no los incluye).
+
 ### Lugares con forma propia
 
 Los lugares conocidos se detectan en los datos (`scripts/specials.mjs`) y se modelan sobre su ubicación y
@@ -161,6 +176,8 @@ src/world/landmarks.js   modelos de los lugares conocidos (catedral, estaciones,
 src/entities/            jugador, vehículos (física arcade), tránsito, policía, peatones y trenes
 scripts/specials.mjs     detecta los lugares conocidos al convertir el mapa
 scripts/landmark-shots.mjs capturas de cada lugar conocido (con navegador headless)
+src/entities/buses.js    colectivos por sus recorridos reales y postes de parada
+scripts/fetch_buses.py   extrae líneas, recorridos y paradas del GTFS de colectivos
 src/touch.js             controles táctiles para celular
 scripts/mobile-test.mjs  prueba en un celular emulado con toques (joystick, botones, pedales)
 scripts/fetch_overture.py descarga Quilmes de Overture Maps

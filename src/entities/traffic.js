@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { Vehicle, collideVehicles } from './vehicle.js';
 
-const TYPE_WEIGHTS = [['sedan', 38], ['hatch', 26], ['pickup', 10], ['taxi', 14], ['bus', 8]];
+const TYPE_WEIGHTS = [['sedan', 40], ['hatch', 28], ['pickup', 11], ['taxi', 15]]; // colectivos come from buses.js
 const MAX_MOVING = 38;
 const MAX_PARKED = 34;
 const SPAWN_MIN = 90, SPAWN_MAX = 260, DESPAWN = 330;
@@ -143,7 +143,7 @@ export class Traffic {
     const { px, pz } = ctx;
     let moving = 0, parked = 0, police = 0;
     for (const v of [...this.vehicles]) {
-      if (v === ctx.playerVehicle) continue;
+      if (v === ctx.playerVehicle || v.managed) continue; // buses.js manages its own colectivos
       const d = Math.hypot(v.x - px, v.z - pz);
       if (d > DESPAWN && !(v.driver === 'police' && ctx.wanted > 0 && d < DESPAWN * 1.5)) {
         this.remove(v);

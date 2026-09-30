@@ -12,6 +12,7 @@ import { Vehicle } from './entities/vehicle.js';
 import { Traffic } from './entities/traffic.js';
 import { Peds } from './entities/peds.js';
 import { Trains, trainHit } from './entities/train.js';
+import { Buses } from './entities/buses.js';
 import { headlightMaterial } from './entities/models.js';
 
 const loadingText = document.getElementById('loading-text');
@@ -73,6 +74,16 @@ async function main() {
   const traffic = new Traffic(scene, world.graph, world.collision, rng);
   const peds = new Peds(scene, world.graph, world.collision, rng);
   const trains = new Trains(scene, data);
+  // real colectivo lines (only for the real map: same coordinates)
+  let buses = null;
+  if (data.source !== 'procedural') {
+    try {
+      const res = await fetch(`${import.meta.env.BASE_URL}data/buses.json`);
+      if (res.ok && res.headers.get('content-type')?.includes('json')) buses = new Buses(scene, await res.json(), { collision: world.collision, traffic, graph: world.graph });
+    } catch {
+      /* no bus data: the game runs without colectivos */
+    }
+  }
   document.getElementById('source').textContent =
     data.source !== 'procedural'
       ? `Mapa: ${data.attribution || '© colaboradores de OpenStreetMap'} · ${data.buildings.length.toLocaleString('es-AR')} edificios`
@@ -321,6 +332,7 @@ async function main() {
     const px = player.x, pz = player.z;
     const ctx = { px, pz, playerVehicle: player.vehicle, peds: peds.list, wanted, time: totalTime, horn, onCrime, trainBoxes };
     const carHit = traffic.update(dt, ctx);
+    buses?.update(dt, ctx, rng);
     if (carHit > 3) audio.thump(carHit);
     peds.update(dt, { px, pz, vehicles: traffic.vehicles, playerVehicle: player.vehicle, onCrime });
 
@@ -393,6 +405,10 @@ async function main() {
       const v = traffic.vehicles.find((v) => Math.min(...v.circles().map(([x, z]) => Math.hypot(x - px, z - pz))) < 4.5);
       if (v) hint = v.driver === 'npc' ? 'E: robar el auto' : v.driver === 'police' ? 'E: robar el patrullero' : 'E: subir al auto';
     }
+    if (!hint && !inCar && buses) {
+      const st = buses.nearestStop(px, pz, 6);
+      if (st) hint = `Parada ${st.name} · Líneas ${st.lines.join(', ')}`;
+    }
     hud.hint(hint);
     const blips = [];
     for (const t of trainBoxes) blips.push({ x: t.x, z: t.z, color: '#1d4fa0', r: 3 });
@@ -405,7 +421,7 @@ async function main() {
     input.endFrame();
     requestAnimationFrame(frame);
   }
-  window.__game = { trains, hud, scene, camera, renderer, player, traffic, peds, world, data, get hours() { return hours; }, set hours(h) { hours = h; } };
+  window.__game = { buses, trains, hud, scene, camera, renderer, player, traffic, peds, world, data, get hours() { return hours; }, set hours(h) { hours = h; } };
   requestAnimationFrame(frame);
 }
 
