@@ -9,6 +9,11 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 
 const GOOGLE_3D_TILES_ASSET = '2275207'; // "Google Photorealistic 3D Tiles" in Cesium ion
 const TOKEN_KEY = 'gta-quilmes-cesium-token';
+const ENV_TOKEN = String(import.meta.env.VITE_CESIUM_ION_TOKEN || '').trim();
+
+export function defaultToken() {
+  return ENV_TOKEN;
+}
 
 export function savedToken() {
   try {
@@ -38,6 +43,7 @@ export class Photoreal {
     this.groundOffset = null;
     this.raycaster = new THREE.Raycaster();
     this.raycaster.firstHitOnly = true;
+    this.maxAnisotropy = renderer.capabilities.getMaxAnisotropy?.() || 1;
     this.probeTimer = 0;
     this.probeOffsets = [
       [0, 0],
@@ -64,7 +70,7 @@ export class Photoreal {
       height: 0,
       recenter: true,
     }));
-    tiles.errorTarget = 12;
+    tiles.errorTarget = window.matchMedia('(max-width: 900px)').matches ? 9 : 6;
     tiles.setCamera(camera);
     tiles.setResolutionFromRenderer(camera, renderer);
 
@@ -74,7 +80,10 @@ export class Photoreal {
         if (!o.isMesh) return;
         o.castShadow = false;
         o.receiveShadow = false;
-        for (const m of [].concat(o.material)) this.materials.add(m);
+        for (const m of [].concat(o.material)) {
+          this.materials.add(m);
+          if (m?.map) m.map.anisotropy = this.maxAnisotropy;
+        }
       });
     });
     tiles.addEventListener('dispose-model', ({ scene: model }) => {

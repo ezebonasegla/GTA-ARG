@@ -14,7 +14,7 @@ import { Traffic } from './entities/traffic.js';
 import { Peds } from './entities/peds.js';
 import { Trains, trainHit } from './entities/train.js';
 import { Buses } from './entities/buses.js';
-import { Photoreal, savedToken, saveToken } from './world/photoreal.js';
+import { Photoreal, defaultToken, savedToken, saveToken } from './world/photoreal.js';
 import { headlightMaterial } from './entities/models.js';
 
 const loadingText = document.getElementById('loading-text');
@@ -133,6 +133,7 @@ async function main() {
 
   const cam = { yaw: spawnHeading, pitch: 0.28, dist: 5.5, idle: 0, mode: 0 };
   const camModes = [1, 1.6, 0.6];
+  const ghost = { on: false, x: sx, y: 90, z: sz, yaw: spawnHeading, pitch: -0.35 };
 
   // headlight for the player's car at night
   const headlight = new THREE.SpotLight(0xfff1d0, 0, 60, 0.6, 0.5, 1.2);
@@ -151,16 +152,17 @@ async function main() {
   if (mobile) startOverlay.querySelector('.cta').textContent = 'TOCÁ PARA JUGAR';
   // Photorealistic mode (Google 3D Tiles via a free Cesium ion token)
   let photo = null;
+  const configuredToken = defaultToken();
   const tokenInput = document.getElementById('cesium-token');
   const photoPanel = document.getElementById('photo-panel');
   if (data.source === 'procedural') photoPanel.hidden = true;
-  tokenInput.value = savedToken();
+  tokenInput.value = savedToken() || configuredToken;
   for (const ev of ['click', 'touchend', 'keydown']) photoPanel.addEventListener(ev, (e) => e.stopPropagation());
   const setPhotoMode = (on) => {
     if (on && !photo) {
-      const token = tokenInput.value.trim() || savedToken();
+      const token = tokenInput.value.trim() || savedToken() || configuredToken;
       if (!token) {
-        hud.toast('Para el modo fotorrealista pegá tu token de Cesium ion en la pantalla de inicio.', 6);
+        hud.toast('Para ver el mapa real 3D de Google, pegá tu token de Cesium ion (o configurá VITE_CESIUM_ION_TOKEN).', 7);
         return;
       }
       photo = new Photoreal({ scene, camera, renderer, origin: data.origin, token, onError: (msg) => {
@@ -172,19 +174,48 @@ async function main() {
     const active = on && !!photo;
     if (photo) photo.holder.visible = active;
     world.root.visible = !active; // the generated city hides; gameplay stays
-    camera.far = active ? 4000 : 1200;
+    camera.far = active ? 5000 : 1200;
     camera.updateProjectionMatrix();
-    scene.fog.far = active ? 3000 : 1100;
+    scene.fog.far = active ? 3800 : 1100;
     photoMode = active;
   };
   let photoMode = false;
+  const setGhostMode = (on) => {
+    if (on === ghost.on) return;
+    if (on) {
+      if (player.vehicle || player.transition || deadTimer > 0) {
+        hud.toast('Salí del auto y quedate a pie para activar el modo fantasma.', 5);
+        return;
+      }
+      ghost.x = player.x;
+      ghost.z = player.z;
+      ghost.y = Math.max(35, player.y + 80);
+      ghost.yaw = cam.yaw;
+      ghost.pitch = Math.max(-1.2, Math.min(1.2, cam.pitch - 0.3));
+      player.mesh.visible = false;
+      window.__game.freeCam = true;
+      hud.toast('Modo fantasma activado (V): volá con WASD + Espacio/Shift.', 6);
+    } else {
+      const safe = world.collision.resolve(ghost.x, ghost.z, 0.35, 'platform');
+      player.x = safe.x;
+      player.z = safe.z;
+      player.y = world.collision.floorAt(player.x, player.z);
+      player.vy = 0;
+      player.sync();
+      player.mesh.visible = true;
+      window.__game.freeCam = false;
+      hud.toast('Modo fantasma desactivado.', 4);
+    }
+    ghost.on = on;
+  };
 
   const start = () => {
     startOverlay.classList.add('hidden');
     audio.start();
     const token = tokenInput.value.trim();
-    saveToken(token);
-    if (token) setPhotoMode(true);
+    if (token && token !== configuredToken) saveToken(token);
+    else if (!token && !configuredToken) saveToken('');
+    if (token || configuredToken) setPhotoMode(true);
     if (mobile) {
       // full screen and landscape where the browser allows it
       enterFullscreen();
@@ -256,6 +287,7 @@ async function main() {
     if (input.hit('Tab')) helpEl.classList.toggle('hidden');
     if (input.hit('KeyT')) hours = (hours + 1) % 24;
     if (input.hit('KeyG')) setPhotoMode(!photoMode);
+    if (input.hit('KeyV')) setGhostMode(!ghost.on);
     if (input.hit('KeyO')) {
       if (fullscreenElement()) exitFullscreen();
       else enterFullscreen().then((ok) => ok && renderer.domElement.requestPointerLock?.());
@@ -269,14 +301,32 @@ async function main() {
     cam.pitch = THREE.MathUtils.clamp(cam.pitch + input.mouseDY * sens, -0.35, 1.2);
     if (input.mouseDX || input.mouseDY) cam.idle = 0;
     else cam.idle += dt;
-    if (input.down('KeyQ')) cam.yaw += dt * 2;
+    if (!ghost.on && input.down('KeyQ')) cam.yaw += dt * 2;
 
     let inCar = !!player.vehicle;
     touch?.update(inCar);
     const horn = inCar && input.down('KeyH');
     let throttle = 0;
 
-    if (deadTimer > 0) {
+    if (ghost.on) {
+      ghost.yaw = cam.yaw;
+      ghost.pitch = cam.pitch;
+      const fwdX = Math.sin(ghost.yaw);
+      const fwdZ = Math.cos(ghost.yaw);
+      const rightX = fwdZ;
+      const rightZ = -fwdX;
+      let mx = 0, mz = 0;
+      if (input.down('KeyW', 'ArrowUp')) { mx += fwdX; mz += fwdZ; }
+      if (input.down('KeyS', 'ArrowDown')) { mx -= fwdX; mz -= fwdZ; }
+      if (input.down('KeyA', 'ArrowLeft')) { mx -= rightX; mz -= rightZ; }
+      if (input.down('KeyD', 'ArrowRight')) { mx += rightX; mz += rightZ; }
+      const mag = Math.hypot(mx, mz) || 1;
+      const speed = input.down('ControlLeft', 'ControlRight') ? 180 : 85;
+      ghost.x += (mx / mag) * speed * dt;
+      ghost.z += (mz / mag) * speed * dt;
+      const climb = (input.down('Space') ? 1 : 0) - (input.down('ShiftLeft', 'ShiftRight') ? 1 : 0);
+      ghost.y = THREE.MathUtils.clamp(ghost.y + climb * speed * dt, 8, 2500);
+    } else if (deadTimer > 0) {
       deadTimer -= dt;
       player.updateDead(dt, world.collision);
       if (deadTimer <= 0) respawn();
@@ -358,7 +408,7 @@ async function main() {
 
     // trains: move, then push/hurt whatever is on the tracks
     const trainBoxes = trains.update(dt);
-    for (const box of trainBoxes) {
+    if (!ghost.on) for (const box of trainBoxes) {
       const moving = Math.hypot(box.vx, box.vz) > 1;
       if (!player.vehicle && deadTimer <= 0) {
         const h = trainHit(box, player.x, player.z, 0.35);
@@ -393,7 +443,7 @@ async function main() {
         if (!p.dead && moving && trainHit(box, p.x, p.z, 0.3)) peds.knockDown(p, box.vx, box.vz, 5);
       }
     }
-    if (player.health <= 0 && deadTimer <= 0) {
+    if (!ghost.on && player.health <= 0 && deadTimer <= 0) {
       hud.message('WASTED', '#c0392b', 4);
       wanted = 0;
       deadTimer = 4;
@@ -402,17 +452,18 @@ async function main() {
       player.lastHit = null;
     }
 
-    const px = player.x, pz = player.z;
+    const px = ghost.on ? ghost.x : player.x;
+    const pz = ghost.on ? ghost.z : player.z;
     const ctx = { px, pz, playerVehicle: player.vehicle, peds: peds.list, wanted, time: totalTime, horn, onCrime, trainBoxes };
     const carHit = traffic.update(dt, ctx);
     buses?.update(dt, ctx, rng);
-    if (carHit > 3) audio.thump(carHit);
-    peds.update(dt, { px, pz, vehicles: traffic.vehicles, playerVehicle: player.vehicle, onCrime });
+    if (!ghost.on && carHit > 3) audio.thump(carHit);
+    peds.update(dt, { px, pz, vehicles: traffic.vehicles, playerVehicle: ghost.on ? null : player.vehicle, onCrime });
 
     // wanted level: evade the cops to lose stars, stop next to them to get busted
     let nearestCop = Infinity;
     for (const v of traffic.vehicles) if (v.driver === 'police') nearestCop = Math.min(nearestCop, Math.hypot(v.x - px, v.z - pz));
-    if (wanted > 0) {
+    if (!ghost.on && wanted > 0) {
       if (nearestCop > 90) evadeTimer += dt;
       else evadeTimer = Math.max(0, evadeTimer - dt * 0.5);
       if (evadeTimer > 12 + wanted * 4) {
@@ -432,7 +483,7 @@ async function main() {
         respawn();
       }
     }
-    hud.setWanted(evadeTimer > 0 && wanted > 0 && Math.floor(totalTime * 3) % 2 ? 0 : wanted);
+    hud.setWanted(ghost.on ? 0 : evadeTimer > 0 && wanted > 0 && Math.floor(totalTime * 3) % 2 ? 0 : wanted);
 
     // ------------------------------------------------------------- camera
     inCar = !!player.vehicle; // may have changed this frame (got in/out, busted)
@@ -451,7 +502,14 @@ async function main() {
         break;
       }
     }
-    if (!window.__game?.freeCam) {
+    if (ghost.on) {
+      const cp2 = Math.cos(ghost.pitch), sp2 = Math.sin(ghost.pitch);
+      const tx = ghost.x + Math.sin(ghost.yaw) * cp2;
+      const ty = ghost.y + sp2;
+      const tz = ghost.z + Math.cos(ghost.yaw) * cp2;
+      camera.position.set(ghost.x, ghost.y, ghost.z);
+      camera.lookAt(tx, ty, tz);
+    } else if (!window.__game?.freeCam) {
       camera.position.set(px - dirX * d, Math.max(0.4, focusY + sp * d), pz - dirZ * d);
       camera.lookAt(px, focusY, pz);
     }
@@ -478,16 +536,16 @@ async function main() {
 
     // ------------------------------------------------------------- HUD
     const near = world.graph.nearest(px, pz, 30);
-    hud.setStreet(near?.seg.road.name || '');
-    hud.setSpeed(inCar ? Math.abs(player.vehicle.speed) * 3.6 : null);
+    hud.setStreet((ghost.on ? 'MODO FANTASMA · ' : '') + (near?.seg.road.name || ''));
+    hud.setSpeed(ghost.on ? null : inCar ? Math.abs(player.vehicle.speed) * 3.6 : null);
     hud.setClock(hours);
-    hud.setHealth(inCar ? player.vehicle.health : player.health);
+    hud.setHealth(ghost.on ? player.health : inCar ? player.vehicle.health : player.health);
     let hint = '';
-    if (!inCar && deadTimer <= 0 && !player.transition) {
+    if (!ghost.on && !inCar && deadTimer <= 0 && !player.transition) {
       const v = traffic.vehicles.find((v) => Math.min(...v.circles().map(([x, z]) => Math.hypot(x - px, z - pz))) < 4.5);
       if (v) hint = v.driver === 'npc' ? 'E: robar el auto' : v.driver === 'police' ? 'E: robar el patrullero' : v.driver === 'bus' ? `E: robar el colectivo ${v.busLine}` : 'E: subir al auto';
     }
-    if (!hint && !inCar && buses) {
+    if (!hint && !inCar && buses && !ghost.on) {
       const st = buses.nearestStop(px, pz, 6);
       if (st) hint = `Parada ${st.name} · Líneas ${st.lines.join(', ')}`;
     }
@@ -495,7 +553,7 @@ async function main() {
     const blips = [];
     for (const t of trainBoxes) blips.push({ x: t.x, z: t.z, color: '#1d4fa0', r: 3 });
     for (const v of traffic.vehicles) if (v.driver === 'police') blips.push({ x: v.x, z: v.z, color: Math.floor(totalTime * 4) % 2 ? '#e74c3c' : '#3498db', r: 4 });
-    hud.drawMinimap(px, pz, player.heading, cam.yaw, blips);
+    hud.drawMinimap(px, pz, ghost.on ? ghost.yaw : player.heading, cam.yaw, blips);
     hud.update(dt);
     audio.update({ inCar, speed: inCar ? player.vehicle.speed : 0, throttle, horn, sirenDist: nearestCop, time: totalTime });
 
