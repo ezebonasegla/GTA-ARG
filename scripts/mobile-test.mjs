@@ -50,7 +50,10 @@ const [ex, ey] = await center('#touch button[data-key="KeyE"]');
 await touch('touchStart', [[ex, ey, 3]]);
 await page.waitForTimeout(700);
 await touch('touchEnd', []);
-await page.waitForTimeout(1500);
+// getting in is animated (walk to the door, sit down): wait until done
+await page.waitForFunction(() => !!window.__game.player.vehicle, null, { timeout: 60000 }).catch(() => {});
+// the driving controls (pedals, "Bajar") show up on the next frame
+await page.waitForFunction(() => document.getElementById('touch').classList.contains('in-car'), null, { timeout: 30000 }).catch(() => {});
 console.log('after Subir:', JSON.stringify(await state()), 'button label:', await page.textContent('#touch button[data-key="KeyE"]'));
 // gas pedal + steer with stick at the same time (multi-touch)
 const [gx, gy] = await center('#touch button[data-key="KeyW"]');
