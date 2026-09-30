@@ -25,12 +25,12 @@ export class Peds {
   }
 
   spawn(px, pz, minD, maxD) {
-    const nodes = this.graph.nodes;
+    // only consider street segments around the player (the city can be huge)
+    const segs = [...this.graph.segIndex.query(px - maxD, pz - maxD, px + maxD, pz + maxD)];
+    if (!segs.length) return null;
     for (let tries = 0; tries < 20; tries++) {
-      const a = nodes[Math.floor(this.rng() * nodes.length)];
-      if (!a.neighbors.size) continue;
-      const nb = [...a.neighbors];
-      const b = nb[Math.floor(this.rng() * nb.length)];
+      const seg = segs[Math.floor(this.rng() * segs.length)];
+      const [a, b] = this.rng() < 0.5 ? [seg.a, seg.b] : [seg.b, seg.a];
       const t = this.rng();
       const side = this.rng() < 0.5 ? -1 : 1;
       const [ox, oz] = this.sideOffset(a, b, side);

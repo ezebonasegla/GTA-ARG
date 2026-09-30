@@ -7,6 +7,7 @@
 //   npm run fetch-osm -- --lat -34.72 --lon -58.25
 //   npm run fetch-osm -- --input raw.json      # convert a saved Overpass response
 //   npm run fetch-osm -- --no-infill           # don't fill blocks missing buildings
+//   npm run fetch-osm -- --no-split            # don't split merged row-house footprints
 //
 // Map data © OpenStreetMap contributors, available under the ODbL.
 import fs from 'node:fs';
@@ -163,7 +164,7 @@ function clipRect(pts, minX, minZ, maxX, maxZ) {
   }
 }
 
-function buildingHeight(tags, area, rng) {
+function buildingHeight(tags, area, rng, dist) {
   const h = parseNum(tags.height);
   if (h > 1) return { h, levels: Math.max(1, Math.round(h / 3)) };
   const lv = parseNum(tags['building:levels']);
@@ -185,12 +186,82 @@ function buildingHeight(tags, area, rng) {
   else if (['garage', 'garages', 'shed', 'roof', 'carport', 'hut'].includes(b)) return { h: 2.8, levels: 1 };
   else if (['school', 'university', 'college', 'hospital', 'civic', 'public', 'government'].includes(b)) levels = 2 + Math.floor(rng() * 3);
   else if (b === 'train_station') return { h: 9, levels: 2 };
-  else levels = area < 120 ? pick([[1, 0.6], [2, 0.4]]) : area < 400 ? pick([[1, 0.3], [2, 0.5], [3, 0.2]]) : pick([[2, 0.4], [3, 0.3], [4, 0.3]]);
+  else {
+    // No data (most satellite-detected footprints): guess from footprint size and
+    // distance to the center, where Quilmes has most of its apartment towers.
+    const towerChance = dist < 450 ? 0.33 : dist < 900 ? 0.12 : dist < 1500 ? 0.04 : 0.012;
+    if (area < 35) return { h: 2.8, levels: 1 };
+    if (area < 150) levels = pick(dist < 900 ? [[1, 0.4], [2, 0.5], [3, 0.1]] : [[1, 0.6], [2, 0.37], [3, 0.03]]);
+    else if (area < 900 && rng() < towerChance) levels = dist < 700 ? 6 + Math.floor(rng() * 10) : 4 + Math.floor(rng() * 6);
+    else if (area < 900) levels = pick([[1, 0.35], [2, 0.45], [3, 0.2]]);
+    else if (dist > 900 && rng() < 0.7) return { h: 7 + rng() * 4, levels: 1, industrial: true };
+    else levels = pick([[2, 0.5], [3, 0.3], [4, 0.2]]);
+  }
   return { h: levels * 3 + 0.3 + rng() * 0.5, levels };
 }
 
-function buildingStyle(tags, levels, rng) {
+// Cut a footprint into strips across its main axis (lots facing the street), and
+// very deep footprints also along the other axis.
+function splitIntoLots(ring, rng, allowDeep) {
+  let best = 0, ux = 1, uz = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (l > best) {
+      best = l;
+      ux = (b[0] - a[0]) / l;
+      uz = (b[1] - a[1]) / l;
+    }
+  }
+  const vx = -uz, vz = ux;
+  const proj = (p, dx, dz) => p[0] * dx + p[1] * dz;
+  const us = ring.map((p) => proj(p, ux, uz)), vs = ring.map((p) => proj(p, vx, vz));
+  const [u0, u1, v0, v1] = [Math.min(...us), Math.max(...us), Math.min(...vs), Math.max(...vs)];
+  if (u1 - u0 < 16 && v1 - v0 < 50) return [ring];
+  if (v1 - v0 >= 40 && !allowDeep) return [ring]; // compact and big: warehouse/factory
+  const cuts = (lo, hi, min, max) => {
+    const out = [lo];
+    let c = lo;
+    while (hi - c > max + min / 2) out.push((c += min + rng() * (max - min)));
+    out.push(hi);
+    return out;
+  };
+  const uc = cuts(u0, u1, 7.5, 11.5);
+  const vc = v1 - v0 > 50 ? cuts(v0, v1, 20, 30) : [v0, v1];
+  const parts = [];
+  for (let i = 0; i < uc.length - 1; i++) {
+    let strip = clipHalf(ring, ux, uz, uc[i], 1);
+    strip = clipHalf(strip, ux, uz, uc[i + 1], -1);
+    for (let j = 0; j < vc.length - 1 && strip.length >= 3; j++) {
+      let cell = clipHalf(strip, vx, vz, vc[j], 1);
+      cell = clipHalf(cell, vx, vz, vc[j + 1], -1);
+      if (cell.length >= 3 && Math.abs(polygonArea(cell)) > 12) parts.push(cell.map(([x, z]) => [r1(x), r1(z)]));
+    }
+  }
+  return parts;
+}
+
+// Keep the part of the polygon where sign * (p·d - c) >= 0.
+function clipHalf(pts, dx, dz, c, sign) {
+  const out = [];
+  const f = (p) => sign * (p[0] * dx + p[1] * dz - c);
+  for (let i = 0; i < pts.length; i++) {
+    const cur = pts[i], prev = pts[(i + pts.length - 1) % pts.length];
+    const fc = f(cur), fp = f(prev);
+    if (fc >= 0) {
+      if (fp < 0) out.push(lerp(prev, cur, fp / (fp - fc)));
+      out.push(cur);
+    } else if (fp >= 0) out.push(lerp(prev, cur, fp / (fp - fc)));
+  }
+  return out;
+  function lerp(a, b, t) {
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  }
+}
+
+function buildingStyle(tags, levels, rng, industrial) {
   const b = tags.building;
+  if (industrial) return 'industrial';
   if (['church', 'cathedral', 'chapel'].includes(b) || tags.amenity === 'place_of_worship') return 'church';
   if (['civic', 'public', 'government'].includes(b) || tags.amenity === 'townhall') return 'civic';
   if (b === 'train_station') return 'station';
@@ -206,6 +277,8 @@ function convert(osm) {
   const rng = mulberry32(1666);
   const roads = [], buildings = [], areas = [], rails = [], landmarks = [], barriers = [];
   const shopNodes = [];
+  const churchNodes = [];
+  const overture = osm.generator === 'overture';
   const lim = radius * 1.05;
   const inside = ([x, z]) => Math.abs(x) <= lim && Math.abs(z) <= lim;
 
@@ -213,8 +286,9 @@ function convert(osm) {
     const t = el.tags || {};
     if (el.type === 'node') {
       const [x, z] = proj.toWorld(el.lat, el.lon);
-      if (t.shop || t.amenity) shopNodes.push([x, z]);
-      if (t.railway === 'station' && t.name) landmarks.push({ name: t.name, pos: [r1(x), r1(z)] });
+      if (t.shop || (t.amenity && t.amenity !== 'place_of_worship')) shopNodes.push([x, z]);
+      if (t.amenity === 'place_of_worship') churchNodes.push([x, z]);
+      if ((t.railway === 'station' || t.landmark) && t.name) landmarks.push({ name: t.name, pos: [r1(x), r1(z)], kind: t.landmark || 'train_station' });
       continue;
     }
     if (el.type === 'way' && el.geometry) {
@@ -279,22 +353,41 @@ function convert(osm) {
   function addArea(kind, ring, t) {
     const clipped = clipRect(ring, -lim - 200, -lim - 200, lim + 200, lim + 200);
     if (clipped.length < 3) return;
+    if (kind === 'water' && Math.abs(polygonArea(ring)) > 4e6) {
+      // big river: draw it to the horizon, collide only inside the playable area
+      const far = clipRect(ring, -lim - 6000, -lim - 6000, lim + 6000, lim + 6000);
+      areas.push({ kind, pts: far, noCollide: true });
+      barriers.push({ pts: clipped });
+      return;
+    }
     const area = { kind, pts: clipped };
     areas.push(area);
     if (t.name && (kind === 'park' || kind === 'plaza') && Math.abs(polygonArea(clipped)) > 1500) {
       const b = bbox(clipped);
-      landmarks.push({ name: t.name, pos: [r1((b.minX + b.maxX) / 2), r1((b.minZ + b.maxZ) / 2)] });
+      landmarks.push({ name: t.name, pos: [r1((b.minX + b.maxX) / 2), r1((b.minZ + b.maxZ) / 2)], kind: 'park' });
     }
   }
 
-  function addBuilding(ring, t, id) {
+  function addBuilding(ring, t, id, piece = false) {
     const b = bbox(ring);
     if (!inside([(b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2])) return;
     const area = Math.abs(polygonArea(ring));
     if (area < 6) return;
+    // Satellite footprints often merge a whole row of attached houses into one
+    // polygon: split those into ~8.66 m lots so every house gets its own height.
+    const untagged = !t.height && !t['building:levels'] && !t.name && (!t.building || t.building === 'yes' || t.building === 'residential' || t.building === 'house');
+    if (!piece && untagged && args.split !== false && area > 260) {
+      const cdist = Math.hypot((b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2);
+      const parts = splitIntoLots(ring, mulberry32((id + 7) % 2147483647), cdist < 900);
+      if (parts.length > 1) {
+        parts.forEach((p, i) => addBuilding(p, t, (id * 31 + i + 1) % 2147483647, true));
+        return;
+      }
+    }
     const brng = mulberry32(id % 2147483647);
-    const { h, levels } = buildingHeight(t, area, brng);
-    const bld = { pts: ring, h: r1(h), levels, style: buildingStyle(t, levels, brng) };
+    const dist = Math.hypot((b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2);
+    const { h, levels, industrial } = buildingHeight(t, area, brng, dist);
+    const bld = { pts: ring, h: r1(h), levels, style: buildingStyle(t, levels, brng, industrial) };
     if (t.shop || ['retail', 'commercial', 'kiosk', 'supermarket'].includes(t.building)) bld.shop = true;
     const shape = t['roof:shape'];
     if ((shape === 'gabled' || shape === 'hipped') && ring.length === 4) bld.roof = 'gable';
@@ -355,7 +448,17 @@ function convert(osm) {
 
   // ------------------------------------------------------------ infill
   let infilled = 0;
-  if (args.infill !== false) infilled = infill(roads, buildings, areas, bIndex, rng, inside);
+  // Churches: the footprint containing a place-of-worship POI gets a church look.
+  for (const [x, z] of churchNodes) {
+    for (const b of bIndex.query(x - 1, z - 1, x + 1, z + 1)) {
+      if (!pointInPolygon(x, z, b.pts) || Math.abs(polygonArea(b.pts)) < 150) continue;
+      b.style = 'church';
+      b.h = Math.max(b.h, 14);
+      delete b.shop;
+    }
+  }
+
+  if (args.infill ?? !overture) infilled = infill(roads, buildings, areas, bIndex, rng, inside);
 
   // ------------------------------------------------------------ spawn near the center
   let spawn = [0, 8], spawnHeading = 0, best = Infinity;
@@ -378,17 +481,31 @@ function convert(osm) {
   const all = roads.flatMap((r) => r.pts).concat(buildings.flatMap((b) => b.pts));
   const bounds = bbox(all);
   const dedupLandmarks = [];
-  for (const l of landmarks) if (!dedupLandmarks.some((d) => d.name === l.name)) dedupLandmarks.push(l);
+  // Keep the famous places first and only a few of each kind (there are dozens of churches and clinics).
+  const priority = ['train_station', 'government_office', 'stadium_arena', 'brewery', 'museum', 'theatre_venue', 'shopping_mall', 'park', 'christian_place_of_worship', 'hospital'];
+  const perKind = { christian_place_of_worship: 2, hospital: 2, park: 6, government_office: 2, shopping_mall: 2 };
+  const famous = /catedral|municipalidad de quilmes|estaci[oó]n quilmes|plaza san mart|cervecer[ií]a y malter|centenario|iriarte|teatro municipal/i;
+  const rank = (l) => (famous.test(l.name) ? -1 : priority.includes(l.kind) ? priority.indexOf(l.kind) : priority.length);
+  landmarks.sort((a, b) => rank(a) - rank(b));
+  const used = {};
+  for (const l of landmarks) {
+    if (!inside(l.pos) || dedupLandmarks.some((d) => d.name === l.name || Math.hypot(d.pos[0] - l.pos[0], d.pos[1] - l.pos[1]) < 60)) continue;
+    if (!famous.test(l.name) && (used[l.kind] = (used[l.kind] || 0) + 1) > (perKind[l.kind] ?? 3)) continue;
+    delete l.kind;
+    dedupLandmarks.push(l);
+  }
   return {
     data: {
-      source: 'osm',
-      attribution: '© OpenStreetMap contributors (ODbL)',
+      source: overture ? 'overture' : 'osm',
+      attribution: overture
+        ? '© OpenStreetMap contributors, Overture Maps Foundation, Google Open Buildings, Microsoft'
+        : '© OpenStreetMap contributors (ODbL)',
       generated: new Date().toISOString(),
       origin: center,
       radius,
       bounds,
       roads, buildings, areas, rails, barriers,
-      landmarks: dedupLandmarks.slice(0, 40),
+      landmarks: dedupLandmarks.slice(0, 30),
       spawn, spawnHeading,
     },
     infilled,
@@ -472,5 +589,5 @@ fs.mkdirSync(path.dirname(outFile), { recursive: true });
 fs.writeFileSync(outFile, JSON.stringify(data));
 const mapped = data.buildings.length - infilled;
 console.log(`Listo: ${path.relative(root, outFile)} (${(fs.statSync(outFile).size / 1e6).toFixed(1)} MB)`);
-console.log(`  calles: ${data.roads.length}, edificios de OSM: ${mapped}, lotes completados: ${infilled}, áreas: ${data.areas.length}, vías: ${data.rails.length}`);
-console.log('  Datos del mapa © colaboradores de OpenStreetMap (ODbL).');
+console.log(`  calles: ${data.roads.length}, edificios: ${mapped}, lotes completados: ${infilled}, áreas: ${data.areas.length}, vías: ${data.rails.length}`);
+console.log(`  Datos: ${data.attribution}`);

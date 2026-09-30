@@ -9,14 +9,16 @@ Hecho con [Three.js](https://threejs.org/) y datos abiertos de [OpenStreetMap](h
 
 ```bash
 npm install
-npm run fetch-osm   # descarga el mapa real de Quilmes (opcional, ver abajo)
 npm run dev         # abrí http://localhost:5173
 ```
 
-Sin el paso `fetch-osm`, el juego arranca con una **aproximación procedural** del centro de Quilmes
-(grilla de manzanas orientada hacia el río, vías del Roca, estación, Plaza San Martín, catedral,
-peatonal Rivadavia y costanera). Con `fetch-osm` se usan las calles y edificios reales.
-También podés forzar el mapa procedural con `?mapa=procedural` en la URL.
+El repositorio ya incluye el **mapa real de Quilmes** (`public/data/quilmes.json`): un cuadrado de 5 km
+centrado en la Plaza San Martín, con **4.816 calles** con su nombre y sentido reales y **67.579 edificios**
+(Quilmes centro, Bernal, Quilmes Oeste, Ezpeleta, la autopista, la ribera y el Río de la Plata).
+Para regenerarlo o ampliarlo mirá [Mapa real](#mapa-real-de-quilmes).
+
+Si el archivo no está, el juego arranca con una **aproximación procedural** del centro de Quilmes.
+También podés forzarla con `?mapa=procedural` en la URL.
 
 ### Controles
 
@@ -47,7 +49,30 @@ También podés forzar el mapa procedural con `?mapa=procedural` en la URL.
 - Ciclo de día y noche con el recorrido del sol para la latitud de Quilmes, ventanas y faroles que se prenden.
 - Minimapa con los puntos de referencia, velocímetro, reloj y nombre de la calle actual.
 
-## Mapa real de Quilmes (OpenStreetMap)
+## Mapa real de Quilmes
+
+Hay dos fuentes, y las dos terminan en el mismo conversor (`scripts/fetch-osm.mjs`):
+
+### Overture Maps (recomendado, es la que se usó para el mapa incluido)
+
+```bash
+pip install pyarrow shapely
+npm run fetch-overture      # = python3 scripts/fetch_overture.py && node scripts/fetch-osm.mjs --input .cache/overture-raw.json
+```
+
+[Overture Maps](https://overturemaps.org/) publica gratis (bucket S3 público, sin API key) las calles de
+OpenStreetMap junto con **huellas de edificios detectadas en imágenes satelitales** (Google Open Buildings,
+Microsoft ML Buildings). En Quilmes eso da ~62.000 edificios contra ~2.400 dibujados a mano en OSM.
+Como casi ninguno tiene altura cargada, el conversor la estima según el tamaño de la huella y la distancia
+al centro (donde están las torres), y **divide las huellas que agrupan varias casas pegadas** en lotes de
+~8,66 m, cada uno con su propia altura (se desactiva con `--no-split`). Los comercios de Overture Places
+marcan qué edificios tienen local en planta baja, las iglesias toman estilo de iglesia y los lugares
+conocidos (Catedral, Municipalidad, Estación Quilmes, Cervecería Quilmes, estadio de Quilmes…) aparecen en el minimapa.
+
+Opciones: `python3 scripts/fetch_overture.py --lat -34.72 --lon -58.27 --radius 3000` (y el mismo
+`--radius` para `fetch-osm.mjs`).
+
+### OpenStreetMap directo (Overpass)
 
 ```bash
 npm run fetch-osm                             # 2 km alrededor de Plaza San Martín (llega al río)
@@ -67,8 +92,9 @@ El script consulta la API de Overpass y genera `public/data/quilmes.json` con:
 - **Relleno de manzanas**: en OSM muchas casas del conurbano no están dibujadas. El script completa el frente de
   las manzanas vacías con lotes de ~8,66 m típicos de la zona (se puede desactivar con `--no-infill`).
 
-Los datos del mapa son © colaboradores de OpenStreetMap, bajo licencia [ODbL](https://www.openstreetmap.org/copyright).
-Si publicás el juego con el mapa generado, mantené esa atribución (el juego la muestra en pantalla).
+Los datos del mapa son © colaboradores de OpenStreetMap ([ODbL](https://www.openstreetmap.org/copyright)),
+Overture Maps Foundation, Google Open Buildings y Microsoft ML Buildings, bajo las licencias con las que Overture
+los publica. Si publicás el juego con el mapa, mantené esa atribución (el juego la muestra en pantalla).
 
 ### ¿Y Google Street View?
 
@@ -99,7 +125,8 @@ src/world/roadGraph.js   grafo de calles (tránsito, peatones, rutas de la polic
 src/world/collision.js   colisiones 2D contra edificios y objetos
 src/world/geo.js         proyección lat/lon ↔ metros y utilidades geométricas
 src/entities/            jugador, vehículos (física arcade), tránsito, policía y peatones
-scripts/fetch-osm.mjs    importador de OpenStreetMap
+scripts/fetch_overture.py descarga Quilmes de Overture Maps
+scripts/fetch-osm.mjs    conversor al formato del juego (y descarga directa de OpenStreetMap)
 scripts/smoke.mjs        prueba automática con navegador headless (capturas de pantalla)
 ```
 
@@ -109,7 +136,7 @@ Coordenadas en metros (`x` = este, `z` = sur) respecto de `origin`:
 
 ```jsonc
 {
-  "source": "osm",
+  "source": "overture",
   "origin": { "lat": -34.7206, "lon": -58.2546 },
   "roads": [{ "pts": [[x, z], ...], "w": 9, "name": "Rivadavia", "kind": "residential", "oneway": true }],
   "buildings": [{ "pts": [[x, z], ...], "h": 6.3, "levels": 2, "style": "house", "shop": true, "roof": "gable" }],

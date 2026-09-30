@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "fetch-osm": "node scripts/fetch-osm.mjs"
+    "fetch-osm": "node scripts/fetch-osm.mjs",
+    "fetch-overture": "python3 scripts/fetch_overture.py --radius 2500 && node scripts/fetch-osm.mjs --input .cache/overture-raw.json --radius 2500"
   },
   "repository": {
     "type": "git",

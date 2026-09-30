@@ -103,7 +103,8 @@ export function buildWorld(data, renderer, scene) {
     railway: flatMat(tex.gravel),
     pitch: flatMat(tex.pitch),
     parking: flatMat(tex.asphalt, 0xbbbbbb),
-    water: new THREE.MeshStandardMaterial({ color: 0x7b6a4c, roughness: 0.15, metalness: 0.1, depthWrite: false }),
+    // Río de la Plata: muddy "color león" water with small waves reflecting the sky
+    water: new THREE.MeshStandardMaterial({ color: 0x8a7d62, roughness: 0.12, metalness: 0.35, normalMap: waveNormalMap(), normalScale: new THREE.Vector2(0.35, 0.35), depthWrite: false }),
   };
   const areaBufs = new Map();
   for (const area of data.areas) {
@@ -114,15 +115,12 @@ export function buildWorld(data, renderer, scene) {
     const white = new THREE.Color(1, 1, 1);
     const contour = area.pts.map(([x, z]) => new THREE.Vector2(x, z));
     const faces = THREE.ShapeUtils.triangulateShape(contour, []);
-    const scale = area.kind === 'pitch' ? 1 / 60 : 1 / 8;
+    const scale = area.kind === 'pitch' ? 1 / 60 : area.kind === 'water' ? 1 / 30 : 1 / 8;
     for (const [i, j, k] of faces) {
       const p = [area.pts[i], area.pts[j], area.pts[k]];
       buf.tri(...p.map(([x, z]) => [x, y, z]), ...p.map(([x, z]) => [x * scale, z * scale]), white, [0, 1, 0]);
     }
-    if (area.kind === 'water' && !area.noCollide) {
-      const b = bbox(area.pts);
-      if (b.maxX - b.minX < 1500 && b.maxZ - b.minZ < 1500) collision.addPolygon(area.pts, 0, 'water');
-    }
+    if (area.kind === 'water' && !area.noCollide) collision.addPolygon(area.pts, 0, 'water');
   }
   for (const barrier of data.barriers || []) collision.addPolygon(barrier.pts, 0, 'water');
   for (const [mat, buf] of areaBufs) {
@@ -131,6 +129,7 @@ export function buildWorld(data, renderer, scene) {
     mesh.renderOrder = -9;
     root.add(mesh);
   }
+  areaBufs.clear();
 
   // Road and sidewalk ribbons (with miter joints), then intersection patches.
   const sidewalkBuf = new GeoBuf();
@@ -300,13 +299,13 @@ export function buildWorld(data, renderer, scene) {
       if (len < 0.01) continue;
       const out = [dz / len, 0, -dx / len];
       if (shopH) {
-        const u0 = dist / 4 + uOffset * 4, u1 = (dist + len) / 4 + uOffset * 4;
+        const u0 = -dist / 4 + uOffset * 4, u1 = -(dist + len) / 4 + uOffset * 4;
         shopBuf.quad([p0[0], 0, p0[1]], [p1[0], 0, p1[1]], [p1[0], shopH, p1[1]], [p0[0], shopH, p0[1]],
           [u0 / 4, 0], [u1 / 4, 0], [u1 / 4, 1], [u0 / 4, 1], shopTint, out);
       }
       const y0 = shopH;
       if (h - y0 > 0.1) {
-        const u0 = dist / 6 + uOffset, u1 = (dist + len) / 6 + uOffset;
+        const u0 = -dist / 6 + uOffset, u1 = -(dist + len) / 6 + uOffset;
         walls.quad([p0[0], y0, p0[1]], [p1[0], y0, p1[1]], [p1[0], h, p1[1]], [p0[0], h, p0[1]],
           [u0, 0], [u1, 0], [u1, (h - y0) / 6], [u0, (h - y0) / 6], tint, out);
       }
@@ -352,6 +351,7 @@ export function buildWorld(data, renderer, scene) {
     }
   }
   root.add(chunkGroup);
+  chunks.clear(); // the JS arrays are no longer needed once uploaded to typed arrays
 
   {
     // tanques de agua (items are [x, z, roofY, scale])
@@ -458,6 +458,7 @@ export function buildWorld(data, renderer, scene) {
     collision,
     graph,
     tex,
+    waterMaterial: areaMats.water,
     setNight(n) {
       for (const m of nightMaterials) m.emissiveIntensity = n * 0.85;
       lampMat.emissiveIntensity = n * 3;
@@ -492,6 +493,35 @@ function instancedChunks(root, geometry, material, items, setMatrix, opts = {}) 
     meshes.push(mesh);
   }
   return meshes;
+}
+
+// Tileable wave normal map (sum of sines), animated by offsetting its UVs.
+function waveNormalMap() {
+  const N = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = N;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(N, N);
+  const hgt = (x, y) => {
+    const t = (Math.PI * 2) / N;
+    return Math.sin(x * t * 3 + Math.sin(y * t * 2) * 1.5) * 0.5 + Math.sin(y * t * 5 + x * t * 2) * 0.3 + Math.sin((x + y) * t * 7) * 0.2;
+  };
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const dx = hgt(x + 1, y) - hgt(x - 1, y), dy = hgt(x, y + 1) - hgt(x, y - 1);
+      const nx = -dx * 2, ny = -dy * 2, nz = 1;
+      const l = Math.hypot(nx, ny, nz);
+      const i = (y * N + x) * 4;
+      img.data[i] = ((nx / l) * 0.5 + 0.5) * 255;
+      img.data[i + 1] = ((ny / l) * 0.5 + 0.5) * 255;
+      img.data[i + 2] = ((nz / l) * 0.5 + 0.5) * 255;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
 }
 
 function radialTexture() {

@@ -46,6 +46,20 @@ export class Environment {
     this.night = 0;
   }
 
+  // Environment map of the current sky, for reflections on the water.
+  bakeEnvMap(hours) {
+    this.update(hours, { x: 0, z: 0 });
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    const skyScene = new THREE.Scene();
+    const sky = new Sky();
+    sky.scale.setScalar(1000);
+    sky.material.uniforms = THREE.UniformsUtils.clone(this.sky.material.uniforms);
+    skyScene.add(sky);
+    const rt = pmrem.fromScene(skyScene);
+    pmrem.dispose();
+    return rt.texture;
+  }
+
   // hours: 0..24. focus: point the shadow camera follows.
   update(hours, focus) {
     // Simple solar model: sunrise ~6:30, sunset ~19:30, sun passes to the north.

@@ -55,8 +55,12 @@ async function main() {
   const data = await loadCityData();
   setLoading(`Construyendo ${data.buildings.length.toLocaleString('es-AR')} edificios y ${data.roads.length.toLocaleString('es-AR')} calles…`);
   await nextFrame();
+  const t0 = performance.now();
   const world = buildWorld(data, renderer, scene);
+  console.info(`Ciudad construida en ${Math.round(performance.now() - t0)} ms`);
   const env = new Environment(scene, renderer);
+  world.waterMaterial.envMap = env.bakeEnvMap(12);
+  world.waterMaterial.envMapIntensity = 0.9;
   const input = new Input(renderer.domElement);
   const hud = new Hud(data);
   const audio = new Audio();
@@ -64,8 +68,8 @@ async function main() {
   const traffic = new Traffic(scene, world.graph, world.collision, rng);
   const peds = new Peds(scene, world.graph, world.collision, rng);
   document.getElementById('source').textContent =
-    data.source === 'osm'
-      ? `Mapa: OpenStreetMap (© colaboradores de OSM) · ${data.buildings.length.toLocaleString('es-AR')} edificios`
+    data.source !== 'procedural'
+      ? `Mapa: ${data.attribution || '© colaboradores de OpenStreetMap'} · ${data.buildings.length.toLocaleString('es-AR')} edificios`
       : 'Mapa: aproximación procedural de Quilmes centro (ejecutá "npm run fetch-osm" para el mapa real)';
 
   // ------------------------------------------------------------- player
@@ -306,12 +310,16 @@ async function main() {
         break;
       }
     }
-    camera.position.set(px - dirX * d, Math.max(0.4, focusY + sp * d), pz - dirZ * d);
-    camera.lookAt(px, focusY, pz);
+    if (!window.__game?.freeCam) {
+      camera.position.set(px - dirX * d, Math.max(0.4, focusY + sp * d), pz - dirZ * d);
+      camera.lookAt(px, focusY, pz);
+    }
 
     // ------------------------------------------------------------- environment
     const night = env.update(hours, { x: px, z: pz });
     world.setNight(night);
+    world.waterMaterial.normalMap.offset.set(totalTime * 0.01, totalTime * 0.006);
+    world.waterMaterial.envMapIntensity = 0.15 + 0.75 * (1 - night);
     headlightMaterial.emissiveIntensity = 0.3 + night * 3;
     if (inCar && night > 0.3) {
       const v = player.vehicle;

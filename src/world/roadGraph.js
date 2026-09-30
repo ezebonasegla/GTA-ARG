@@ -112,6 +112,18 @@ export class RoadGraph {
     }
   }
 
+  // Random directed edge among the streets within maxD of (x, z).
+  randomEdgeNear(x, z, maxD, rng, filter) {
+    const segs = [...this.segIndex.query(x - maxD, z - maxD, x + maxD, z + maxD)];
+    for (let k = 0; k < 40 && segs.length; k++) {
+      const s = segs[Math.floor(rng() * segs.length)];
+      const opts = s.a.out.filter((e) => e.b === s.b).concat(s.b.out.filter((e) => e.b === s.a));
+      const e = opts[Math.floor(rng() * opts.length)];
+      if (e && e.len > 20 && (!filter || filter(e))) return e;
+    }
+    return null;
+  }
+
   randomEdge(rng, filter) {
     for (let k = 0; k < 200; k++) {
       const e = this.edges[Math.floor(rng() * this.edges.length)];

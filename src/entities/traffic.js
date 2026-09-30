@@ -61,7 +61,9 @@ export class Traffic {
   }
 
   nextEdge(edge, prefer) {
-    const outs = edge.b.out.filter((e) => e.b !== edge.a);
+    let outs = edge.b.out.filter((e) => e.b !== edge.a);
+    const streets = outs.filter((e) => e.road.kind !== 'service');
+    if (streets.length) outs = streets; // avoid driveways and parking aisles
     if (!outs.length) return edge.b.out[0] || null;
     if (prefer) {
       let best = outs[0], bestScore = -Infinity;
@@ -82,15 +84,16 @@ export class Traffic {
   }
 
   spawnMoving(px, pz, minD, maxD) {
-    const edge = this.graph.randomEdge(this.rng, (e) => {
+    const edge = this.graph.randomEdgeNear(px, pz, 270, this.rng, (e) => {
       const mx = (e.a.x + e.b.x) / 2, mz = (e.a.z + e.b.z) / 2;
       const d = Math.hypot(mx - px, mz - pz);
-      return d > minD && d < maxD && e.road.kind !== 'pedestrian';
+      return d > minD && d < maxD && e.road.kind !== 'pedestrian' && e.road.kind !== 'service';
     });
     if (!edge) return null;
     const s = this.rng() * edge.len * 0.8;
     const [x, z] = this.lanePoint(edge, s);
     if (this.vehicles.some((v) => Math.hypot(v.x - x, v.z - z) < 12)) return null;
+    if (this.collision.isBlocked(x, z, 1.5)) return null;
     let type = pickType(this.rng);
     if (type === 'bus' && edge.road.w < 9) type = 'sedan';
     const v = this.add(new Vehicle(type, x, z, Math.atan2(edge.dx, edge.dz)));
@@ -103,10 +106,10 @@ export class Traffic {
   }
 
   spawnParked(px, pz, minD, maxD) {
-    const edge = this.graph.randomEdge(this.rng, (e) => {
+    const edge = this.graph.randomEdgeNear(px, pz, 270, this.rng, (e) => {
       const mx = (e.a.x + e.b.x) / 2, mz = (e.a.z + e.b.z) / 2;
       const d = Math.hypot(mx - px, mz - pz);
-      return d > minD && d < maxD && e.road.w <= 12 && e.road.kind !== 'pedestrian';
+      return d > minD && d < maxD && e.road.w <= 12 && e.road.kind !== 'pedestrian' && e.road.kind !== 'service';
     });
     if (!edge || edge.len < 30) return null;
     const s = 12 + this.rng() * (edge.len - 24);
@@ -114,6 +117,7 @@ export class Traffic {
     const x = edge.a.x + edge.dx * s - edge.dz * off;
     const z = edge.a.z + edge.dz * s + edge.dx * off;
     if (this.vehicles.some((v) => Math.hypot(v.x - x, v.z - z) < 6)) return null;
+    if (this.collision.isBlocked(x, z, 1.2)) return null;
     const type = this.rng() < 0.2 ? 'pickup' : this.rng() < 0.5 ? 'hatch' : 'sedan';
     const v = this.add(new Vehicle(type, x, z, Math.atan2(edge.dx, edge.dz)));
     v.parked = true;
@@ -121,7 +125,7 @@ export class Traffic {
   }
 
   spawnPolice(px, pz) {
-    const edge = this.graph.randomEdge(this.rng, (e) => {
+    const edge = this.graph.randomEdgeNear(px, pz, 270, this.rng, (e) => {
       const d = Math.hypot(e.a.x - px, e.a.z - pz);
       return d > 110 && d < 220;
     });
