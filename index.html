@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es-AR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GTA Quilmes</title>
+    <style>
+      :root {
+        --accent: #75aadb;
+        --ink: #fff;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0f16; font-family: 'Trebuchet MS', 'Segoe UI', sans-serif; color: var(--ink); }
+      #app canvas { display: block; }
+      .hidden { display: none !important; }
+
+      #loading, #start {
+        position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: radial-gradient(circle at 50% 40%, #1c2a44, #070a10 70%); z-index: 20; text-align: center; padding: 16px;
+      }
+      #start { background: rgba(5, 8, 14, 0.72); cursor: pointer; }
+      .logo { font-size: clamp(40px, 9vw, 96px); font-weight: 900; letter-spacing: 2px; line-height: 0.9; text-shadow: 4px 4px 0 #000; }
+      .logo span { display: block; color: var(--accent); font-size: 0.55em; letter-spacing: 8px; }
+      #loading-text { margin-top: 24px; opacity: 0.8; }
+      #start p { max-width: 560px; opacity: 0.9; line-height: 1.5; }
+      .keys { display: grid; grid-template-columns: auto auto; gap: 4px 18px; text-align: left; margin: 12px auto; font-size: 14px; }
+      .keys b { color: var(--accent); font-family: monospace; font-size: 15px; }
+      .cta { margin-top: 12px; padding: 10px 26px; border: 2px solid var(--accent); border-radius: 6px; font-weight: bold; letter-spacing: 1px; }
+
+      #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+      #minimap { position: absolute; left: 20px; bottom: 20px; width: 200px; height: 200px; border-radius: 50%; border: 3px solid rgba(0, 0, 0, 0.7); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25); }
+      #health { position: absolute; left: 38px; bottom: 8px; width: 164px; height: 7px; background: rgba(0, 0, 0, 0.6); border-radius: 4px; overflow: hidden; }
+      #health-bar { height: 100%; width: 100%; background: linear-gradient(90deg, #2ecc71, #7bed9f); }
+      #street { position: absolute; left: 240px; bottom: 30px; font-size: 26px; font-weight: 800; text-shadow: 2px 2px 0 #000, 0 0 8px #000; font-style: italic; }
+      #street.flash { animation: flash 3s ease-out; }
+      @keyframes flash { 0% { opacity: 0; transform: translateY(8px); } 10% { opacity: 1; transform: none; } }
+      #topright { position: absolute; right: 22px; top: 18px; text-align: right; }
+      #clock { font-size: 30px; font-weight: 900; text-shadow: 2px 2px 0 #000; font-family: monospace; }
+      #stars { font-size: 30px; letter-spacing: 2px; }
+      #stars span { color: rgba(0, 0, 0, 0.45); -webkit-text-stroke: 1px rgba(255, 255, 255, 0.6); }
+      #stars span.on { color: #f5f5f5; -webkit-text-stroke: 1px #000; text-shadow: 0 0 6px rgba(255, 255, 255, 0.7); }
+      #speed { position: absolute; right: 26px; bottom: 26px; font-size: 54px; font-weight: 900; text-shadow: 3px 3px 0 #000; font-style: italic; }
+      #speed small { font-size: 18px; }
+      #message { position: absolute; top: 38%; width: 100%; text-align: center; font-size: clamp(48px, 10vw, 110px); font-weight: 900; letter-spacing: 6px; text-shadow: 4px 4px 0 #000; opacity: 0; transition: opacity 0.6s; }
+      #hint { position: absolute; top: 18px; left: 18px; background: rgba(0, 0, 0, 0.72); padding: 10px 14px; border-radius: 4px; font-size: 15px; display: none; }
+      #toast { position: absolute; top: 90px; right: 22px; background: rgba(0, 0, 0, 0.7); padding: 8px 14px; border-radius: 4px; opacity: 0; transition: opacity 0.4s; }
+      #source { position: absolute; right: 12px; bottom: 4px; font-size: 11px; opacity: 0.7; text-shadow: 1px 1px 0 #000; max-width: 60vw; }
+      #help { position: fixed; top: 60px; left: 18px; background: rgba(0, 0, 0, 0.78); padding: 14px 18px; border-radius: 6px; z-index: 11; font-size: 14px; }
+      #help h3 { margin: 0 0 6px; color: var(--accent); }
+      @media (max-width: 700px) {
+        #minimap { width: 130px; height: 130px; left: 12px; bottom: 16px; }
+        #health { left: 16px; width: 120px; bottom: 6px; }
+        #street { left: 16px; bottom: 160px; font-size: 18px; }
+        #speed { font-size: 36px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="hud">
+      <canvas id="minimap" width="220" height="220"></canvas>
+      <div id="health"><div id="health-bar"></div></div>
+      <div id="street">Quilmes</div>
+      <div id="topright">
+        <div id="clock">17:00</div>
+        <div id="stars"></div>
+      </div>
+      <div id="speed" style="display: none"></div>
+      <div id="message"></div>
+      <div id="hint"></div>
+      <div id="toast"></div>
+      <div id="source"></div>
+    </div>
+    <div id="help" class="hidden">
+      <h3>Controles</h3>
+      <div class="keys">
+        <b>W A S D</b><span>caminar / manejar</span>
+        <b>Mouse</b><span>mover la cámara (clic para capturar)</span>
+        <b>Shift</b><span>correr</span>
+        <b>Espacio</b><span>saltar / freno de mano</span>
+        <b>E</b><span>subir / bajar / robar auto</span>
+        <b>H</b><span>bocina</span>
+        <b>F</b><span>empujar</span>
+        <b>C</b><span>cambiar cámara</span>
+        <b>T</b><span>adelantar 1 hora</span>
+        <b>P</b><span>pausar el reloj</span>
+        <b>Tab</b><span>mostrar / ocultar ayuda</span>
+      </div>
+    </div>
+    <div id="loading">
+      <div class="logo">GTA<span>QUILMES</span></div>
+      <div id="loading-text">Cargando…</div>
+    </div>
+    <div id="start" class="hidden">
+      <div class="logo">GTA<span>QUILMES</span></div>
+      <p>Recorré Quilmes a pie o al volante: colectivos, taxis, la peatonal, la estación del Roca y la costanera. Robá un auto y escapale a la policía.</p>
+      <div class="keys">
+        <b>W A S D</b><span>moverse / manejar</span>
+        <b>E</b><span>subir / bajar del auto</span>
+        <b>Espacio</b><span>saltar / freno de mano</span>
+        <b>Tab</b><span>todos los controles</span>
+      </div>
+      <div class="cta">HACÉ CLIC PARA JUGAR</div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
