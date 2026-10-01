@@ -439,8 +439,8 @@ export function buildShopKit(root, placed, { graph, collision, nightMaterials })
     const [icon, bg] = key.split('|');
     const mat = iconMaterial(icon, bg);
     glow.push([mat, 0.9]);
-    instancedChunks(root, blade, mat, items, place, { cast: true });
-    instancedChunks(root, arm, iron, items, place);
+    instancedChunks(root, blade, mat, items, place, { range: 350 });
+    instancedChunks(root, arm, iron, items, place, { range: 250 });
   }
 
   // awnings (striped; tricolor for the Italian ones) and flat canopies

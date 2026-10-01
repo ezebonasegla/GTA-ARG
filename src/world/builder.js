@@ -209,7 +209,7 @@ export function buildWorld(data, renderer, scene) {
     instancedChunks(root, new THREE.BoxGeometry(2.4, 0.14, 0.24), new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 1 }), sleeperCount, (m, [x, z, h]) => {
       q.setFromAxisAngle(yAxis, h);
       m.compose(new THREE.Vector3(x, 0.08, z), q, one);
-    }, { receive: true });
+    }, { receive: true, range: 350 });
   }
 
   // ---------------------------------------------------------------- buildings
@@ -233,8 +233,8 @@ export function buildWorld(data, renderer, scene) {
     const legs = new THREE.BoxGeometry(1, 0.6, 1);
     legs.translate(0, 0.3, 0);
     const tankMatrix = (m, [x, z, y, s]) => m.makeScale(s, s, s).setPosition(x, y, z);
-    instancedChunks(root, g, new THREE.MeshStandardMaterial({ color: 0x2d3033, roughness: 0.6 }), tanks, tankMatrix, { cast: true });
-    instancedChunks(root, legs, new THREE.MeshStandardMaterial({ color: 0x9a968f }), tanks, tankMatrix, { cast: true });
+    instancedChunks(root, g, new THREE.MeshStandardMaterial({ color: 0x2d3033, roughness: 0.6 }), tanks, tankMatrix, { cast: true, range: 650 });
+    instancedChunks(root, legs, new THREE.MeshStandardMaterial({ color: 0x9a968f }), tanks, tankMatrix, { cast: true, range: 450 });
   }
 
   // ---------------------------------------------------------------- real businesses
@@ -330,9 +330,10 @@ export function buildWorld(data, renderer, scene) {
     q.setFromAxisAngle(up, r * 6.28);
     m.compose(new THREE.Vector3(x, 0, z), q, new THREE.Vector3(s, s * (0.9 + r * 0.3), s));
   };
-  instancedChunks(root, trunkG, trunkMat, trees, treeMatrix, { cast: true });
+  instancedChunks(root, trunkG, trunkMat, trees, treeMatrix, { cast: true, range: 600 });
   instancedChunks(root, crownG, crownMat, trees, treeMatrix, {
     cast: true,
+    range: 950,
     receive: true,
     color: ([, , , r]) => c.setHSL(0.2 + r * 0.1, 0.35 + r * 0.2, 0.22 + r * 0.1),
   });
@@ -348,7 +349,7 @@ export function buildWorld(data, renderer, scene) {
     q.setFromAxisAngle(up, h);
     m.compose(new THREE.Vector3(x, 0, z), q, one);
   };
-  instancedChunks(root, mergeSimple([pole, arm]), new THREE.MeshStandardMaterial({ color: 0x9e9b94, roughness: 0.95 }), lights, lampMatrix, { cast: true });
+  instancedChunks(root, mergeSimple([pole, arm]), new THREE.MeshStandardMaterial({ color: 0x9e9b94, roughness: 0.95 }), lights, lampMatrix, { cast: true, range: 600 });
 
   // cestos de basura enrejados sobre un caño, en la vereda de enfrente a los postes
   {
@@ -377,8 +378,8 @@ export function buildWorld(data, renderer, scene) {
     const grid = gridTexture();
     grid.repeat.set(6, 2);
     const at = (m, [x, z]) => m.makeTranslation(x, 0, z);
-    instancedChunks(root, cano, new THREE.MeshStandardMaterial({ color: 0x2a2d2e, metalness: 0.5, roughness: 0.6 }), cestos, at, { cast: true });
-    instancedChunks(root, cesto, new THREE.MeshStandardMaterial({ color: 0x2a2d2e, map: grid, alphaTest: 0.5, side: THREE.DoubleSide }), cestos, at);
+    instancedChunks(root, cano, new THREE.MeshStandardMaterial({ color: 0x2a2d2e, metalness: 0.5, roughness: 0.6 }), cestos, at, { range: 220 });
+    instancedChunks(root, cesto, new THREE.MeshStandardMaterial({ color: 0x2a2d2e, map: grid, alphaTest: 0.5, side: THREE.DoubleSide }), cestos, at, { range: 220 });
   }
 
   // cordones pintados de amarillo en las esquinas
@@ -404,15 +405,15 @@ export function buildWorld(data, renderer, scene) {
     strip.rotateX(-Math.PI / 2);
     strip.translate(0, 0.085, 0);
     const curbMat = new THREE.MeshStandardMaterial({ color: 0xe6bf1e, roughness: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
-    for (const m of instancedChunks(root, strip, curbMat, curbs, lampMatrix, { receive: true })) m.renderOrder = -5;
+    for (const m of instancedChunks(root, strip, curbMat, curbs, lampMatrix, { receive: true, range: 260 })) m.renderOrder = -5;
   }
-  instancedChunks(root, head, lampMat, lights, lampMatrix);
+  instancedChunks(root, head, lampMat, lights, lampMatrix, { range: 700 });
   // Fake light pools on the pavement (cheaper than hundreds of real lights).
   const poolG = new THREE.PlaneGeometry(14, 14);
   poolG.rotateX(-Math.PI / 2);
   poolG.translate(0, 0.09, 2.1);
   const poolMat = new THREE.MeshBasicMaterial({ map: radialTexture(), color: 0xffb860, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: true });
-  const pools = instancedChunks(root, poolG, poolMat, lights, lampMatrix);
+  const pools = instancedChunks(root, poolG, poolMat, lights, lampMatrix, { range: 450 });
   for (const p of pools) p.renderOrder = -5;
 
   return {
@@ -421,7 +422,10 @@ export function buildWorld(data, renderer, scene) {
     graph,
     tex,
     waterMaterial: areaMats.water,
-    updateDetail: (p) => chunks.updateDetail(p),
+    updateDetail: (p) => {
+      chunks.updateDetail(p);
+      updateCulling(p);
+    },
     setNight(n) {
       for (const m of nightMaterials) m.emissiveIntensity = n * 0.85;
       lampMat.emissiveIntensity = n * 3;
@@ -443,6 +447,14 @@ export function buildWorld(data, renderer, scene) {
 
 // One InstancedMesh per spatial chunk so that frustum culling (and the shadow pass)
 // only processes nearby instances.
+// Instanced props are hidden beyond their range (opts.range, meters from the camera):
+// each kind of prop per 220 m chunk is a draw call, and most of them were being drawn
+// out to the fog.
+const culled = [];
+export function updateCulling(p) {
+  for (const c of culled) c.mesh.visible = (c.x - p.x) ** 2 + (c.z - p.z) ** 2 < c.r2;
+}
+
 export function instancedChunks(root, geometry, material, items, setMatrix, opts = {}) {
   const groups = new Map();
   for (const it of items) {
@@ -464,6 +476,8 @@ export function instancedChunks(root, geometry, material, items, setMatrix, opts
     mesh.computeBoundingSphere();
     root.add(mesh);
     meshes.push(mesh);
+    const r = (opts.range ?? 450) + mesh.boundingSphere.radius;
+    culled.push({ mesh, x: mesh.boundingSphere.center.x, z: mesh.boundingSphere.center.z, r2: r * r });
   }
   return meshes;
 }

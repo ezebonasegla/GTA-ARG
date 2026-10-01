@@ -8,6 +8,7 @@ import { TouchControls, isTouchDevice } from './touch.js';
 import { enterFullscreen, exitFullscreen, fullscreenElement, setupFullscreenButton } from './fullscreen.js';
 import { Hud } from './hud.js';
 import { Gps } from './gps.js';
+import { Helicopter } from './entities/heli.js';
 import { Audio } from './audio.js';
 import { Player, doorPoint } from './entities/player.js';
 import { Vehicle } from './entities/vehicle.js';
@@ -15,7 +16,6 @@ import { Traffic } from './entities/traffic.js';
 import { Peds } from './entities/peds.js';
 import { Trains, trainHit } from './entities/train.js';
 import { Buses } from './entities/buses.js';
-import { Photoreal, defaultToken, savedToken, saveToken } from './world/photoreal.js';
 import { headlightMaterial, loadVehicleModels } from './entities/models.js';
 
 const loadingText = document.getElementById('loading-text');
@@ -42,9 +42,14 @@ async function main() {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   const mobile = isTouchDevice();
   renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1 : 1.5));
+  const perf = { frames: 0, t: 0, low: 0, high: 0, n: 0, maxRatio: renderer.getPixelRatio() };
+  const fpsEl = document.getElementById('fps');
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // the sun barely moves: redraw the shadow map every other frame
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true; // the first frame must have one, or shaders compile against a missing map (white city)
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   document.getElementById('app').appendChild(renderer.domElement);
@@ -126,6 +131,7 @@ async function main() {
   let totalTime = 0;
   let deadTimer = 0;
   let riding = null; // bus the player travels in as a passenger
+  let heli = null, flying = false; // the helicopter called with Shift+Y, and whether we pilot it
   const crimeCooldown = new Map();
   const onCrime = (what, amount) => {
     const last = crimeCooldown.get(what) || -10;
@@ -155,40 +161,10 @@ async function main() {
   const startOverlay = document.getElementById('start');
   startOverlay.classList.remove('hidden');
   if (mobile) startOverlay.querySelector('.cta').textContent = 'TOCÁ PARA JUGAR';
-  // Photorealistic mode (Google 3D Tiles via a free Cesium ion token)
-  let photo = null;
-  const configuredToken = defaultToken();
-  const tokenInput = document.getElementById('cesium-token');
-  const photoPanel = document.getElementById('photo-panel');
-  if (data.source === 'procedural') photoPanel.hidden = true;
-  tokenInput.value = savedToken() || configuredToken;
-  for (const ev of ['click', 'touchend', 'keydown']) photoPanel.addEventListener(ev, (e) => e.stopPropagation());
-  const setPhotoMode = (on) => {
-    if (on && !photo) {
-      const token = tokenInput.value.trim() || savedToken() || configuredToken;
-      if (!token) {
-        hud.toast('Para ver el mapa real 3D de Google, pegá tu token de Cesium ion (o configurá VITE_CESIUM_ION_TOKEN).', 7);
-        return;
-      }
-      photo = new Photoreal({ scene, camera, renderer, origin: data.origin, token, onError: (msg) => {
-        hud.toast(msg, 9);
-        setPhotoMode(false);
-      } });
-      hud.toast('Modo fotorrealista: cargando la ciudad 3D de Google…', 4);
-    }
-    const active = on && !!photo;
-    if (photo) photo.holder.visible = active;
-    world.root.visible = !active; // the generated city hides; gameplay stays
-    camera.far = active ? 5000 : 1200;
-    camera.updateProjectionMatrix();
-    scene.fog.far = active ? 3800 : 1100;
-    photoMode = active;
-  };
-  let photoMode = false;
   const setGhostMode = (on) => {
     if (on === ghost.on) return;
     if (on) {
-      if (player.vehicle || riding || player.transition || deadTimer > 0) {
+      if (player.vehicle || riding || flying || player.transition || deadTimer > 0) {
         hud.toast('Salí del auto y quedate a pie para activar el modo fantasma.', 5);
         return;
       }
@@ -217,10 +193,6 @@ async function main() {
   const start = () => {
     startOverlay.classList.add('hidden');
     audio.start();
-    const token = tokenInput.value.trim();
-    if (token && token !== configuredToken) saveToken(token);
-    else if (!token && !configuredToken) saveToken('');
-    if (token || configuredToken) setPhotoMode(true);
     if (mobile) {
       // full screen and landscape where the browser allows it
       enterFullscreen();
@@ -324,8 +296,22 @@ async function main() {
 
     if (input.hit('KeyM') || (gps.open && input.hit('Escape'))) gps.toggle(!gps.open, ghost.on ? ghost.x : player.x, ghost.on ? ghost.z : player.z);
     if (input.hit('Tab')) helpEl.classList.toggle('hidden');
+    if (input.hit('KeyY') && input.down('ShiftLeft', 'ShiftRight') && !flying && !ghost.on) {
+      // land it on a free spot a few meters ahead of the player
+      const fx = Math.sin(player.heading), fz = Math.cos(player.heading);
+      let spot = null;
+      for (const d of [9, 14, 20, 6, 28]) {
+        const x = player.x + fx * d, z = player.z + fz * d;
+        if (!world.collision.isBlocked(x, z, 4)) { spot = [x, z]; break; }
+      }
+      if (!spot) hud.toast('No hay lugar para el helicóptero acá. Probá en una calle o una plaza.');
+      else {
+        heli?.dispose();
+        heli = new Helicopter(scene, spot[0], spot[1], player.heading);
+        hud.toast('Helicóptero listo. E para subir · W/S adelante/atrás · A/D girar · Espacio subir · Shift bajar', 6);
+      }
+    }
     if (input.hit('KeyT')) hours = (hours + 1) % 24;
-    if (input.hit('KeyG')) setPhotoMode(!photoMode);
     if (input.hit('KeyV')) setGhostMode(!ghost.on);
     if (input.hit('KeyO')) {
       if (fullscreenElement()) exitFullscreen();
@@ -383,6 +369,32 @@ async function main() {
         while (d < -Math.PI) d += Math.PI * 2;
         if (cam.idle > 0.3) cam.yaw += d * Math.min(1, dt * 3);
       }
+    } else if (flying) {
+      heli.update(dt, {
+        forward: (input.down('KeyW', 'ArrowUp') ? 1 : 0) - (input.down('KeyS', 'ArrowDown') ? 1 : 0),
+        turn: (input.down('KeyA', 'ArrowLeft') ? 1 : 0) - (input.down('KeyD', 'ArrowRight') ? 1 : 0),
+        lift: (input.down('Space') ? 1 : 0) - (input.down('ShiftLeft', 'ShiftRight') ? 1 : 0),
+      }, world.collision);
+      player.x = heli.x;
+      player.z = heli.z;
+      player.heading = heli.heading;
+      if (input.hit('KeyE')) {
+        if (heli.y - world.collision.heightAt(heli.x, heli.z) < 0.6 && heli.speed < 3) {
+          const d = world.collision.resolve(...Object.values(heli.doorPoint()), 0.35);
+          player.x = d.x;
+          player.z = d.z;
+          player.y = heli.y;
+          player.mesh.visible = true;
+          player.sync();
+          flying = false;
+        } else hud.toast('Aterrizá primero (Shift para bajar) y después E para bajarte.');
+      }
+      if (cam.idle > 1.2 && heli.speed > 2) {
+        let d = heli.heading - cam.yaw;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        cam.yaw += d * Math.min(1, dt * 2);
+      }
     } else if (riding) {
       const b = riding, v = b.v;
       player.x = v.x;
@@ -435,8 +447,13 @@ async function main() {
     } else {
       player.update(dt, input, cam.yaw, world.collision);
       const bus = buses?.near(player.x, player.z);
+      const nearHeli = heli && Math.hypot(heli.x - player.x, heli.z - player.z) < 5;
       if (input.hit('KeyE')) {
-        if (bus) board(bus);
+        if (nearHeli) {
+          flying = true;
+          player.mesh.visible = false;
+          hud.toast('Espacio para despegar (el rotor tarda unos segundos en tomar vueltas).');
+        } else if (bus) board(bus);
         else tryEnterVehicle();
       }
       if (input.hit('KeyR')) tryEnterVehicle(); // steal whatever is closest, colectivos included
@@ -474,7 +491,7 @@ async function main() {
     const trainBoxes = trains.update(dt);
     if (!ghost.on) for (const box of trainBoxes) {
       const moving = Math.hypot(box.vx, box.vz) > 1;
-      if (!player.vehicle && !riding && deadTimer <= 0) {
+      if (!player.vehicle && !riding && !flying && deadTimer <= 0) {
         const h = trainHit(box, player.x, player.z, 0.35);
         if (h) {
           player.x += h.nx * h.push;
@@ -518,6 +535,7 @@ async function main() {
 
     const px = ghost.on ? ghost.x : player.x;
     const pz = ghost.on ? ghost.z : player.z;
+    if (heli && !flying) heli.update(dt, null, world.collision);
     const ctx = { px, pz, riding, playerVehicle: player.vehicle, peds: peds.list, wanted, time: totalTime, horn, onCrime, trainBoxes };
     const carHit = traffic.update(dt, ctx);
     buses?.update(dt, ctx, rng);
@@ -536,7 +554,7 @@ async function main() {
         if (!wanted) hud.toast('Perdiste a la policía');
       }
       const slow = !player.vehicle || Math.abs(player.vehicle.speed) < 2.5;
-      if (nearestCop < 7 && slow && !riding) bustedTimer += dt;
+      if (nearestCop < 7 && slow && !riding && !flying) bustedTimer += dt;
       else bustedTimer = Math.max(0, bustedTimer - dt);
       if (bustedTimer > 2) {
         bustedTimer = 0;
@@ -552,8 +570,8 @@ async function main() {
     // ------------------------------------------------------------- camera
     inCar = !!player.vehicle; // may have changed this frame (got in/out, busted)
     const camV = player.vehicle || riding?.v;
-    const focusY = camV ? (riding ? 2.4 : 1.6) : 1.5 + player.y;
-    const baseDist = camV ? 5 + camV.spec.length * 0.9 : 4.2;
+    const focusY = flying ? heli.y + 2 : camV ? (riding ? 2.4 : 1.6) : 1.5 + player.y;
+    const baseDist = flying ? 17 : camV ? 5 + camV.spec.length * 0.9 : 4.2;
     cam.base = cam.base ? cam.base + (baseDist - cam.base) * Math.min(1, dt * 3) : baseDist; // smooth zoom on enter/exit
     const dist = cam.base * camModes[cam.mode];
     const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
@@ -582,11 +600,6 @@ async function main() {
     // ------------------------------------------------------------- environment
     const night = env.update(hours, { x: px, z: pz });
     world.setNight(night);
-    if (photoMode) {
-      const street = world.graph.nearest(px, pz, 40);
-      photo.update(dt, { x: px, z: pz, streetX: street?.x, streetZ: street?.z, night });
-      if (Math.floor(totalTime) !== Math.floor(totalTime - dt)) document.getElementById('source').textContent = photo.attribution();
-    }
     world.update(px, pz);
     world.waterMaterial.normalMap.offset.set(totalTime * 0.01, totalTime * 0.006);
     world.waterMaterial.envMapIntensity = 0.15 + 0.75 * (1 - night);
@@ -602,7 +615,7 @@ async function main() {
     // ------------------------------------------------------------- HUD
     const near = world.graph.nearest(px, pz, 30);
     hud.setStreet((ghost.on ? 'MODO FANTASMA · ' : '') + (near?.seg.road.name || ''));
-    hud.setSpeed(ghost.on ? null : inCar ? Math.abs(player.vehicle.speed) * 3.6 : null);
+    hud.setSpeed(ghost.on ? null : flying ? heli.speed * 3.6 : inCar ? Math.abs(player.vehicle.speed) * 3.6 : null);
     hud.setClock(hours);
     hud.setHealth(ghost.on ? player.health : inCar ? player.vehicle.health : player.health);
     let hint = '';
@@ -615,6 +628,8 @@ async function main() {
       const shop = world.shopList?.find((p) => Math.hypot(p.x + p.ox * 1.5 - px, p.z + p.oz * 1.5 - pz) < 3.5);
       if (shop) hint = `${shop.shop.name} · ${shop.label}`;
     }
+    if (flying) hint = `Helicóptero · ${Math.round(heli.y - world.collision.heightAt(heli.x, heli.z))} m de altura · E: bajar (aterrizado)`;
+    else if (!hint && heli && !inCar && !riding && Math.hypot(heli.x - player.x, heli.z - player.z) < 5) hint = 'E: subir al helicóptero';
     if (riding) hint = `Línea ${riding.v.busLine} ${riding.v.busHeadsign} · Próxima: ${buses.nextStopName(riding)}${riding.getOff ? ' (bajás)' : ' · E: bajar'}`;
     if (!hint && !inCar && !riding && buses && !ghost.on) {
       const st = buses.nearestStop(px, pz, 6);
@@ -630,6 +645,22 @@ async function main() {
     audio.update({ inCar, speed: inCar ? player.vehicle.speed : 0, throttle, horn, sirenDist: nearestCop, time: totalTime });
 
     world.updateDetail(camera.position);
+    // fps counter + dynamic resolution: drop the pixel ratio when the frame rate sags,
+    // bring it back when there is headroom
+    perf.frames++;
+    perf.t += dt || 1 / 60;
+    if (perf.t >= 1) {
+      const fps = perf.frames / perf.t;
+      fpsEl.textContent = `${Math.round(fps)} FPS`;
+      perf.low = fps < 48 ? perf.low + 1 : 0;
+      perf.high = fps > 58 ? perf.high + 1 : 0;
+      const pr = renderer.getPixelRatio();
+      if (perf.low >= 2 && pr > 0.7) renderer.setPixelRatio(Math.max(0.7, pr - 0.15)), (perf.low = 0);
+      else if (perf.high >= 4 && pr < perf.maxRatio) renderer.setPixelRatio(Math.min(perf.maxRatio, pr + 0.1)), (perf.high = 0);
+      perf.frames = 0;
+      perf.t = 0;
+    }
+    if ((perf.n = (perf.n + 1) % 2) === 0) renderer.shadowMap.needsUpdate = true;
     renderer.render(scene, camera);
     input.endFrame();
     requestAnimationFrame(frame);

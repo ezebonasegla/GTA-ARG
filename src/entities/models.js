@@ -43,6 +43,7 @@ export async function loadVehicleModels(base) {
     gltf.loadAsync(`${base}models/cars/${file}.glb`).then(({ scene }) => { templates[type] = prepCar(scene); }));
   for (const car of REAL_CARS) {
     jobs.push(gltf.loadAsync(`${base}models/cars/${car.file}.glb`).then(({ scene }) => {
+      compactCar(scene);
       real.push({ ...car, scene, size: new THREE.Box3().setFromObject(scene).getSize(new THREE.Vector3()), paints: new Map() });
     }));
   }
@@ -230,6 +231,72 @@ function busFromTemplate(livery, spec) {
   g.userData.spec = spec;
   return g;
 }
+
+// Replicas come with dozens of meshes and materials (the 206 has 47): every one is a
+// draw call per car, per frame, plus its shadow. Merge them: plain-coloured materials
+// become vertex colours of one mesh; the paint, glass, lights and textured parts keep
+// their own material; each wheel becomes a single mesh.
+const plainCarMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.4 });
+function compactCar(scene) {
+  scene.updateMatrixWorld(true);
+  let glass = null;
+  const keyOf = (m) => {
+    if (/^paint/.test(m.name)) return m;
+    if (m.transparent || m.opacity < 1) return (glass ||= m); // one glass for every window
+    if (m.map || m.alphaMap) return m;
+    return plainCarMat; // plain colours, lights included (as their colour)
+  };
+  const bake = (meshes, into) => {
+    const inv = new THREE.Matrix4().copy(into.matrixWorld).invert();
+    const groups = new Map();
+    for (const mesh of meshes) {
+      for (const [i, mat] of [].concat(mesh.material).entries()) {
+        const key = keyOf(mat);
+        let g = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone();
+        if (Array.isArray(mesh.material)) {
+          const grp = mesh.geometry.groups[i];
+          if (!grp) continue;
+          g = g.clone();
+          const take = (a) => new THREE.BufferAttribute(a.array.slice(grp.start * a.itemSize, (grp.start + grp.count) * a.itemSize), a.itemSize, a.normalized);
+          for (const k of Object.keys(g.attributes)) g.setAttribute(k, take(g.attributes[k]));
+        }
+        g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, mesh.matrixWorld));
+        const keep = key === plainCarMat ? ['position', 'normal'] : ['position', 'normal', 'uv'];
+        for (const k of Object.keys(g.attributes)) if (!keep.includes(k)) g.deleteAttribute(k);
+        if (key !== plainCarMat && !g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+        if (key === plainCarMat) {
+          const n = g.attributes.position.count, col = new Float32Array(n * 3);
+          const c = mat.emissive && mat.emissive.getHex() && mat.emissiveIntensity > 0 ? mat.emissive : mat.color || new THREE.Color(1, 1, 1);
+          for (let v = 0; v < n; v++) col.set([c.r, c.g, c.b], v * 3);
+          g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        }
+        if (!g.attributes.normal) g.computeVertexNormals();
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(g);
+      }
+      mesh.parent.remove(mesh);
+    }
+    for (const [mat, geos] of groups) {
+      const merged = mergeGeometries(geos);
+      if (!merged) continue;
+      const m = new THREE.Mesh(merged, mat);
+      m.castShadow = true;
+      into.add(m);
+    }
+  };
+  const wheels = [];
+  scene.traverse((o) => { if (/^wheel-(front|back)-(left|right)$/.test(o.name)) wheels.push(o); });
+  for (const w of wheels) {
+    // a wheel that is itself one mesh stays as it is; merge only meshes inside it
+    const ms = [];
+    w.traverse((o) => { if (o.isMesh && o !== w) ms.push(o); });
+    if (ms.length > 1) bake(ms, w);
+  }
+  const body = [];
+  scene.traverse((o) => { if (o.isMesh && !wheels.some((w) => w === o || isChild(o, w))) body.push(o); });
+  bake(body, scene);
+}
+const isChild = (o, p) => { for (let q = o.parent; q; q = q.parent) if (q === p) return true; return false; };
 
 // Paint = the model's "paint" material in the requested color. A painted texture is
 // turned to grey first (keeping its shading and details) so the color tints it.

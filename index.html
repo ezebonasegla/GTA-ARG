@@ -40,6 +40,7 @@
       #topright { position: absolute; right: 22px; top: 18px; text-align: right; }
       #clock { font-size: 30px; font-weight: 900; text-shadow: 2px 2px 0 #000; font-family: monospace; }
       #stars { font-size: 30px; letter-spacing: 2px; }
+      #fps { font: bold 12px monospace; opacity: 0.75; text-shadow: 1px 1px 0 #000; margin-top: 2px; }
       #stars span { color: rgba(0, 0, 0, 0.45); -webkit-text-stroke: 1px rgba(255, 255, 255, 0.6); }
       #stars span.on { color: #f5f5f5; -webkit-text-stroke: 1px #000; text-shadow: 0 0 6px rgba(255, 255, 255, 0.7); }
       #speed { position: absolute; right: 26px; bottom: 26px; font-size: 54px; font-weight: 900; text-shadow: 3px 3px 0 #000; font-style: italic; }
@@ -56,10 +57,6 @@
       body.touch #fs-button { left: calc(50% + 30px); top: calc(12px + env(safe-area-inset-top)); transform: none; }
       body.touch .tb.help { transform: translateX(calc(-50% - 30px)); }
       #toast { max-width: min(420px, 80vw); }
-      .photo-panel { margin-top: 18px; display: grid; gap: 6px; width: min(460px, 100%); text-align: left; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 12px 14px; cursor: default; }
-      .photo-panel label { font-weight: bold; color: var(--accent); }
-      .photo-panel input { font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.08); color: #fff; }
-      .photo-panel small { opacity: 0.75; line-height: 1.4; }
       #gps { position: absolute; left: 20px; bottom: 236px; background: rgba(0, 0, 0, 0.72); border-left: 4px solid #b44bff; padding: 6px 12px; border-radius: 4px; font-size: 15px; display: none; max-width: 320px; }
       #gps b { color: #f5c518; font-size: 18px; margin-right: 4px; }
       #bigmap { position: fixed; inset: 0; z-index: 25; background: #0b0f16; }
@@ -132,6 +129,7 @@
       <div id="topright">
         <div id="clock">17:00</div>
         <div id="stars"></div>
+        <div id="fps"></div>
       </div>
       <div id="speed" style="display: none"></div>
       <div id="message"></div>
@@ -169,7 +167,6 @@
         <b>T</b><span>adelantar 1 hora</span>
         <b>P</b><span>pausar el reloj</span>
         <b>O</b><span>pantalla completa</span>
-        <b>G</b><span>modo fotorrealista (Google 3D) / ciudad generada</span>
         <b>V</b><span>modo fantasma (volar por la ciudad)</span>
         <b>M</b><span>mapa: marcá un destino o buscá una dirección</span>
         <b>W A S D + Espacio / Shift</b><span>moverse en modo fantasma (Control = más rápido)</span>
@@ -200,11 +197,6 @@
         <b>V</b><span>modo fantasma para recorrer por el cielo</span>
       </div>
       <div class="cta">HACÉ CLIC PARA JUGAR</div>
-      <div id="photo-panel" class="photo-panel">
-        <label for="cesium-token">Mapa real 3D de Google (fotorrealista)</label>
-        <input id="cesium-token" type="password" autocomplete="off" spellcheck="false" placeholder="Pegá tu token de Cesium ion (opcional)" />
-        <small>Creá una cuenta gratuita en cesium.com/ion → Access Tokens → copiá el token. También podés configurarlo en VITE_CESIUM_ION_TOKEN para no pegarlo a mano. Tecla G: cambiar de modo.</small>
-      </div>
     </div>
     <div id="rotate"><div style="font-size: 48px">⟳</div>Girá el celular para jugar en horizontal</div>
     <script type="module" src="/src/main.js"></script>
