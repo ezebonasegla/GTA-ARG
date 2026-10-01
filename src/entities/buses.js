@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Vehicle } from './vehicle.js';
 import { closestOnSegment } from '../world/geo.js';
+import { BUS_W, PLAT_W, stationAt, signTexture } from '../world/metrobus.js';
+import { createPersonMesh, animatePerson, disposePerson } from './person.js';
 
 const MAX_BUSES = 9;
 const SPAWN_MIN = 120, SPAWN_MAX = 320, DESPAWN = 420;
@@ -101,7 +103,9 @@ export class Buses {
     this.stopById = new Map(this.stops.map((st) => [st.id, st]));
     this.list = [];
     this.spawnTimer = 0;
+    this.stations = [];
     this.buildStops();
+    this.buildStations();
   }
 
   // Parada poles: a green pole with the blue "PARADA" plate, merged per chunk.
@@ -156,6 +160,7 @@ export class Buses {
         const r = this.routes.find((r) => r.stops.some((s) => s.id === st.id));
         const sOn = r?.stops.find((s) => s.id === st.id).s;
         const p = r ? this.curb(r.pathObj.at(sOn), 0.6) : { x: st.x, z: st.z, dx: 1, dz: 0 };
+        if (r && this.stationFor(st, r, sOn)) continue;
         const at = r ? r.pathObj.at(sOn, LANE) : p;
         st.px = p?.x ?? at.x;
         st.pz = p?.z ?? at.z;
@@ -191,6 +196,122 @@ export class Buses {
         const fm = new THREE.Mesh(mergeGeometries(frames), shelterMat);
         fm.castShadow = true;
         this.scene.add(fm, new THREE.Mesh(mergeGeometries(glass), glassMat));
+      }
+    }
+  }
+
+  // Metro road segment under path point p running along it (same way on one-way
+  // carriageways). Returns the corridor median point and the travel direction.
+  metroAt(p) {
+    if (!this.graph) return null;
+    let best = null;
+    for (const seg of this.graph.segIndex.query(p.x - 20, p.z - 20, p.x + 20, p.z + 20)) {
+      const road = seg.road;
+      if (!road.metro) continue;
+      const l = Math.hypot(seg.b.x - seg.a.x, seg.b.z - seg.a.z) || 1;
+      const ux = (seg.b.x - seg.a.x) / l, uz = (seg.b.z - seg.a.z) / l;
+      const dot = ux * p.dx + uz * p.dz;
+      if (road.oneway ? dot < 0.8 : Math.abs(dot) < 0.8) continue;
+      const [x, z, , d2] = closestOnSegment(p.x, p.z, seg.a.x, seg.a.z, seg.b.x, seg.b.z);
+      if (d2 > (road.w / 2 + 2) ** 2 || (best && d2 >= best.d2)) continue;
+      const dx = dot < 0 ? -ux : ux, dz = dot < 0 ? -uz : uz;
+      const m = road.oneway ? road.metro.median : 0;
+      best = { road, d2, x: x - dz * m, z: z + dx * m, dx, dz };
+    }
+    return best;
+  }
+
+  // Stops on the Calchaquí metrobus get a central station instead of a curb pole; the
+  // station slides along the avenue off the cross streets and stops of several lines
+  // share it. The routes' stop distances move with it so buses halt alongside.
+  stationFor(st, r, sOn) {
+    const p = r.pathObj.at(sOn);
+    const met = this.metroAt(p);
+    if (!met) return null;
+    let stn = this.stations.find((o) => Math.hypot(o.x - met.x, o.z - met.z) < 40 && o.dx * met.dx + o.dz * met.dz > 0.5);
+    if (!stn) {
+      const off = BUS_W + PLAT_W / 2;
+      for (const along of [0, 7, -7, 13, -13, 19, -19]) {
+        const cx = met.x + met.dx * along, cz = met.z + met.dz * along;
+        let ok = true;
+        for (let t = -19; t <= 19 && ok; t += 2.5) {
+          const x = cx + met.dx * t - met.dz * off, z = cz + met.dz * t + met.dx * off;
+          const m = this.graph.nearest(x, z, 20);
+          if (m && !m.seg.road.metro && m.seg.road.kind !== 'footway' && m.seg.road.kind !== 'pedestrian' && m.dist < m.seg.road.w / 2 + 1.5) ok = false;
+          if (this.collision.isBlocked(x, z, 0.2)) ok = false;
+        }
+        if (!ok) continue;
+        stn = { x: cx, z: cz, dx: met.dx, dz: met.dz, road: met.road, people: [], cool: 0, ...stationAt(met.road, cx, cz, met.dx, met.dz) };
+        this.collision.addPolygon(stn.corners, stn.height, 'platform');
+        this.stations.push(stn);
+        break;
+      }
+      if (!stn) return null;
+    }
+    st.station = stn;
+    st.px = stn.wait.x;
+    st.pz = stn.wait.z;
+    for (const rr of this.routes) {
+      for (const s of rr.stops) if (s.id === st.id) s.s = rr.pathObj.project(stn.x, stn.z, s.s, 60).s;
+    }
+    return stn;
+  }
+
+  buildStations() {
+    if (!this.stations.length) return;
+    const mats = {
+      deck: new THREE.MeshStandardMaterial({ color: 0xa3a19b, roughness: 0.9 }),
+      edge: new THREE.MeshStandardMaterial({ color: 0xf2c200, roughness: 0.8 }),
+      frame: new THREE.MeshStandardMaterial({ color: 0xc8ccd0, roughness: 0.4, metalness: 0.7 }),
+      glass: new THREE.MeshStandardMaterial({ color: 0xbfd8e0, roughness: 0.1, transparent: true, opacity: 0.3, depthWrite: false }),
+      sign: new THREE.MeshStandardMaterial({ map: signTexture(), roughness: 0.5 }),
+    };
+    for (const k of Object.keys(mats)) {
+      const m = new THREE.Mesh(mergeGeometries(this.stations.flatMap((s) => s.geos[k])), mats[k]);
+      m.castShadow = k !== 'glass';
+      m.receiveShadow = k === 'deck';
+      this.scene.add(m);
+    }
+    for (const s of this.stations) delete s.geos;
+  }
+
+  // People waiting on the stations near the player walk into a bus when it stops.
+  updateStations(dt, px, pz, rng) {
+    for (const stn of this.stations) {
+      const d = Math.hypot(stn.x - px, stn.z - pz);
+      if (d > 170) {
+        for (const p of stn.people) this.scene.remove(p.mesh), disposePerson(p.mesh);
+        stn.people.length = 0;
+        continue;
+      }
+      const bus = this.list.find((b) => b.wait > 0 && this.stopById.get(b.r.stops[b.nextStop]?.id)?.station === stn);
+      stn.cool -= dt;
+      if (!bus && stn.people.length < 4 && stn.cool <= 0 && d > 35) {
+        stn.cool = 6 + rng() * 10;
+        const w = stn.wait, t = (rng() - 0.5) * w.len, side = rng() * 0.9;
+        const mesh = createPersonMesh({ rng });
+        const p = { mesh, x: w.x + w.dx * t + w.nx * side, z: w.z + w.dz * t + w.nz * side };
+        mesh.rotation.y = Math.atan2(-w.nx, -w.nz) + (rng() - 0.5) * 1.2;
+        this.scene.add(mesh);
+        stn.people.push(p);
+      }
+      for (const p of [...stn.people]) {
+        let speed = 0;
+        if (bus) {
+          const dx = bus.v.x - p.x, dz = bus.v.z - p.z, l = Math.hypot(dx, dz);
+          if (l < 2.6) {
+            this.scene.remove(p.mesh);
+            disposePerson(p.mesh);
+            stn.people.splice(stn.people.indexOf(p), 1);
+            continue;
+          }
+          speed = 1.3;
+          p.x += (dx / l) * speed * dt;
+          p.z += (dz / l) * speed * dt;
+          p.mesh.rotation.y = Math.atan2(dx, dz);
+        }
+        p.mesh.position.set(p.x, stn.height, p.z);
+        animatePerson(p.mesh, dt, { speed });
       }
     }
   }
@@ -340,6 +461,7 @@ export class Buses {
       this.spawn(px, pz, rng);
       this.spawnTimer = 1.5;
     }
+    this.updateStations(dt, px, pz, rng);
   }
 
   drive(b, dt, ctx) {
@@ -363,7 +485,10 @@ export class Buses {
       b.overtake -= dt;
       lane = 0;
     }
-    const t = pth.at(b.s + look, lane);
+    let t = pth.at(b.s + look, lane);
+    // metrobus: keep to the central bus lane
+    const met = this.metroAt(pth.at(b.s + look));
+    if (met) t = { x: met.x - met.dz * BUS_W / 2, z: met.z + met.dx * BUS_W / 2 };
     let diff = Math.atan2(t.x - v.x, t.z - v.z) - v.heading;
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;

@@ -1,4 +1,5 @@
 // Turns city data (OSM export or procedural) into Three.js meshes + collision.
+import { markMetro, drawMetroLanes } from './metrobus.js';
 import * as THREE from 'three';
 import { makeTextures } from './textures.js';
 import { facadeMaterial } from './conurbanoTextures.js';
@@ -20,6 +21,7 @@ const SIDEWALK = 3;
 export function buildWorld(data, renderer, scene) {
   const tex = makeTextures(renderer);
   const collision = new CollisionWorld();
+  markMetro(data.roads);
   const graph = new RoadGraph(data.roads);
   const root = new THREE.Group();
   root.name = 'city';
@@ -177,6 +179,11 @@ export function buildWorld(data, renderer, scene) {
   addFlat(roadBufs.ped, flatMat(tex.sidewalk, 0xe8d8c8), -7);
   addFlat(roadBufs.pasillo, flatMat(tex.pasillo), -7);
   addFlat(roadBufs.dirt, flatMat(tex.dirt, 0xd0c0a8), -7);
+  const metroBufs = { lane: new GeoBuf(), yellow: new GeoBuf(), white: new GeoBuf() };
+  drawMetroLanes(data.roads, ribbon, metroBufs);
+  addFlat(metroBufs.lane, flatMat(tex.concrete, 0xd6d2ca), -6.6);
+  addFlat(metroBufs.yellow, flatMat(null, 0xf2c200), -6.5);
+  addFlat(metroBufs.white, flatMat(null, 0xf4f4f4), -6.5);
   addFlat(patchBuf, flatMat(tex.asphalt), -6);
 
   // ---------------------------------------------------------------- rails

@@ -2,6 +2,7 @@
 // driving on the right), parked cars along the curbs, and police chasing the player.
 import * as THREE from 'three';
 import { Vehicle, collideVehicles } from './vehicle.js';
+import { carLaneOffset } from '../world/metrobus.js';
 
 const TYPE_WEIGHTS = [['sedan', 40], ['hatch', 28], ['pickup', 11], ['taxi', 15]]; // colectivos come from buses.js
 const MAX_MOVING = 38;
@@ -25,6 +26,7 @@ function wrapAngle(a) {
 // plus a margin away from them so traffic slips past instead of queueing behind them
 const parkOffset = (road) => road.w / 2 - 1.0;
 function laneOffset(road) {
+  if (road.metro) return carLaneOffset(road); // Calchaquí: the center belongs to the metrobus
   const ideal = road.oneway ? road.w * 0.18 : road.w * 0.25;
   return Math.min(ideal, Math.max(road.oneway ? 0 : 0.4, parkOffset(road) - 2.1));
 }

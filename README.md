@@ -82,6 +82,10 @@ Los colectivos recorren los **recorridos reales** de las líneas que pasan por Q
 reales**, con el número de línea y el destino en el cartel (adelante, al costado y atrás). Cada parada tiene su
 poste; al acercarte a pie, la pantalla muestra la dirección de la parada y qué líneas paran ahí.
 
+En la **Av. Calchaquí** está el **Metrobus**: los colectivos van por los dos carriles centrales exclusivos y
+los autos por los exteriores. Las paradas son estaciones elevadas en el medio de la avenida, donde la gente
+espera y sube cuando frena el colectivo.
+
 Líneas incluidas (22): 22, 85, 98, 129, 148, 159, 178, 195, 219, 257, 263, 266, 278, 281, 293, 295, 300,
 324, 372, 570, 580 y 585, con sus ramales en ambos sentidos (185 recorridos y 1.286 paradas).
 
