@@ -39,7 +39,7 @@ export const FOOD = {
   resto: { label: 'Restaurante', sign: '#7a2b1f', awning: ['#7a1f1f', '#2f4f3a', '#b3261e', '#1f5f9e'], props: ['tables', 'chalkboard'], icon: 'fork' },
 };
 // blade-sign icons for the other rubros (farmacia keeps its green cross)
-export const RUBRO_ICON = { kiosco: 'candy', ferreteria: 'hammer', ropa: 'hanger', tecno: 'phone', almacen: 'cart', banco: 'coin', taller: 'wrench', hotel: 'bed', hogar: 'sofa', flores: 'flower', libreria: 'book', boliche: 'disco' };
+export const RUBRO_ICON = { kiosco: 'candy', ferreteria: 'hammer', ropa: 'hanger', tecno: 'phone', almacen: 'cart', banco: 'coin', taller: 'wrench', hotel: 'bed', hogar: 'sofa', flores: 'flower', libreria: 'book', boliche: 'disco', super: 'cart' };
 // extra street furniture for non-food rubros
 const RUBRO_EXTRA = { hotel: { canopy: 0x1b1b1b, props: ['planters'] }, flores: { props: ['flowers'] }, boliche: { canopy: 0x0b0b0b, props: ['vallas'] } };
 

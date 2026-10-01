@@ -5,12 +5,13 @@ import * as THREE from 'three';
 import { mulberry32, SpatialHash, bbox, polygonArea, nearestBuilding, closestOnSegment } from './geo.js';
 import { GeoBuf, instancedChunks, frontRoad } from './builder.js';
 import { foodSub, FOOD, foodFacadeMaterial, buildShopKit } from './shopkit.js';
+import { chainOf, buildBigStores } from './supermarkets.js';
 
 const RUBROS = {
   kiosco: ['kiosk', 'convenience', 'newsagent', 'tobacco', 'lottery', 'e-cigarette'],
   farmacia: ['pharmacy', 'chemist', 'medical_supply'],
   comida: ['restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'ice_cream', 'biergarten', 'bakery', 'pastry', 'confectionery', 'deli'],
-  almacen: ['supermarket', 'greengrocer', 'butcher', 'food', 'beverages', 'alcohol', 'wine', 'dairy', 'frozen_food', 'cheese', 'farm'],
+  almacen: ['greengrocer', 'butcher', 'food', 'beverages', 'alcohol', 'wine', 'dairy', 'frozen_food', 'cheese', 'farm'],
   ferreteria: ['hardware', 'doityourself', 'paint', 'electrical', 'trade', 'building_materials', 'houseware', 'locksmith'],
   ropa: ['clothes', 'shoes', 'jewelry', 'optician', 'boutique', 'fashion_accessories', 'bag', 'cosmetics', 'perfumery', 'beauty', 'hairdresser', 'sports', 'toys', 'gift'],
   banco: ['bank', 'money_lender', 'bureau_de_change'],
@@ -21,6 +22,7 @@ const RUBROS = {
   flores: ['florist', 'garden_centre'],
   libreria: ['books', 'stationery'],
   boliche: ['nightclub'],
+  super: ['supermarket', 'wholesale', 'department_store'],
 };
 const RUBRO_OF = Object.fromEntries(Object.entries(RUBROS).flatMap(([r, kinds]) => kinds.map((k) => [k, r])));
 // storefront width (m) and sign color per rubro
@@ -28,11 +30,11 @@ const STYLE = {
   kiosco: { w: 3, sign: '#c0392b' }, farmacia: { w: 5, sign: '#1f8a4c' }, comida: { w: 6, sign: '#7a2b1f' },
   almacen: { w: 6, sign: '#b8431b' }, ferreteria: { w: 5, sign: '#c46a12' }, ropa: { w: 5, sign: '#4a2a63' },
   banco: { w: 7, sign: '#1d3f8a' }, taller: { w: 6, sign: '#3d4a55' }, tecno: { w: 4, sign: '#1e6f8a' }, local: { w: 4.5, sign: '#34495e' },
-  hotel: { w: 6, sign: '#1f2a3a' }, boliche: { w: 9, sign: '#6a1b9a' }, hogar: { w: 7, sign: '#8a5a2b' }, flores: { w: 4, sign: '#2e7d32' }, libreria: { w: 4.5, sign: '#5d4037' },
+  hotel: { w: 6, sign: '#1f2a3a' }, boliche: { w: 9, sign: '#6a1b9a' }, super: { w: 7, sign: '#00796b' }, hogar: { w: 7, sign: '#8a5a2b' }, flores: { w: 4, sign: '#2e7d32' }, libreria: { w: 4.5, sign: '#5d4037' },
 };
 const RUBRO_LABEL = {
   kiosco: 'Kiosco', farmacia: 'Farmacia', almacen: 'Almacén', ferreteria: 'Ferretería', ropa: 'Ropa y accesorios', banco: 'Banco',
-  taller: 'Autos y talleres', tecno: 'Tecnología', hotel: 'Hotel', boliche: 'Boliche', hogar: 'Muebles y hogar', flores: 'Florería', libreria: 'Librería', local: 'Local',
+  taller: 'Autos y talleres', tecno: 'Tecnología', hotel: 'Hotel', boliche: 'Boliche', super: 'Supermercado', hogar: 'Muebles y hogar', flores: 'Florería', libreria: 'Librería', local: 'Local',
 };
 export function rubroOf(shop) {
   // OSM often tags appliance chains as shop=electrical (a ferretería-like rubro)
@@ -107,7 +109,8 @@ export function buildShops(data, { root, graph, collision, nightMaterials }) {
     const rubro = rubroOf(shop);
     const { p0, p1, front } = best;
     const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
-    const w = Math.min(STYLE[rubro].w, len - 0.4);
+    const big = rubro === 'super' && Math.abs(polygonArea(b.pts)) >= 1200;
+    const w = big ? Math.min(len - 1, 34) : Math.min(STYLE[rubro].w, len - 0.4);
     if (w < 2.4) continue;
     // center on the business, kept inside the wall and clear of neighbours
     let s = Math.min(len - w / 2 - 0.2, Math.max(w / 2 + 0.2, best.t * len));
@@ -127,9 +130,10 @@ export function buildShops(data, { root, graph, collision, nightMaterials }) {
     used.set(key, taken);
     const ux = (p1[0] - p0[0]) / len, uz = (p1[1] - p0[1]) / len;
     const sub = rubro === 'comida' ? foodSub(shop) : null;
+    const chain = rubro === 'super' ? chainOf(shop.name) : null;
     placed.push({
-      shop, rubro, sub, w, room: front.room, roof: b.h, label: sub ? FOOD[sub].label : RUBRO_LABEL[rubro],
-      signColor: sub ? FOOD[sub].sign : STYLE[rubro].sign,
+      shop, rubro, sub, w, big, chain, building: b, room: front.room, roof: b.h, label: sub ? FOOD[sub].label : big ? 'Hipermercado' : RUBRO_LABEL[rubro],
+      signColor: sub ? FOOD[sub].sign : chain ? chain.band : STYLE[rubro].sign,
       h: Math.min(3.8, b.h - 0.3),
       x: p0[0] + ux * s, z: p0[1] + uz * s,
       ux, uz, ox: uz, oz: -ux, // along the wall, and outward
@@ -142,6 +146,7 @@ export function buildShops(data, { root, graph, collision, nightMaterials }) {
   const rng = mulberry32(21);
   const W = new THREE.Color(1, 1, 1);
   for (const p of placed) {
+    if (p.big) continue;
     const key = p.sub ? `comida:${p.sub}` : p.rubro;
     if (!mats[key]) {
       mats[key] = p.sub ? foodFacadeMaterial(p.sub) : facadeMaterial(p.rubro);
@@ -171,6 +176,7 @@ export function buildShops(data, { root, graph, collision, nightMaterials }) {
     ctx.textBaseline = 'middle';
     const buf = new GeoBuf();
     placed.slice(a * perAtlas, (a + 1) * perAtlas).forEach((p, i) => {
+      if (p.big) return;
       const px = (i % cols) * signW, py = Math.floor(i / cols) * signH;
       ctx.fillStyle = p.signColor;
       ctx.fillRect(px, py, signW, signH);
@@ -221,7 +227,8 @@ export function buildShops(data, { root, graph, collision, nightMaterials }) {
     }
   }
 
-  const kit = buildShopKit(root, placed, { graph, collision, nightMaterials });
+  const kit = buildShopKit(root, placed.filter((p) => !p.big), { graph, collision, nightMaterials });
+  const bigStores = buildBigStores(root, placed.filter((p) => p.big), { collision, nightMaterials });
 
   // cruz verde de farmacia: blade sign sticking out of the facade, lit at night
   const crossMat = new THREE.MeshStandardMaterial({ map: crossTexture(), emissiveMap: crossTexture(), emissive: 0x30ff70, emissiveIntensity: 0.4 });
@@ -241,6 +248,7 @@ export function buildShops(data, { root, graph, collision, nightMaterials }) {
     placed,
     setNight(n) {
       kit.setNight(n);
+      bigStores.setNight(n);
       crossMat.emissiveIntensity = 0.4 + n * 2.5;
     },
   };
@@ -258,7 +266,7 @@ function facadeMaterial(rubro) {
   ectx.fillStyle = '#000';
   ectx.fillRect(0, 0, S * 4, S);
   const rng = mulberry32(rubro.length * 97);
-  for (let k = 0; k < 4; k++) (DRAW[rubro] || DRAW.local)(ctx, ectx, k * S, S, rng);
+  for (let k = 0; k < 4; k++) (DRAW[rubro] || (rubro === 'super' ? DRAW.almacen : DRAW.local))(ctx, ectx, k * S, S, rng);
   const map = new THREE.CanvasTexture(c), emissiveMap = new THREE.CanvasTexture(e);
   map.colorSpace = emissiveMap.colorSpace = THREE.SRGBColorSpace;
   map.anisotropy = 8;

@@ -181,6 +181,7 @@ export class ChunkSet {
     this.map = new Map();
     this.detail = []; // small stuff hidden beyond `range` meters
     this.lazy = []; // props baked only while the camera is near
+    this.streamed = []; // meshes kept on the GPU only while the camera is near
   }
   at(x, z) {
     const key = `${Math.floor(x / this.size)},${Math.floor(z / this.size)}`;
@@ -195,10 +196,12 @@ export class ChunkSet {
       const [ix, iz] = key.split(',').map(Number);
       const cx = (ix + 0.5) * this.size, cz = (iz + 0.5) * this.size;
       const detail = (mesh, range) => this.detail.push({ mesh, cx, cz, range: range + this.size * 0.7 });
+      // facades and cut-outs stream in and out of the GPU around the player (the fog
+      // hides anything past ~1.1 km anyway); their CPU copy stays to come back quickly
       if (!c.facade.empty) {
-        const m = new THREE.Mesh(freeAfterUpload(c.facade.geometry()), mats.facade);
+        const m = new THREE.Mesh(c.facade.geometry(), mats.facade);
         m.castShadow = m.receiveShadow = true;
-        root.add(m);
+        this.streamed.push({ mesh: m, cx, cz, range: 1300 + this.size * 0.7, on: false });
       }
       if (!c.props.empty) {
         // baked on demand near the camera (see updateDetail)
@@ -206,10 +209,9 @@ export class ChunkSet {
         this.lazy.push({ props: c.props, mesh: null, cx, cz, range: 420 + this.size * 0.7 });
       }
       if (!c.alpha.empty) {
-        const m = new THREE.Mesh(freeAfterUpload(c.alpha.geometry()), mats.alpha);
+        const m = new THREE.Mesh(c.alpha.geometry(), mats.alpha);
         m.receiveShadow = true;
-        root.add(m);
-        detail(m, 320);
+        this.streamed.push({ mesh: m, cx, cz, range: 320 + this.size * 0.7, on: false });
       }
       if (c.lines.length) {
         const g = new THREE.BufferGeometry();
@@ -228,6 +230,17 @@ export class ChunkSet {
   // frame so driving doesn't stutter) and free the far ones.
   updateDetail(p) {
     for (const d of this.detail) d.mesh.visible = (d.cx - p.x) ** 2 + (d.cz - p.z) ** 2 < d.range * d.range;
+    for (const s of this.streamed) {
+      const d2 = (s.cx - p.x) ** 2 + (s.cz - p.z) ** 2;
+      if (!s.on && d2 < s.range * s.range) {
+        this.root.add(s.mesh);
+        s.on = true;
+      } else if (s.on && d2 > (s.range * 1.15) ** 2) {
+        this.root.remove(s.mesh);
+        s.mesh.geometry.dispose(); // frees the GPU buffers; re-uploaded when it comes back
+        s.on = false;
+      }
+    }
     let budget = 2;
     for (const l of this.lazy) {
       const d2 = (l.cx - p.x) ** 2 + (l.cz - p.z) ** 2;
