@@ -1,3 +1,4 @@
+import { Combat, GUN_SHOPS } from './combat.js';
 import { streaming } from './world/geobuf.js';
 import * as THREE from 'three';
 import { generateQuilmes } from './world/procedural.js';
@@ -94,6 +95,7 @@ async function main() {
   await nextFrame();
   const models = loadVehicleModels(import.meta.env.BASE_URL);
   const data = await loadCityData();
+  data.shops = [...(data.shops || []), ...GUN_SHOPS]; // the real armerías (combat.js)
   setLoading(`Construyendo ${data.buildings.length.toLocaleString('es-AR')} edificios y ${data.roads.length.toLocaleString('es-AR')} calles…`);
   await nextFrame();
   const t0 = performance.now();
@@ -191,6 +193,8 @@ async function main() {
   };
 
   const cam = { yaw: spawnHeading, pitch: 0.28, dist: 5.5, idle: 0, mode: 0 };
+  const combat = new Combat({ scene, world, player, peds, traffic, hud, audio, onCrime, getWanted: () => wanted });
+  const NO_INPUT = { down: () => false, hit: () => false, mouseDX: 0, mouseDY: 0 };
   const camModes = [1, 1.6, 0.6];
   const ghost = { on: false, x: sx, y: 90, z: sz, yaw: spawnHeading, pitch: -0.35 };
 
@@ -518,18 +522,21 @@ async function main() {
         cam.pitch += (0.22 - cam.pitch) * Math.min(1, dt * 2);
       }
     } else {
-      player.update(dt, input, cam.yaw, world.collision);
+      player.update(dt, combat.menu ? NO_INPUT : input, cam.yaw, world.collision);
       const bus = buses?.near(player.x, player.z);
       const nearHeli = heli && Math.hypot(heli.x - player.x, heli.z - player.z) < 5;
-      if (input.hit('KeyE')) {
-        if (nearHeli) {
+      if (input.hit('KeyE') && !combat.menu) {
+        if (combat.tryShop()) {
+          // inside the armería
+        } else if (nearHeli) {
           flying = true;
           player.mesh.visible = false;
           hud.toast('Espacio para despegar (el rotor tarda unos segundos en tomar vueltas).');
         } else if (bus) board(bus);
         else tryEnterVehicle();
       }
-      if (input.hit('KeyR')) tryEnterVehicle(); // steal whatever is closest, colectivos included
+      if (input.hit('KeyR') && !combat.menu) tryEnterVehicle(); // steal whatever is closest, colectivos included
+      combat.updatePlayer(dt, input, cam, camera, !!touch);
       if (input.hit('KeyF')) {
         // empujón
         player.push();
@@ -600,6 +607,7 @@ async function main() {
     }
     if (!ghost.on && player.health <= 0 && deadTimer <= 0) {
       hud.message('WASTED', '#c0392b', 4);
+      combat.onWasted();
       wanted = 0;
       deadTimer = 4;
       player.cancelTransition();
@@ -622,6 +630,7 @@ async function main() {
     buses?.update(dt, ctx, rng);
     if (!ghost.on && carHit > 3) audio.thump(carHit);
     peds.update(dt, { px, pz, vehicles: traffic.vehicles, playerVehicle: ghost.on ? null : player.vehicle, onCrime, fast });
+    combat.update(dt, { onFoot: !player.vehicle && !riding && !flying && !ghost.on && deadTimer <= 0 && !player.transition, alive: deadTimer <= 0 && !ghost.on, camPitch: cam.pitch });
 
     // wanted level: evade the cops to lose stars, stop next to them to get busted
     let nearestCop = Infinity;
@@ -635,7 +644,7 @@ async function main() {
         if (!wanted) hud.toast('Perdiste a la policía');
       }
       const slow = !player.vehicle || Math.abs(player.vehicle.speed) < 2.5;
-      if (nearestCop < 7 && slow && !riding && !flying) bustedTimer += dt;
+      if ((nearestCop < 7 && slow && !riding && !flying) || combat.arresting) bustedTimer += dt;
       else bustedTimer = Math.max(0, bustedTimer - dt);
       if (bustedTimer > 2) {
         bustedTimer = 0;
@@ -643,6 +652,7 @@ async function main() {
         player.cancelTransition();
         if (player.vehicle) exitVehicleNow();
         hud.message('BUSTED', '#2e86de', 4);
+        combat.onBusted();
         respawn();
       }
     }
@@ -674,8 +684,11 @@ async function main() {
       camera.position.set(ghost.x, ghost.y, ghost.z);
       camera.lookAt(tx, ty, tz);
     } else if (!window.__game?.freeCam) {
-      camera.position.set(px - dirX * d, Math.max(0.4, focusY + sp * d), pz - dirZ * d);
-      camera.lookAt(px, focusY, pz);
+      // aiming: closer, over the right shoulder, so the crosshair clears the player
+      const aimK = (cam.aimK = (cam.aimK || 0) + ((combat.aiming && !camV ? 1 : 0) - (cam.aimK || 0)) * Math.min(1, dt * 10));
+      const dd = d * (1 - 0.45 * aimK), sx = -Math.cos(cam.yaw) * 0.75 * aimK, sz = Math.sin(cam.yaw) * 0.75 * aimK;
+      camera.position.set(px - dirX * dd + sx, Math.max(0.4, focusY + sp * dd - 0.15 * aimK), pz - dirZ * dd + sz);
+      camera.lookAt(px + sx + dirX * 6 * aimK, focusY - 0.15 * aimK, pz + sz + dirZ * 6 * aimK);
     }
 
     // ------------------------------------------------------------- environment
@@ -703,6 +716,10 @@ async function main() {
     if (!ghost.on && !inCar && !riding && deadTimer <= 0 && !player.transition) {
       const v = traffic.vehicles.find((v) => Math.min(...v.circles().map(([x, z]) => Math.hypot(x - px, z - pz))) < 4.5);
       if (v) hint = v.driver === 'npc' ? 'E: robar el auto' : v.driver === 'police' ? 'E: robar el patrullero' : v.driver === 'bus' ? `E: viajar en el ${v.busLine} ${v.busHeadsign} · R: robarlo` : 'E: subir al auto';
+    }
+    if (!hint && !inCar && !riding && !ghost.on) {
+      const gun = combat.shopNear(player.x, player.z);
+      if (gun) hint = `E: entrar a ${gun.name} (armería)`;
     }
     if (!hint && !inCar && !riding && !ghost.on) {
       // in front of a business: its name and what it is
@@ -747,7 +764,7 @@ async function main() {
     input.endFrame();
     requestAnimationFrame(frame);
   }
-  window.__game = { ghost, buses, trains, hud, scene, camera, renderer, player, traffic, peds, world, data, get hours() { return hours; }, set hours(h) { hours = h; } };
+  window.__game = { input, combat, ghost, buses, trains, hud, scene, camera, renderer, player, traffic, peds, world, data, get hours() { return hours; }, set hours(h) { hours = h; }, get wanted() { return wanted; }, set wanted(w) { wanted = w; } };
   requestAnimationFrame(frame);
 }
 

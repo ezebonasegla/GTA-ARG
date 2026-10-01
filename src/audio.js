@@ -54,6 +54,28 @@ export class Audio {
     this.sirenOsc.frequency.setTargetAtTime(Math.sin(time * 3) > 0 ? 950 : 700, t, 0.05);
   }
 
+  // kind: 'pistol' | 'shotgun' | 'smg'; vol 0..1 (distance)
+  gunshot(kind, vol = 1) {
+    if (!this.ctx || vol <= 0.02) return;
+    const ctx = this.ctx;
+    const len = kind === 'shotgun' ? 0.45 : kind === 'smg' ? 0.12 : 0.22;
+    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * len), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) {
+      const t = i / d.length;
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, kind === 'shotgun' ? 2.2 : 4) + (i < 60 ? 0.8 : 0);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = kind === 'shotgun' ? 1800 : kind === 'smg' ? 3200 : 2600;
+    const g = ctx.createGain();
+    g.gain.value = (kind === 'shotgun' ? 1.1 : 0.8) * vol;
+    src.connect(f).connect(g).connect(this.master);
+    src.start();
+  }
+
   thump(strength) {
     if (!this.ctx) return;
     const ctx = this.ctx;

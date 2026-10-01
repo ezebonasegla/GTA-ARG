@@ -76,6 +76,16 @@ Para probarlo desde el celular en la misma red Wi-Fi: `npm run dev -- --host` y 
 - **Trenes de la línea Roca** que circulan por las vías reales y paran en las estaciones Quilmes y Bernal
   (cuidado: atropellan).
 
+### Armas
+
+Las **armerías reales** de Quilmes (La Perdiz en Hipólito Yrigoyen 646, Pointer en Leandro N. Alem 11 y Guns y
+Friends en Av. Cevallos 440) tienen un círculo rojo en la puerta: **E** para entrar y comprar cuchillo, pistola,
+escopeta o ametralladora, y balas. **I** abre el inventario (1-4 equipar, 0 manos libres, rueda del mouse para
+cambiar), **clic derecho** apunta por sobre el hombro y **clic izquierdo** dispara; **X** recarga. Las balas son
+proyectiles (velocidad y caída), la escopeta tira perdigones; los impactos voltean gente, rompen autos y dejan
+chispas, polvo y sangre. Con 2 o más estrellas los policías se bajan del patrullero y disparan: pistola, escopeta
+con 3 estrellas y ametralladora desde 4. Si te agarran te sacan las armas.
+
 ### Modo liviano
 
 Si el navegador cierra la pestaña (poca memoria o placa de video), la próxima vez el juego arranca solo en

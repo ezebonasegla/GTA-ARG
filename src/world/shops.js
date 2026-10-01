@@ -23,6 +23,7 @@ const RUBROS = {
   libreria: ['books', 'stationery'],
   boliche: ['nightclub'],
   super: ['supermarket', 'wholesale', 'department_store'],
+  armeria: ['weapons', 'hunting'],
 };
 const RUBRO_OF = Object.fromEntries(Object.entries(RUBROS).flatMap(([r, kinds]) => kinds.map((k) => [k, r])));
 // storefront width (m) and sign color per rubro
@@ -31,10 +32,11 @@ const STYLE = {
   almacen: { w: 6, sign: '#b8431b' }, ferreteria: { w: 5, sign: '#c46a12' }, ropa: { w: 5, sign: '#4a2a63' },
   banco: { w: 7, sign: '#1d3f8a' }, taller: { w: 6, sign: '#3d4a55' }, tecno: { w: 4, sign: '#1e6f8a' }, local: { w: 4.5, sign: '#34495e' },
   hotel: { w: 6, sign: '#1f2a3a' }, boliche: { w: 9, sign: '#6a1b9a' }, super: { w: 7, sign: '#00796b' }, hogar: { w: 7, sign: '#8a5a2b' }, flores: { w: 4, sign: '#2e7d32' }, libreria: { w: 4.5, sign: '#5d4037' },
+  armeria: { w: 5, sign: '#1b1f23' },
 };
 const RUBRO_LABEL = {
   kiosco: 'Kiosco', farmacia: 'Farmacia', almacen: 'Almacén', ferreteria: 'Ferretería', ropa: 'Ropa y accesorios', banco: 'Banco',
-  taller: 'Autos y talleres', tecno: 'Tecnología', hotel: 'Hotel', boliche: 'Boliche', super: 'Supermercado', hogar: 'Muebles y hogar', flores: 'Florería', libreria: 'Librería', local: 'Local',
+  taller: 'Autos y talleres', tecno: 'Tecnología', hotel: 'Hotel', boliche: 'Boliche', super: 'Supermercado', hogar: 'Muebles y hogar', flores: 'Florería', libreria: 'Librería', armeria: 'Armería', local: 'Local',
 };
 export function rubroOf(shop) {
   // OSM often tags appliance chains as shop=electrical (a ferretería-like rubro)
@@ -522,6 +524,23 @@ const DRAW = {
     ctx.font = 'bold 9px Arial';
     ctx.textAlign = 'center';
     ctx.fillText('BOLETERÍA', x + 222, 182);
+  },
+  armeria(ctx, ectx, x, S, rng) {
+    frame(ctx, x, S, pick(rng, ['#2b2e31', '#3a332c']), '#1b1f23');
+    // vidriera blindada con rejas y escopetas / rifles en exhibición
+    glass(ctx, ectx, x + 12, 70, 160, 150, '#1c2226', '#f2e6c8');
+    for (let i = 0; i < 6; i++) {
+      const gx = x + 24 + i * 25;
+      ctx.fillStyle = '#4a3020';
+      ctx.fillRect(gx, 150, 7, 50);
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(gx + 2, 82, 3, 72);
+    }
+    ctx.fillStyle = '#111';
+    for (let xx = x + 12; xx <= x + 172; xx += 10) ctx.fillRect(xx, 70, 2, 150);
+    ctx.fillStyle = '#6d6d6d';
+    ctx.fillRect(x + 12, 220, 160, 36);
+    door(ctx, ectx, x + 186, 70, 60, 186, '#111');
   },
   local(ctx, ectx, x, S, rng) {
     frame(ctx, x, S, pick(rng, ['#e6e0d4', '#d9dfe3', '#efe3c8']), '#444');

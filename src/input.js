@@ -26,6 +26,15 @@ export class Input {
       this.mouseDX += e.movementX;
       this.mouseDY += e.movementY;
     });
+    // mouse buttons as virtual keys (fire / aim) while playing
+    canvas.addEventListener('mousedown', (e) => {
+      if (!this.locked) return;
+      const code = `Mouse${e.button}`;
+      if (!this.keys.has(code)) this.pressed.add(code);
+      this.keys.add(code);
+    });
+    addEventListener('mouseup', (e) => this.keys.delete(`Mouse${e.button}`));
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     this.wheel = 0;
     addEventListener('wheel', (e) => (this.wheel += Math.sign(e.deltaY)), { passive: true });
   }

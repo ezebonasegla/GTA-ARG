@@ -32,6 +32,8 @@ export class TouchControls {
         <button data-key="Space" class="tb big" data-foot="Saltar" data-car="Freno de mano">Saltar</button>
         <button data-key="KeyF" class="tb foot-only">Empujar</button>
         <button data-key="KeyR" class="tb foot-only">Robar</button>
+        <button data-key="Mouse0" class="tb foot-only">Disparar</button>
+        <button data-key="KeyI" class="tb foot-only">Armas</button>
         <button data-key="KeyH" class="tb car-only">Bocina</button>
         <button data-key="KeyC" class="tb">Cámara</button>
       </div>
