@@ -127,7 +127,7 @@ export class Peds {
       if (Math.hypot(p.x - px, p.z - pz) > DESPAWN || (p.dead && (p.timer -= dt) < 0)) this.remove(p);
     }
     let alive = this.list.filter((p) => !p.dead).length;
-    for (let k = 0; k < 4 && alive < MAX_PEDS; k++) if (this.spawn(px, pz, ctx.initial ? 6 : SPAWN_MIN, SPAWN_MAX)) alive++;
+    if (!ctx.fast) for (let k = 0; k < 4 && alive < MAX_PEDS; k++) if (this.spawn(px, pz, ctx.initial ? 6 : SPAWN_MIN, SPAWN_MAX)) alive++;
 
     for (const p of this.list) {
       if (p.state === 'down') {

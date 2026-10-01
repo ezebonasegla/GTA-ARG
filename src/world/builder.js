@@ -508,8 +508,8 @@ export function buildWorld(data, renderer, scene) {
     corridors,
     tex,
     waterMaterial: areaMats.water,
-    updateDetail: (p) => {
-      chunks.updateDetail(p);
+    updateDetail: (p, fast) => {
+      chunks.updateDetail(p, fast);
       updateCulling(p);
     },
     setNight(n) {
@@ -525,8 +525,8 @@ export function buildWorld(data, renderer, scene) {
     shops: shops.count,
     shopList: shops.placed,
     // Per-frame work that depends on where the player is.
-    update(x, z) {
-      streetSigns.update(x, z);
+    update(x, z, fast) {
+      streetSigns.update(x, z, fast);
     },
   };
 }

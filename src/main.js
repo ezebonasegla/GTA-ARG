@@ -540,11 +540,18 @@ async function main() {
     const px = ghost.on ? ghost.x : player.x;
     const pz = ghost.on ? ghost.z : player.z;
     if (heli && !flying) heli.update(dt, null, world.collision);
-    const ctx = { px, pz, riding, playerVehicle: player.vehicle, peds: peds.list, wanted, time: totalTime, horn, onCrime, trainBoxes };
+    // flying across the map (helicopter, ghost): don't spawn people, cars and details
+    // that would be thrown away a second later; they come in when you slow down
+    const vs = Math.hypot(px - (perf.lx ?? px), pz - (perf.lz ?? pz)) / Math.max(dt, 1e-3);
+    perf.lx = px;
+    perf.lz = pz;
+    perf.vs = (perf.vs || 0) + (Math.min(vs, 400) - (perf.vs || 0)) * Math.min(1, dt * 2);
+    const fast = perf.vs > 32;
+    const ctx = { px, pz, riding, playerVehicle: player.vehicle, peds: peds.list, wanted, time: totalTime, horn, onCrime, trainBoxes, fast };
     const carHit = traffic.update(dt, ctx);
     buses?.update(dt, ctx, rng);
     if (!ghost.on && carHit > 3) audio.thump(carHit);
-    peds.update(dt, { px, pz, vehicles: traffic.vehicles, playerVehicle: ghost.on ? null : player.vehicle, onCrime });
+    peds.update(dt, { px, pz, vehicles: traffic.vehicles, playerVehicle: ghost.on ? null : player.vehicle, onCrime, fast });
 
     // wanted level: evade the cops to lose stars, stop next to them to get busted
     let nearestCop = Infinity;
@@ -604,7 +611,7 @@ async function main() {
     // ------------------------------------------------------------- environment
     const night = env.update(hours, { x: px, z: pz });
     world.setNight(night);
-    world.update(px, pz);
+    world.update(px, pz, fast);
     world.waterMaterial.normalMap.offset.set(totalTime * 0.01, totalTime * 0.006);
     world.waterMaterial.envMapIntensity = 0.15 + 0.75 * (1 - night);
     headlightMaterial.emissiveIntensity = 0.3 + night * 3;
@@ -648,7 +655,7 @@ async function main() {
     hud.update(dt);
     audio.update({ inCar, speed: inCar ? player.vehicle.speed : 0, throttle, horn, sirenDist: nearestCop, time: totalTime });
 
-    world.updateDetail(camera.position);
+    world.updateDetail(camera.position, fast);
     // fps counter + dynamic resolution: drop the pixel ratio when the frame rate sags,
     // bring it back when there is headroom
     perf.frames++;

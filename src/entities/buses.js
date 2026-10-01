@@ -457,7 +457,7 @@ export class Buses {
       this.drive(b, dt, ctx);
     }
     this.spawnTimer -= dt;
-    if (this.list.length < MAX_BUSES && this.spawnTimer <= 0) {
+    if (this.list.length < MAX_BUSES && this.spawnTimer <= 0 && !ctx.fast) {
       this.spawn(px, pz, rng);
       this.spawnTimer = 1.5;
     }

@@ -112,6 +112,11 @@ export function buildStreetSigns(data, { root, collision }) {
     g.computeBoundingSphere();
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
+    // the atlas can be 16 MB of pixels: drop them once the GPU has the copy instead of
+    // waiting for the garbage collector (flying over the city made dozens pile up)
+    tex.onUpdate = () => {
+      canvas.width = canvas.height = 1;
+    };
     tex.anisotropy = 4;
     const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: night * 0.35, roughness: 0.55, metalness: 0.2 });
     const mesh = new THREE.Mesh(g, mat);
@@ -133,7 +138,7 @@ export function buildStreetSigns(data, { root, collision }) {
   return {
     posts: [...chunks.values()].flatMap((c) => c.posts),
     // Build the nearest missing chunk (at most one per call) and drop far ones.
-    update(x, z) {
+    update(x, z, fast = false) {
       for (const c of loaded) if (Math.hypot(c.cx - x, c.cz - z) > UNLOAD_R) unload(c);
       const ix = Math.floor(x / CHUNK), iz = Math.floor(z / CHUNK);
       const r = Math.ceil(LOAD_R / CHUNK);
@@ -146,7 +151,7 @@ export function buildStreetSigns(data, { root, collision }) {
           if (d < bestD) (bestD = d), (best = c);
         }
       }
-      if (best) load(best);
+      if (best && !fast) load(best);
     },
     setNight(n) {
       night = n;

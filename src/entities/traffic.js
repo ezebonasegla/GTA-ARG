@@ -163,8 +163,8 @@ export class Traffic {
       else if (v.parked || !v.driver) parked++;
       else moving++;
     }
-    for (let k = 0; k < 3 && moving < MAX_MOVING; k++) if (this.spawnMoving(px, pz, ctx.initial ? 25 : SPAWN_MIN, SPAWN_MAX)) moving++;
-    for (let k = 0; k < 3 && parked < MAX_PARKED; k++) if (this.spawnParked(px, pz, ctx.initial ? 10 : SPAWN_MIN, SPAWN_MAX)) parked++;
+    if (!ctx.fast) for (let k = 0; k < 3 && moving < MAX_MOVING; k++) if (this.spawnMoving(px, pz, ctx.initial ? 25 : SPAWN_MIN, SPAWN_MAX)) moving++;
+    if (!ctx.fast) for (let k = 0; k < 3 && parked < MAX_PARKED; k++) if (this.spawnParked(px, pz, ctx.initial ? 10 : SPAWN_MIN, SPAWN_MAX)) parked++;
 
     this.policeTimer -= dt;
     const wantCops = Math.min(5, ctx.wanted);
