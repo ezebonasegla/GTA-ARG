@@ -207,7 +207,8 @@ export class Traffic {
     return playerHit;
   }
 
-  obstacleAhead(v, ctx, range) {
+  // others: false to see only people, the player and trains (breaking a gridlock)
+  obstacleAhead(v, ctx, range, others = true) {
     const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
     let nearest = Infinity;
     const check = (x, z, halfW, base = 1.6) => {
@@ -217,7 +218,7 @@ export class Traffic {
       const lat = Math.abs(rx * fz - rz * fx);
       if (lat < base + halfW) nearest = Math.min(nearest, along);
     };
-    for (const o of this.vehicles) {
+    for (const o of others ? this.vehicles : []) {
       if (o === v) continue;
       if (Math.abs(o.x - v.x) > range + 6 || Math.abs(o.z - v.z) > range + 6) continue;
       // a parked car only blocks if the two bodies would actually touch
@@ -284,8 +285,12 @@ export class Traffic {
       const toEnd = e.len - s;
       if (turn > 0.4 && toEnd < 30) target = Math.min(target, THREE.MathUtils.lerp(4.5, target, toEnd / 30));
     }
-    const obst = this.obstacleAhead(v, ctx, 6 + speed * 1.4 + v.spec.length / 2);
+    // gridlock (cars nose to nose at a corner, each waiting for the other): after a few
+    // seconds stop yielding to other cars and creep through, the bodies push apart
+    if (c.nudge > 0) c.nudge -= dt;
+    const obst = this.obstacleAhead(v, ctx, 6 + speed * 1.4 + v.spec.length / 2, !(c.nudge > 0));
     if (obst < Infinity) target = Math.min(target, Math.max(0, (obst - v.spec.length / 2 - 3) * 0.7));
+    if (c.nudge > 0) target = Math.min(target, 3);
     // barrera down ahead (and not already on the crossing): wait for the train
     const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
     if (this.closedAt?.(v.x + fx * 14, v.z + fz * 14) && !this.closedAt(v.x, v.z)) target = 0;
@@ -330,6 +335,10 @@ export class Traffic {
     // left in the lane): lose patience, back up and take another way
     if (obst < Infinity && speed < 0.4 && c.reverse <= 0) c.blocked = (c.blocked || 0) + dt;
     else c.blocked = 0;
+    if (c.blocked > 5 && !(c.nudge > 0) && !this.closedAt?.(v.x + Math.sin(v.heading) * 14, v.z + Math.cos(v.heading) * 14)) {
+      c.nudge = 4;
+      c.blocked = 0;
+    }
     if (c.blocked > 12) {
       c.blocked = 0;
       if (Math.hypot(ctx.px - v.x, ctx.pz - v.z) > 120) {

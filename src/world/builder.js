@@ -25,6 +25,7 @@ export function buildWorld(data, renderer, scene) {
   markMetro(data.roads);
   const plan = planCorridors(data); // cuts the streets that can't cross the autopista / tracks
   const graph = new RoadGraph(data.roads);
+  dropBuildingsOnRoads(data, graph);
   // pasos bajo nivel: the ground and every flat layer skip the trenches (stencil set
   // by corridors.js)
   const noTrench = { stencilWrite: true, stencilRef: 1, stencilFunc: THREE.NotEqualStencilFunc };
@@ -176,7 +177,9 @@ export function buildWorld(data, renderer, scene) {
       ribbon(roadBufs.ped, road.pts, road.w, 0.05, 1 / 4);
       continue;
     }
+    // service streets (pasajes, accesos) get a narrow one
     if (road.kind !== 'service') ribbon(sidewalkBuf, road.pts, road.w + SIDEWALK * 2, 0.04, 1 / 6);
+    else if (road.w >= 5 && !road.ramp) ribbon(sidewalkBuf, road.pts, road.w + 3, 0.04, 1 / 6);
     // many residential streets of the conurbano are concrete slabs
     const concrete = road.kind === 'residential' && (hashString(`${road.pts[0][0]},${road.pts[0][1]}`) % 100) < 45;
     ribbon(concrete ? roadBufs.concrete : road.oneway || road.w < 8 ? roadBufs.road1 : roadBufs.road2, road.pts, road.w, 0.06, 1 / 12);
@@ -538,6 +541,36 @@ export function buildWorld(data, renderer, scene) {
 // each kind of prop per 220 m chunk is a draw call, and most of them were being drawn
 // out to the fog.
 const culled = [];
+// The footprint datasets (Google Open Buildings, Overture) don't always agree with the
+// streets: ~2% of the buildings stand on a carriageway, blocking traffic. Drop those
+// whose middle (or any corner pulled 30% inwards) is more than 0.5 m into a road.
+function dropBuildingsOnRoads(data, graph) {
+  const onRoad = (x, z) => {
+    for (const s of graph.segIndex.query(x, z, x, z)) {
+      const r = s.road;
+      if (r.kind === 'footway' || r.kind === 'pedestrian' || r.pasillo) continue;
+      if (closestOnSegment(x, z, s.a.x, s.a.z, s.b.x, s.b.z)[3] < (r.w / 2 - 0.5) ** 2) return true;
+    }
+    return false;
+  };
+  const before = data.buildings.length;
+  data.buildings = data.buildings.filter((b) => {
+    if (b.special) return true;
+    const pts = b.pts;
+    let cx = 0, cz = 0;
+    for (const [x, z] of pts) (cx += x), (cz += z);
+    cx /= pts.length;
+    cz /= pts.length;
+    if (pointInPolygon(cx, cz, pts) && onRoad(cx, cz)) return false;
+    for (const [x, z] of pts) {
+      const px = x * 0.7 + cx * 0.3, pz = z * 0.7 + cz * 0.3;
+      if (pointInPolygon(px, pz, pts) && onRoad(px, pz)) return false;
+    }
+    return true;
+  });
+  console.info(`edificios sobre la calzada quitados: ${before - data.buildings.length}`);
+}
+
 export function updateCulling(p) {
   for (const c of culled) c.mesh.visible = (c.x - p.x) ** 2 + (c.z - p.z) ** 2 < c.r2;
 }
