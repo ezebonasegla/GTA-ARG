@@ -39,7 +39,8 @@ async function loadCityData() {
 }
 
 async function main() {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  // stencil: the pasos bajo nivel cut the ground (see world/corridors.js)
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', stencil: true });
   const mobile = isTouchDevice();
   renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1 : 1.5));
   const perf = { frames: 0, t: 0, low: 0, high: 0, n: 0, maxRatio: renderer.getPixelRatio() };
@@ -84,6 +85,7 @@ async function main() {
   const rng = mulberry32(Date.now() & 0xffff);
   await models;
   const traffic = new Traffic(scene, world.graph, world.collision, rng);
+  traffic.closedAt = (x, z) => world.corridors.closedAt(x, z); // barreras down
   const peds = new Peds(scene, world.graph, world.collision, rng);
   const trains = new Trains(scene, data);
   // real colectivo lines (only for the real map: same coordinates)
@@ -338,8 +340,9 @@ async function main() {
       ghost.pitch = cam.pitch;
       const fwdX = Math.sin(ghost.yaw);
       const fwdZ = Math.cos(ghost.yaw);
-      const rightX = fwdZ;
-      const rightZ = -fwdX;
+      // screen right while looking along (fwdX, fwdZ)
+      const rightX = -fwdZ;
+      const rightZ = fwdX;
       let mx = 0, mz = 0;
       if (input.down('KeyW', 'ArrowUp')) { mx += fwdX; mz += fwdZ; }
       if (input.down('KeyS', 'ArrowDown')) { mx -= fwdX; mz -= fwdZ; }
@@ -489,6 +492,7 @@ async function main() {
 
     // trains: move, then push/hurt whatever is on the tracks
     const trainBoxes = trains.update(dt);
+    world.corridors.update(dt, trains);
     if (!ghost.on) for (const box of trainBoxes) {
       const moving = Math.hypot(box.vx, box.vz) > 1;
       if (!player.vehicle && !riding && !flying && deadTimer <= 0) {
@@ -588,7 +592,7 @@ async function main() {
     if (ghost.on) {
       const cp2 = Math.cos(ghost.pitch), sp2 = Math.sin(ghost.pitch);
       const tx = ghost.x + Math.sin(ghost.yaw) * cp2;
-      const ty = ghost.y + sp2;
+      const ty = ghost.y - sp2; // same pitch as the chase camera: positive looks down
       const tz = ghost.z + Math.cos(ghost.yaw) * cp2;
       camera.position.set(ghost.x, ghost.y, ghost.z);
       camera.lookAt(tx, ty, tz);

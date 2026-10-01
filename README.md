@@ -82,6 +82,12 @@ Los colectivos recorren los **recorridos reales** de las líneas que pasan por Q
 reales**, con el número de línea y el destino en el cartel (adelante, al costado y atrás). Cada parada tiene su
 poste; al acercarte a pie, la pantalla muestra la dirección de la parada y qué líneas paran ahí.
 
+La **Autopista Buenos Aires–La Plata** está cerrada con New Jersey, guardarraíl y alambrado: se entra y se sale
+solo por sus **rampas reales**, y las calles que la cruzan pasan por puentes o pasos bajo nivel. Las **vías del
+Roca** tienen alambrado a los costados: se cruzan solo en los **pasos a nivel** (las barreras bajan cuando viene
+el tren y los autos esperan), por los puentes o por los pasos bajo nivel. Los datos de rampas, puentes, túneles y
+pasos a nivel salen de OSM con `node scripts/fetch-crossings.mjs`.
+
 En la **Av. Calchaquí** está el **Metrobus**: los colectivos van por los dos carriles centrales exclusivos y
 los autos por los exteriores. Las paradas son estaciones elevadas en el medio de la avenida, donde la gente
 espera y sube cuando frena el colectivo.

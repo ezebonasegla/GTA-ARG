@@ -34,6 +34,8 @@ function laneOffset(road) {
 
 function speedLimit(road) {
   if (road.kind === 'pedestrian') return 4;
+  if (road.motorway) return 27;
+  if (road.ramp) return 14;
   if (road.kind === 'primary' || road.kind === 'trunk') return 15;
   if (road.kind === 'secondary') return 13;
   return 10;
@@ -284,6 +286,9 @@ export class Traffic {
     }
     const obst = this.obstacleAhead(v, ctx, 6 + speed * 1.4 + v.spec.length / 2);
     if (obst < Infinity) target = Math.min(target, Math.max(0, (obst - v.spec.length / 2 - 3) * 0.7));
+    // barrera down ahead (and not already on the crossing): wait for the train
+    const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
+    if (this.closedAt?.(v.x + fx * 14, v.z + fz * 14) && !this.closedAt(v.x, v.z)) target = 0;
     const err = target - speed;
     const input = {
       throttle: err > 0.3 ? Math.min(1, err * 0.35) : 0,

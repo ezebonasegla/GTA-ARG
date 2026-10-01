@@ -1,4 +1,5 @@
 // Player on foot: movement, jump, shove, getting in/out of cars and falling down.
+import { GROUND_ONLY } from '../world/corridors.js';
 import { createPersonMesh, animatePerson } from './person.js';
 
 const TAU = Math.PI * 2;
@@ -64,10 +65,10 @@ export class Player {
     }
     this.x += Math.sin(this.heading) * this.speed * dt;
     this.z += Math.cos(this.heading) * this.speed * dt;
-    const r = collision.resolve(this.x, this.z, 0.35, 'platform');
+    const r = collision.resolve(this.x, this.z, 0.35, Math.abs(this.y) > 1 ? GROUND_ONLY : 'platform');
     this.x = r.x;
     this.z = r.z;
-    const floor = collision.floorAt(this.x, this.z);
+    const floor = collision.floorAt(this.x, this.z, this.y);
     if (input.hit('Space') && this.y <= floor + 0.01) this.vy = 5.2;
     this.vy -= 18 * dt;
     this.y += this.vy * dt;
@@ -152,7 +153,7 @@ export class Player {
         this.heading += wrap(v.heading - this.heading) * tIn;
         this.x = door.x + (seatX - door.x) * tIn;
         this.z = door.z + (seatZ - door.z) * tIn;
-        this.y = 0.05 * tIn;
+        this.y = (v.y || 0) + 0.05 * tIn;
         tr.sit = smooth((k - 0.2) / 0.7);
         if (k >= 1) done = 'entered';
       }
@@ -166,6 +167,7 @@ export class Player {
       this.x = seatX + (r.x - seatX) * tOut;
       this.z = seatZ + (r.z - seatZ) * tOut;
       tr.sit = 1 - smooth((k - 0.15) / 0.8);
+      this.y = v.y || 0;
       this.heading = v.heading + wrap(Math.atan2(door.lx, door.lz) - v.heading) * 0.5 * Math.sin(Math.min(1, k) * Math.PI);
       if (k >= 1) {
         // settle; any movement key ends the animation right away
@@ -177,7 +179,7 @@ export class Player {
     this.sync();
     if (done) {
       this.transition = null;
-      this.y = 0;
+      this.y = tr.v.y || 0;
       if (done === 'entered') this.mesh.visible = false;
       animatePerson(this.mesh, 0, { speed: 0, sit: 0 });
     }
@@ -190,7 +192,7 @@ export class Player {
     if (!tr) return null;
     this.transition = null;
     this.mesh.visible = true;
-    this.y = 0;
+    this.y = tr.v.y || 0;
     if (tr.kind === 'enter' && tr.v.driver === 'player') tr.v.driver = null;
     return tr.v;
   }

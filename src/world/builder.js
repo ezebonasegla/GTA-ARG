@@ -1,5 +1,6 @@
 // Turns city data (OSM export or procedural) into Three.js meshes + collision.
 import { markMetro, drawMetroLanes, offsetLine } from './metrobus.js';
+import { planCorridors, buildCorridors } from './corridors.js';
 import * as THREE from 'three';
 import { makeTextures } from './textures.js';
 import { facadeMaterial } from './conurbanoTextures.js';
@@ -22,7 +23,11 @@ export function buildWorld(data, renderer, scene) {
   const tex = makeTextures(renderer);
   const collision = new CollisionWorld();
   markMetro(data.roads);
+  const plan = planCorridors(data); // cuts the streets that can't cross the autopista / tracks
   const graph = new RoadGraph(data.roads);
+  // pasos bajo nivel: the ground and every flat layer skip the trenches (stencil set
+  // by corridors.js)
+  const noTrench = { stencilWrite: true, stencilRef: 1, stencilFunc: THREE.NotEqualStencilFunc };
   const root = new THREE.Group();
   root.name = 'city';
   scene.add(root);
@@ -36,7 +41,7 @@ export function buildWorld(data, renderer, scene) {
     g.rotateX(-Math.PI / 2);
     const uv = g.attributes.uv;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * size / 8, uv.getY(i) * size / 8);
-    const m = new THREE.MeshStandardMaterial({ map: tex.grass, color: 0xa8a890, roughness: 1 });
+    const m = new THREE.MeshStandardMaterial({ map: tex.grass, color: 0xa8a890, roughness: 1, ...noTrench });
     const cx = (data.bounds.minX + data.bounds.maxX) / 2, cz = (data.bounds.minZ + data.bounds.maxZ) / 2;
     const ground = new THREE.Mesh(g, m);
     ground.position.set(cx, 0, cz);
@@ -47,7 +52,7 @@ export function buildWorld(data, renderer, scene) {
 
   // ---------------------------------------------------------------- flat layers
   const flatMat = (map, color = 0xffffff, extra = {}) =>
-    new THREE.MeshStandardMaterial({ map, color, roughness: 0.95, depthWrite: false, ...extra });
+    new THREE.MeshStandardMaterial({ map, color, roughness: 0.95, depthWrite: false, ...noTrench, ...extra });
   const areaMats = {
     park: flatMat(tex.grass, 0xc8d8a8),
     grass: flatMat(tex.grass, 0xc8d8a8),
@@ -61,7 +66,7 @@ export function buildWorld(data, renderer, scene) {
     waste: flatMat(tex.dryGrass, 0xd8d0b8),
     wetland: flatMat(tex.wetland),
     // Río de la Plata: muddy "color león" water with small waves reflecting the sky
-    water: new THREE.MeshStandardMaterial({ color: 0x8a7d62, roughness: 0.12, metalness: 0.35, normalMap: waveNormalMap(), normalScale: new THREE.Vector2(0.35, 0.35), depthWrite: false }),
+    water: new THREE.MeshStandardMaterial({ ...noTrench, color: 0x8a7d62, roughness: 0.12, metalness: 0.35, normalMap: waveNormalMap(), normalScale: new THREE.Vector2(0.35, 0.35), depthWrite: false }),
   };
   const areaBufs = new Map();
   for (const area of data.areas) {
@@ -131,7 +136,34 @@ export function buildWorld(data, renderer, scene) {
       buf.tri(p0, p1, p2, [p0[0] * uvScale, p0[2] * uvScale], [p1[0] * uvScale, p1[2] * uvScale], [p2[0] * uvScale, p2[2] * uvScale], white, [0, 1, 0]);
     }
   }
-  for (const road of data.roads) {
+  // the stretch of a street on a bridge or in a trench is drawn by corridors.js
+  const deckClip = (road) => {
+    const near = plan.decks.filter((d) => road.pts.some(([x, z]) => Math.abs(x - d.x) < d.len + 60 && Math.abs(z - d.z) < d.len + 60));
+    if (!near.length) return [road.pts];
+    const inside = (x, z, ux, uz) => near.some((d) => {
+      const rx = x - d.x, rz = z - d.z;
+      return Math.abs(ux * d.ux + uz * d.uz) > 0.5 && Math.abs(rx * d.ux + rz * d.uz) < d.len && Math.abs(rx * -d.uz + rz * d.ux) < d.half;
+    });
+    const out = [];
+    let run = [];
+    for (let i = 0; i < road.pts.length - 1; i++) {
+      const [ax, az] = road.pts[i], [bx, bz] = road.pts[i + 1], len = Math.hypot(bx - ax, bz - az) || 1;
+      const ux = (bx - ax) / len, uz = (bz - az) / len;
+      for (let t = 0; t < len; t += 2) {
+        const p = [ax + ux * t, az + uz * t];
+        if (inside(p[0], p[1], ux, uz)) {
+          if (run.length > 1) out.push(run);
+          run = [];
+        } else run.push(p);
+      }
+    }
+    const last = road.pts[road.pts.length - 1];
+    if (!inside(last[0], last[1], 1, 0) || run.length) run.push(last);
+    if (run.length > 1) out.push(run);
+    return out;
+  };
+  for (const whole of data.roads) for (const pts of deckClip(whole)) {
+    const road = pts === whole.pts ? whole : { ...whole, pts };
     if (road.pasillo) {
       ribbon(roadBufs.pasillo, road.pts, road.w, 0.055, 1 / 3);
       continue;
@@ -165,6 +197,7 @@ export function buildWorld(data, renderer, scene) {
   for (const node of graph.nodes) {
     if (node.degree < 2) continue;
     if (node.degree === 2 && node.roads.size === 1) continue;
+    if (plan.decks.some((d) => Math.hypot(node.x - d.x, node.z - d.z) < d.len)) continue;
     let maxW = 0;
     let vehicular = false;
     for (const r of node.roads) {
@@ -294,6 +327,8 @@ export function buildWorld(data, renderer, scene) {
     }
     return false;
   };
+  // autopista and railway: fences, barriers, bridges, trenches, barreras
+  const corridors = buildCorridors(data, plan, { root, chunks, collision, tex, flatMat, graph });
   // villas, descampados, rejas and walls on the property line, poles and cables
   buildConurbano(data, { root, chunks, collision, tex, flatMat, graph, nearPasillo });
   chunks.build(root, chunkMats);
@@ -313,7 +348,7 @@ export function buildWorld(data, renderer, scene) {
   const trees = [];
   const lights = [];
   for (const road of data.roads) {
-    if (road.kind === 'footway') continue;
+    if (road.kind === 'footway' || road.motorway || road.ramp) continue;
     const ped = road.kind === 'pedestrian';
     const spacing = ped ? 14 : 11;
     for (let i = 0; i < road.pts.length - 1; i++) {
@@ -327,13 +362,13 @@ export function buildWorld(data, renderer, scene) {
         for (let t = 8 + rng() * 4; t < len - 8; t += spacing + rng() * 4) {
           if (rng() > (road.kind === 'primary' ? 0.55 : 0.8)) continue;
           const x = ax + dx * t + nx * off * side, z = az + dz * t + nz * off * side;
-          if (collision.isBlocked(x, z, 1.2) || !outside(x, z) || nearPasillo(x, z, 1.2) || onRoad(x, z, 0.8)) continue;
+          if (collision.isBlocked(x, z, 1.2) || !outside(x, z) || nearPasillo(x, z, 1.2) || onRoad(x, z, 0.8) || corridors.inDeck(x, z, 2)) continue;
           trees.push([x, z, 0.8 + rng() * 0.6, rng(), streetSpecies(rng()), x * x + z * z > 900 * 900 && rng() < 0.55]);
         }
         if (side === 1 && !ped) {
           for (let t = 15; t < len - 5; t += 34) {
             const x = ax + dx * t + nx * (road.w / 2 + 0.4), z = az + dz * t + nz * (road.w / 2 + 0.4);
-            if (collision.isBlocked(x, z, 0.3) || nearPasillo(x, z, 0.8) || onRoad(x, z, 0.3)) continue;
+            if (collision.isBlocked(x, z, 0.3) || nearPasillo(x, z, 0.8) || onRoad(x, z, 0.3) || corridors.inDeck(x, z, 1)) continue;
             lights.push([x, z, Math.atan2(-nx, -nz)]);
           }
         }
@@ -350,6 +385,7 @@ export function buildWorld(data, renderer, scene) {
       trees.push([x, z, 0.9 + rng() * 0.9, rng(), area.kind === 'wood' ? (rng() < 0.3 ? 2 : 0) : streetSpecies(rng()), false]);
     }
   }
+  lights.push(...corridors.lamps);
   for (const [x, z] of trees) collision.addCircle(x, z, 0.35, 'tree');
   for (const [x, z] of lights) collision.addCircle(x, z, 0.2, 'pole');
 
@@ -469,6 +505,7 @@ export function buildWorld(data, renderer, scene) {
     root,
     collision,
     graph,
+    corridors,
     tex,
     waterMaterial: areaMats.water,
     updateDetail: (p) => {

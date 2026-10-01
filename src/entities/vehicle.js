@@ -2,6 +2,7 @@
 // the handbrake) and circle-based collision against the city.
 import * as THREE from 'three';
 import { createVehicleMesh, VEHICLE_TYPES } from './models.js';
+import { GROUND_ONLY } from '../world/corridors.js';
 
 let nextId = 1;
 
@@ -23,6 +24,8 @@ export class Vehicle {
     this.health = 100;
     this.driver = null; // 'player' | 'npc' | 'police' | null
     this.braking = false;
+    this.y = 0; // above / below the street on bridges and in pasos bajo nivel
+    this.pitch = 0;
     this.mesh.position.set(x, 0, z);
     this.mesh.rotation.y = heading;
   }
@@ -102,7 +105,7 @@ export class Vehicle {
     if (collision) {
       for (let pass = 0; pass < 2; pass++) {
         for (const [cx, cz] of this.circles()) {
-          const res = collision.resolve(cx, cz, this.radius);
+          const res = collision.resolve(cx, cz, this.radius, Math.abs(this.y) > 1 ? GROUND_ONLY : undefined);
           if (!res.hit) continue;
           this.x += res.x - cx;
           this.z += res.z - cz;
@@ -118,6 +121,13 @@ export class Vehicle {
       }
     }
     if (impact > 6) this.health = Math.max(0, this.health - (impact - 6) * 2);
+    if (collision?.levelAt) {
+      const fx2 = Math.sin(this.heading), fz2 = Math.cos(this.heading);
+      const y = collision.levelAt(this.x, this.z, fx2, fz2, this.y) ?? 0;
+      const ahead = collision.levelAt(this.x + fx2 * 2, this.z + fz2 * 2, fx2, fz2, this.y) ?? 0;
+      this.y += (y - this.y) * Math.min(1, dt * 14);
+      this.pitch += (-Math.atan((ahead - y) / 2) - this.pitch) * Math.min(1, dt * 10);
+    }
 
     this.wheelSpin += (vF * dt) / 0.34;
     this.sync();
@@ -125,8 +135,8 @@ export class Vehicle {
   }
 
   sync() {
-    this.mesh.position.set(this.x, 0, this.z);
-    this.mesh.rotation.y = this.heading;
+    this.mesh.position.set(this.x, this.y, this.z);
+    this.mesh.rotation.set(this.pitch, this.heading, 0, 'YXZ');
     const wheels = this.mesh.userData.wheels || [];
     wheels.forEach((w, i) => {
       w.rotation.x = this.wheelSpin;
@@ -139,6 +149,7 @@ export class Vehicle {
 
 // Push two vehicles apart and exchange momentum (very simplified).
 export function collideVehicles(a, b) {
+  if (Math.abs(a.y - b.y) > 2) return 0; // one on the bridge, the other under it
   let hit = 0;
   for (const [ax, az] of a.circles()) {
     for (const [bx, bz] of b.circles()) {

@@ -512,6 +512,8 @@ export class Buses {
     }
     const obst = this.traffic.obstacleAhead(v, ctx, 8 + speed * 1.5 + v.spec.length / 2);
     if (obst < Infinity) target = Math.min(target, Math.max(0, (obst - v.spec.length / 2 - 3) * 0.6));
+    const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
+    if (this.traffic.closedAt?.(v.x + fx * 16, v.z + fz * 16) && !this.traffic.closedAt(v.x, v.z)) target = 0;
     // stuck behind something (not at a stop): honk-wait, then go around it
     if (b.wait <= 0 && speed < 0.5 && target < 1) b.stuck += dt;
     else b.stuck = Math.max(0, b.stuck - dt);

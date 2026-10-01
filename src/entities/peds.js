@@ -1,5 +1,6 @@
 // Pedestrians walking along the sidewalks of the road graph.
 import { createPersonMesh, animatePerson, disposePerson } from './person.js';
+import { GROUND_ONLY } from '../world/corridors.js';
 
 const MAX_PEDS = 42;
 const SPAWN_MIN = 40, SPAWN_MAX = 160, DESPAWN = 200;
@@ -157,7 +158,7 @@ export class Peds {
         p.timer -= dt;
         if (p.timer <= 0) p.state = 'walk';
         animatePerson(p.mesh, dt, { speed: 0 });
-        p.mesh.position.set(p.x, 0, p.z);
+        p.mesh.position.set(p.x, p.lev || 0, p.z);
         p.mesh.rotation.y = p.heading;
         continue;
       }
@@ -229,11 +230,13 @@ export class Peds {
       p.heading += dh * Math.min(1, dt * 6);
       p.x += (dx / l) * speed * dt;
       p.z += (dz / l) * speed * dt;
-      const r = this.collision.resolve(p.x, p.z, 0.3);
+      const r = this.collision.resolve(p.x, p.z, 0.3, Math.abs(p.lev || 0) > 1 ? GROUND_ONLY : undefined);
       p.x = r.x;
       p.z = r.z;
+      // up on a footbridge / down in a paso bajo nivel
+      p.lev = this.collision.levelAt?.(p.x, p.z, Math.sin(p.heading), Math.cos(p.heading), p.lev || 0) ?? 0;
       animatePerson(p.mesh, dt, { speed, panic: p.state === 'flee' && p.panic });
-      p.mesh.position.set(p.x, 0, p.z);
+      p.mesh.position.set(p.x, p.lev, p.z);
       p.mesh.rotation.y = p.heading;
     }
 

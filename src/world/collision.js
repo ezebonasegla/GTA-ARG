@@ -1,5 +1,6 @@
 // 2D collision against building footprints (polygons) and round props (trees, poles).
 import { SpatialHash, bbox, closestOnSegment, pointInPolygon } from './geo.js';
+import { deckHeight } from './corridors.js';
 
 export class CollisionWorld {
   constructor() {
@@ -46,8 +47,21 @@ export class CollisionWorld {
     return h;
   }
 
-  // Height of walkable raised surfaces (station platforms) under a point.
-  floorAt(x, z) {
+  // Height of the bridge or trench deck under (x, z) for something heading (dx, dz)
+  // (null: any heading) and currently at height fromY; null off every deck.
+  levelAt(x, z, dx = null, dz = null, fromY = null) {
+    if (!this.decksAt) return null;
+    for (const d of this.decksAt(x, z)) {
+      const h = deckHeight(d, x, z, dx, dz, fromY);
+      if (h !== null) return h;
+    }
+    return null;
+  }
+
+  // Height of walkable raised surfaces (station platforms, decks) under a point.
+  floorAt(x, z, fromY = null) {
+    const deck = this.levelAt(x, z, null, null, fromY);
+    if (deck !== null) return deck;
     let h = 0;
     for (const s of this.hash.query(x, z, x, z)) {
       if (s.tag === 'platform' && s.height > h && pointInPolygon(x, z, s.pts)) h = s.height;
@@ -64,7 +78,7 @@ export class CollisionWorld {
     for (let iter = 0; iter < 3; iter++) {
       let moved = false;
       for (const s of cands) {
-        if (ignoreTag && s.tag === ignoreTag) continue;
+        if (ignoreTag && (ignoreTag.has ? ignoreTag.has(s.tag) : s.tag === ignoreTag)) continue;
         if (s.type === 'circle') {
           const dx = x - s.x, dz = z - s.z;
           const d = Math.hypot(dx, dz);

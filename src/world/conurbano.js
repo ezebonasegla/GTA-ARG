@@ -249,7 +249,7 @@ export function buildConurbano(data, { root, chunks, collision, tex, flatMat, gr
 
   // ------------------------------------------------------------ postes de luz y cables
   for (const road of data.roads) {
-    if (['footway', 'pedestrian', 'service'].includes(road.kind) || road.w > 20) continue;
+    if (['footway', 'pedestrian', 'service'].includes(road.kind) || road.w > 20 || road.motorway || road.ramp) continue;
     const rng = mulberry32(hashString(`c${road.pts[0][0]},${road.pts[0][1]}`));
     let prev = null;
     let next = 6 + rng() * 10;
@@ -265,7 +265,7 @@ export function buildConurbano(data, { root, chunks, collision, tex, flatMat, gr
         next += 30 + rng() * 10;
         const off = road.w / 2 + 0.45;
         const x = ax + dx * t + nx * off, z = az + dz * t + nz * off;
-        if (collision.isBlocked(x, z, 0.5) || nearPasillo(x, z, 0.8)) continue;
+        if (collision.isBlocked(x, z, 0.5) || nearPasillo(x, z, 0.8) || collision.inDeck?.(x, z, 1)) continue;
         const ch = chunks.at(x, z);
         const lean = (rng() - 0.5) * 0.05;
         ch.props.add(TPL.pole, place(x, 0, z, 1, 1, 1, 0, lean, lean), COL.wood, 0.25);
