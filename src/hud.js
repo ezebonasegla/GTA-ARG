@@ -1,3 +1,4 @@
+import { signName } from './world/alturas.js';
 // HUD: minimap (pre-rendered city, rotated around the player), speedometer,
 // wanted stars, street name, clock and big center messages.
 export class Hud {
@@ -71,6 +72,7 @@ export class Hud {
     ctx.setLineDash([]);
     this.map = c;
     this.landmarks = (data.landmarks || []).filter((l) => !l.minor); // minor places only on the big map
+    this.streetLabels = streetLabels(data.roads);
   }
 
   drawMinimap(px, pz, heading, camYaw, blips, gps) {
@@ -119,6 +121,26 @@ export class Hud {
       ctx.restore();
     }
     ctx.restore();
+    // street names, along their street and never upside down
+    {
+      const a = Math.PI + camYaw, c = Math.cos(a), s = Math.sin(a), k = this.scale * zoom;
+      const reach = (W / 2 - 14) / k;
+      const placed = [];
+      ctx.save();
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      for (const l of this.streetLabels) {
+        if (Math.abs(l.x - px) > reach || Math.abs(l.z - pz) > reach) continue;
+        const dx = (l.x - px) * k, dz = (l.z - pz) * k;
+        const sx = dx * c - dz * s, sy = dx * s + dz * c;
+        if (Math.hypot(sx, sy) > W / 2 - 22 || placed.some(([x, y]) => Math.hypot(x - sx, y - sy) < 46)) continue;
+        placed.push([sx, sy]);
+        drawLabel(ctx, l.name, W / 2 + sx, H / 2 + sy, l.angle + a, l.major);
+      }
+      ctx.restore();
+    }
     // destination: yellow blip, pinned to the rim when it is off the minimap
     if (gps?.dest) {
       const dx = (gps.dest.x - px) * this.scale * zoom, dz = (gps.dest.z - pz) * this.scale * zoom;
@@ -238,4 +260,42 @@ function poly(ctx, pts) {
   ctx.beginPath();
   pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
   ctx.closePath();
+}
+
+// One label every ~180 m of each named street, on its longer segments.
+function streetLabels(roads) {
+  const out = [];
+  for (const r of roads) {
+    if (!r.name || r.pasillo || r.kind === 'footway') continue;
+    let acc = 90;
+    for (let i = 0; i < r.pts.length - 1; i++) {
+      const [ax, az] = r.pts[i], [bx, bz] = r.pts[i + 1];
+      const len = Math.hypot(bx - ax, bz - az);
+      acc += len;
+      if (acc < 180 || len < 25) continue;
+      acc = 0;
+      out.push({ name: signName(r.name), x: (ax + bx) / 2, z: (az + bz) / 2, angle: Math.atan2(bz - az, bx - ax), major: r.kind === 'primary' || r.kind === 'secondary' });
+    }
+  }
+  // the same street keeps a label only every 150 m; avenues first so they win clutter fights
+  out.sort((a, b) => b.major - a.major);
+  const kept = [];
+  for (const l of out) if (!kept.some((k) => k.name === l.name && Math.hypot(k.x - l.x, k.z - l.z) < 150)) kept.push(l);
+  return kept;
+}
+
+// Street name at screen (x, y) rotated by `angle`, flipped so it always reads left to right.
+export function drawLabel(ctx, text, x, y, angle, major) {
+  angle = ((angle % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+  if (angle > Math.PI / 2) angle -= Math.PI;
+  else if (angle < -Math.PI / 2) angle += Math.PI;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 3;
+  ctx.strokeText(text, 0, 0);
+  ctx.fillStyle = major ? '#5a3b00' : '#2b2b2b';
+  ctx.fillText(text, 0, 0);
+  ctx.restore();
 }

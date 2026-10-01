@@ -3,6 +3,7 @@
 // (one-way aware when driving) and the minimap shows it with the distance left.
 import { namesMatch, streetKey } from './world/alturas.js';
 import { describeShop } from './world/shops.js';
+import { drawLabel } from './hud.js';
 
 const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 export const formatDistance = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1).replace('.', ',')} km` : `${Math.max(0, Math.round(m / 10) * 10)} m`);
@@ -236,6 +237,28 @@ export class Gps {
       ctx.fillText(l.name, lx + 5 / zoom, lz + 4 / zoom);
     }
     if (this.dest) pin(ctx, ...P(this.dest.x, this.dest.z), zoom);
+    ctx.restore();
+    // street names in screen space: more of them as you zoom in, never overlapping
+    ctx.save();
+    ctx.font = `bold ${zoom > 3 ? 14 : 12}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    const placed = [];
+    const gap = zoom < 0.6 ? 220 : zoom < 1.2 ? 150 : 110;
+    for (const l of this.hud.streetLabels) {
+      if (!l.major && zoom < 0.9) continue;
+      const sx = r.width / 2 + ((l.x - this.hud.ox) * S - x) * zoom, sy = r.height / 2 + ((l.z - this.hud.oz) * S - z) * zoom;
+      if (sx < -50 || sy < -20 || sx > r.width + 50 || sy > r.height + 20) continue;
+      if (placed.some(([px, py]) => Math.hypot(px - sx, py - sy) < gap)) continue;
+      placed.push([sx, sy]);
+      drawLabel(ctx, l.name, sx, sy, l.angle, l.major);
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.translate(r.width / 2, r.height / 2);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-x, -z);
     if (this.player) {
       const [ppx, ppz] = P(...this.player);
       ctx.fillStyle = '#fff';
