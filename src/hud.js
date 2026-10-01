@@ -13,6 +13,7 @@ export class Hud {
     this.msgEl = document.getElementById('message');
     this.hintEl = document.getElementById('hint');
     this.toastEl = document.getElementById('toast');
+    this.gpsEl = document.getElementById('gps');
     this.msgTimer = 0;
     this.toastTimer = 0;
     this.buildMap(data);
@@ -69,10 +70,10 @@ export class Hud {
     }
     ctx.setLineDash([]);
     this.map = c;
-    this.landmarks = data.landmarks || [];
+    this.landmarks = (data.landmarks || []).filter((l) => !l.minor); // minor places only on the big map
   }
 
-  drawMinimap(px, pz, heading, camYaw, blips) {
+  drawMinimap(px, pz, heading, camYaw, blips, gps) {
     const ctx = this.miniCtx;
     const W = this.mini.width, H = this.mini.height;
     const zoom = 2.1; // minimap px per map px
@@ -89,6 +90,15 @@ export class Hud {
     ctx.scale(zoom, zoom);
     const mx = (px - this.ox) * this.scale, mz = (pz - this.oz) * this.scale;
     ctx.drawImage(this.map, -mx, -mz);
+    const M = (x, z) => [(x - this.ox) * this.scale - mx, (z - this.oz) * this.scale - mz];
+    if (gps?.route) {
+      ctx.strokeStyle = '#b44bff';
+      ctx.lineWidth = 4 / zoom;
+      ctx.lineJoin = ctx.lineCap = 'round';
+      ctx.beginPath();
+      gps.route.forEach(([x, z], i) => ctx[i ? 'lineTo' : 'moveTo'](...M(x, z)));
+      ctx.stroke();
+    }
     for (const b of blips) {
       const bx = (b.x - this.ox) * this.scale - mx, bz = (b.z - this.oz) * this.scale - mz;
       ctx.fillStyle = b.color;
@@ -109,6 +119,36 @@ export class Hud {
       ctx.restore();
     }
     ctx.restore();
+    // destination: yellow blip, pinned to the rim when it is off the minimap
+    if (gps?.dest) {
+      const dx = (gps.dest.x - px) * this.scale * zoom, dz = (gps.dest.z - pz) * this.scale * zoom;
+      const a = Math.PI + camYaw, c = Math.cos(a), s = Math.sin(a);
+      let sx = dx * c - dz * s, sy = dx * s + dz * c;
+      const rim = W / 2 - 12, d = Math.hypot(sx, sy);
+      const outside = d > rim;
+      if (outside) {
+        sx *= rim / d;
+        sy *= rim / d;
+      }
+      ctx.save();
+      ctx.translate(W / 2 + sx, H / 2 + sy);
+      ctx.fillStyle = '#f5c518';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      if (outside) {
+        ctx.rotate(Math.atan2(sy, sx));
+        ctx.moveTo(8, 0);
+        ctx.lineTo(-6, -6);
+        ctx.lineTo(-6, 6);
+      } else {
+        ctx.arc(0, 0, 6, 0, Math.PI * 2);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
     // player arrow
     ctx.save();
     ctx.translate(W / 2, H / 2);
@@ -142,6 +182,12 @@ export class Hud {
     this.street.classList.remove('flash');
     void this.street.offsetWidth;
     this.street.classList.add('flash');
+  }
+
+  setGps(label, distance) {
+    this.gpsEl.style.display = label ? 'block' : 'none';
+    if (label) this.gpsEl.innerHTML = `<b>${distance}</b> <span></span>`;
+    if (label) this.gpsEl.querySelector('span').textContent = label;
   }
 
   setSpeed(kmh) {

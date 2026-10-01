@@ -1,6 +1,10 @@
-// Low-poly procedural models: cars, colectivos, taxis and patrulleros (people: person.js).
+// Vehicles: CC0 models (Kenney Car Kit, Quaternius colectivo; see public/models/*/LICENSE.txt)
+// loaded once by loadVehicleModels(), with the low-poly procedural ones as fallback.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 
 const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.24, 14);
 wheelGeo.rotateZ(Math.PI / 2);
@@ -21,8 +25,290 @@ export const VEHICLE_TYPES = {
   police: { length: 4.6, width: 1.82, height: 1.5, maxSpeed: 52, accel: 8.8, mass: 1.3, colors: [0xf4f4f4] },
 };
 
+const CAR_FILES = { pickup: 'truck' }; // Kenney, until there is a replica
+// Real-car replicas (CC-BY, credits in public/models/cars/CREDITS.md), prepared with
+// scripts/prep_car.py: real size, body + 4 wheels, paint material named "paint".
+const REAL_CARS = [
+  { file: 'fiat-uno', types: ['hatch', 'sedan', 'taxi'] },
+  { file: 'peugeot-208', types: ['hatch'] },
+  { file: 'peugeot-206', types: ['hatch', 'sedan'] },
+  { file: 'peugeot-308', types: ['sedan', 'police'] },
+];
+const templates = {};
+const real = [];
+
+export async function loadVehicleModels(base) {
+  const gltf = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath(`${base}draco/`));
+  const jobs = Object.entries(CAR_FILES).map(([type, file]) =>
+    gltf.loadAsync(`${base}models/cars/${file}.glb`).then(({ scene }) => { templates[type] = prepCar(scene); }));
+  for (const car of REAL_CARS) {
+    jobs.push(gltf.loadAsync(`${base}models/cars/${car.file}.glb`).then(({ scene }) => {
+      real.push({ ...car, scene, size: new THREE.Box3().setFromObject(scene).getSize(new THREE.Vector3()), paints: new Map() });
+    }));
+  }
+  jobs.push(new OBJLoader().loadAsync(`${base}models/bus/Bus.obj`).then((o) => { templates.bus = prepBus(o); }));
+  const res = await Promise.allSettled(jobs);
+  for (const r of res) if (r.status === 'rejected') console.warn('vehicle model missing, using procedural:', r.reason);
+}
+
+// Kenney cars share one 8x4 swatch atlas; the paint is the body's most used swatch
+// that isn't tyre/trim grey. Recoloring = repainting that swatch in a copy of the atlas.
+const TRIM = new Set(['3,2', '2,2', '0,3']);
+function prepCar(scene) {
+  const body = scene.getObjectByName('body');
+  const area = new Map();
+  body.traverse((o) => {
+    if (!o.isMesh) return;
+    const g = o.geometry, uv = g.attributes.uv, pos = g.attributes.position, idx = g.index;
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    for (let t = 0; t < idx.count; t += 3) {
+      const [i, j, k] = [idx.getX(t), idx.getX(t + 1), idx.getX(t + 2)];
+      const key = `${Math.floor(((uv.getX(i) + uv.getX(j) + uv.getX(k)) / 3) * 8)},${Math.floor(((uv.getY(i) + uv.getY(j) + uv.getY(k)) / 3) * 4)}`;
+      if (TRIM.has(key)) continue;
+      a.fromBufferAttribute(pos, i);
+      b.fromBufferAttribute(pos, j).sub(a);
+      c.fromBufferAttribute(pos, k).sub(a);
+      area.set(key, (area.get(key) || 0) + b.cross(c).length());
+    }
+  });
+  const cell = [...area].sort((x, y) => y[1] - x[1])[0][0].split(',').map(Number);
+  let material;
+  scene.traverse((o) => { if (o.isMesh) material = o.material; });
+  return { scene, cell, material, size: new THREE.Box3().setFromObject(scene).getSize(new THREE.Vector3()), variants: new Map() };
+}
+
+function paintMaterial(t, color) {
+  const key = t.cell.join() + color;
+  if (t.variants.has(key)) return t.variants.get(key);
+  const img = t.material.map.image;
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const w = img.width / 8, h = img.height / 4, x0 = t.cell[0] * w, y0 = t.cell[1] * h;
+  const px = ctx.getImageData(x0, y0, w, h);
+  const d = px.data;
+  let mean = 0;
+  for (let i = 0; i < d.length; i += 4) mean += d[i] + d[i + 1] + d[i + 2];
+  mean /= d.length * 0.75;
+  const target = new THREE.Color(color);
+  for (let i = 0; i < d.length; i += 4) {
+    const k = (d[i] + d[i + 1] + d[i + 2]) / 3 / mean; // keep the swatch's shading gradient
+    d[i] = Math.min(255, target.r * 255 * k);
+    d[i + 1] = Math.min(255, target.g * 255 * k);
+    d[i + 2] = Math.min(255, target.b * 255 * k);
+  }
+  ctx.putImageData(px, x0, y0);
+  const map = new THREE.CanvasTexture(c);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.flipY = t.material.map.flipY;
+  map.magFilter = map.minFilter = THREE.NearestFilter;
+  const m = t.material.clone();
+  m.map = map;
+  t.variants.set(key, m);
+  return m;
+}
+
+function carFromTemplate(type, color, spec) {
+  const t = templates[type];
+  const g = new THREE.Group();
+  const model = t.scene.clone(true);
+  const s = spec.length / t.size.z;
+  model.scale.setScalar(s);
+  const mat = type === 'police' ? t.material : paintMaterial(t, color);
+  const wheels = [];
+  model.traverse((o) => {
+    if (o.isMesh) {
+      o.material = mat;
+      o.castShadow = true;
+    }
+  });
+  for (const w of [...model.children]) {
+    if (!/^wheel-(front|back)-(left|right)$/.test(w.name)) continue;
+    // spin/steer a pivot so the wheel keeps its own mirrored orientation
+    const pivot = new THREE.Group();
+    pivot.position.copy(w.position);
+    w.position.set(0, 0, 0);
+    model.add(pivot);
+    pivot.add(w);
+    wheels.push(pivot);
+  }
+  wheels.sort((a, b) => b.position.z - a.position.z); // front pair first (it steers)
+  g.add(model);
+  const L = spec.length, W = t.size.x * s, y = t.size.y * s * 0.45;
+  for (const x of [-W / 2 + 0.3, W / 2 - 0.3]) {
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.04), headMat);
+    head.position.set(x, y, L / 2 - 0.02);
+    g.add(head);
+  }
+  const tail = new THREE.MeshStandardMaterial({ color: 0x550000, emissive: 0xff0000, emissiveIntensity: 0.25 });
+  for (const x of [-W / 2 + 0.25, W / 2 - 0.25]) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.12, 0.04), tail);
+    m.position.set(x, y, -L / 2 + 0.02);
+    g.add(m);
+  }
+  g.userData.tail = tail;
+  if (type === 'police') {
+    const red = new THREE.MeshStandardMaterial({ color: 0x550000, emissive: 0xff1010, emissiveIntensity: 0 });
+    const blu = new THREE.MeshStandardMaterial({ color: 0x000055, emissive: 0x1040ff, emissiveIntensity: 0 });
+    const bar = new THREE.Group();
+    for (const [mtl, x] of [[red, -0.3], [blu, 0.3]]) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.24), mtl);
+      m.position.x = x;
+      bar.add(m);
+    }
+    bar.position.set(0, t.size.y * s + 0.04, -0.1);
+    g.add(bar);
+    g.userData.siren = { red, blu };
+  }
+  g.userData.wheels = wheels;
+  g.userData.spec = spec;
+  return g;
+}
+
+// Quaternius bus: one body mesh with per-part materials (Top, Bottom, Windows, Lights,
+// Bumper, Details, Material = wheels) plus two axle meshes. Stretched to a real
+// colectivo's size; axles keep round wheels (radial scale = height scale).
+function prepBus(obj) {
+  const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3());
+  const spec = VEHICLE_TYPES.bus;
+  const sx = spec.length / size.x, sy = spec.height / size.y, sz = spec.width / size.z;
+  const xc = (box.min.x + box.max.x) / 2, y0 = box.min.y;
+  const map = (x, y, z) => new THREE.Vector3(z * sz, (y - y0) * sy, -(x - xc) * sx); // rotate so front (-x) -> +z
+  const parts = { axles: [] };
+  for (const mesh of obj.children) {
+    const g = mesh.geometry.clone();
+    const p = g.attributes.position;
+    if (/Wheels/.test(mesh.name)) {
+      g.computeBoundingBox();
+      const c = g.boundingBox.getCenter(new THREE.Vector3());
+      for (let i = 0; i < p.count; i++) {
+        const v = new THREE.Vector3((p.getZ(i) - c.z) * sz, (p.getY(i) - c.y) * sy, -(p.getX(i) - c.x) * sy);
+        p.setXYZ(i, v.x, v.y, v.z);
+      }
+      parts.axles.push({ geometry: g, center: map(c.x, c.y, c.z) });
+    } else {
+      for (let i = 0; i < p.count; i++) {
+        const v = map(p.getX(i), p.getY(i), p.getZ(i));
+        p.setXYZ(i, v.x, v.y, v.z);
+      }
+      parts.body = { geometry: g, materials: [].concat(mesh.material).map((m) => m.name) };
+    }
+    g.computeVertexNormals();
+  }
+  parts.axles.sort((a, b) => b.center.z - a.center.z);
+  return parts;
+}
+
+// the OBJ mixes face windings, so bus materials are double sided
+const busMat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.2, side: THREE.DoubleSide, ...extra });
+const BUS_FIXED = {
+  Windows: busMat(0x1d2a33, { roughness: 0.1, metalness: 0.6 }),
+  Lights: headMat,
+  Bumper: busMat(0x2b2d30, { roughness: 0.7 }),
+  Material: wheelMat,
+};
+function busFromTemplate(livery, spec) {
+  const t = templates.bus;
+  const [top, bottom, detail] = typeof livery === 'object' ? livery : [0xf2f2f2, livery, 0x222222];
+  const paint = { Top: busMat(top), Bottom: busMat(bottom), Details: busMat(detail) };
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(t.body.geometry, t.body.materials.map((n) => BUS_FIXED[n] || paint[n] || paint.Bottom));
+  body.castShadow = true;
+  g.add(body);
+  g.userData.wheels = t.axles.map((a) => {
+    const pivot = new THREE.Group();
+    pivot.position.copy(a.center);
+    const m = new THREE.Mesh(a.geometry, wheelMat);
+    m.castShadow = true;
+    pivot.add(m);
+    g.add(pivot);
+    return pivot;
+  });
+  g.userData.steer = 1; // only the front axle turns
+  g.userData.spec = spec;
+  return g;
+}
+
+// Paint = the model's "paint" material in the requested color. A painted texture is
+// turned to grey first (keeping its shading and details) so the color tints it.
+const greyMaps = new Map();
+function repaint(car, mat, color) {
+  const key = `${mat.uuid}:${color}`;
+  if (car.paints.has(key)) return car.paints.get(key);
+  const m = mat.clone();
+  m.color = new THREE.Color(color);
+  if (mat.map) {
+    if (!greyMaps.has(mat.map)) {
+      const img = mat.map.image;
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const px = ctx.getImageData(0, 0, c.width, c.height), d = px.data;
+      let mean = 0;
+      for (let i = 0; i < d.length; i += 4) mean += (d[i] + d[i + 1] + d[i + 2]) / 3;
+      mean /= d.length / 4;
+      for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = Math.min(255, ((d[i] + d[i + 1] + d[i + 2]) / 3 / mean) * 235);
+      ctx.putImageData(px, 0, 0);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.flipY = mat.map.flipY;
+      greyMaps.set(mat.map, t);
+    }
+    m.map = greyMaps.get(mat.map);
+  }
+  car.paints.set(key, m);
+  return m;
+}
+
+function realCar(type, color, spec) {
+  const options = real.filter((c) => c.types.includes(type));
+  const car = options[Math.floor(Math.random() * options.length)];
+  const g = new THREE.Group();
+  const model = car.scene.clone(true);
+  const wheels = [];
+  model.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true;
+      if (/^paint/.test(o.material.name)) o.material = repaint(car, o.material, type === 'taxi' ? 0x111111 : color);
+    }
+    if (/^wheel-(front|back)-(left|right)$/.test(o.name)) wheels.push(o);
+  });
+  wheels.sort((a, b) => b.position.z - a.position.z); // front pair first (it steers)
+  g.add(model);
+  if (type === 'taxi') {
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.2, 0.28), new THREE.MeshStandardMaterial({ color: 0xffd400, emissive: 0xffc000, emissiveIntensity: 0.4 }));
+    sign.position.set(0, car.size.y + 0.1, -0.2);
+    g.add(sign);
+  }
+  if (type === 'police') {
+    const red = new THREE.MeshStandardMaterial({ color: 0x550000, emissive: 0xff1010, emissiveIntensity: 0 });
+    const blu = new THREE.MeshStandardMaterial({ color: 0x000055, emissive: 0x1040ff, emissiveIntensity: 0 });
+    const bar = new THREE.Group();
+    for (const [mtl, x] of [[red, -0.3], [blu, 0.3]]) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.24), mtl);
+      m.position.x = x;
+      bar.add(m);
+    }
+    bar.position.set(0, car.size.y + 0.02, -0.2);
+    g.add(bar);
+    g.userData.siren = { red, blu };
+  }
+  g.userData.wheels = wheels;
+  // physics uses the replica's real footprint (mirrors excluded)
+  g.userData.spec = { ...spec, length: car.size.z, width: car.size.x * 0.9, height: car.size.y };
+  return g;
+}
+
 export function createVehicleMesh(type, color) {
   const spec = VEHICLE_TYPES[type];
+  if (real.some((c) => c.types.includes(type))) return realCar(type, type === 'police' ? 0xf4f4f4 : color, spec);
+  if (type === 'bus' && templates.bus) return busFromTemplate(color, spec);
+  if (templates[type] && type !== 'bus') return carFromTemplate(type, color, spec);
+  if (typeof color === 'object') color = color[1];
   const g = new THREE.Group();
   const paint = new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.4 });
   const L = spec.length, W = spec.width, H = spec.height;

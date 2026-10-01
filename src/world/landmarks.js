@@ -7,6 +7,15 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { boxCorners } from './geo.js';
 
+// Hitos fijos (WGS84). Los que tienen huella en OSM se modelan sobre ella (data.specials,
+// `special` = su tipo) y scripts/check-geo.mjs verifica que caigan a < `tol` m de acá.
+export const HITOS = {
+  catedral: { name: 'Catedral Inmaculada Concepción', lat: -34.72065, lon: -58.254306, special: 'cathedral', tol: 40 },
+  plazaSanMartin: { name: 'Plaza San Martín', lat: -34.720019, lon: -58.25435, special: 'plaza', tol: 40 },
+  estacion: { name: 'Estación Quilmes (Línea Roca)', lat: -34.724338, lon: -58.260877, special: 'station', tol: 60 },
+  cerveceria: { name: 'Cervecería y Maltería Quilmes', lat: -34.729976, lon: -58.258905, special: 'brewery', tol: 120 },
+};
+
 // ------------------------------------------------------------------ helpers
 class Kit {
   constructor() {
@@ -375,9 +384,122 @@ export function buildLandmarks(data, { root, collision, graph, tex }) {
   }
 
   // ---------------------------------------------------------------- stadiums
+  const two = (m) => { const c = m.clone(); c.side = THREE.DoubleSide; return c; };
+  const S = { concrete: two(M.concrete), white: two(M.white), iron: M.iron, metal: two(M.metal),
+    blue: two(mat(0x1b3a8c, { roughness: 0.6 })), celeste: two(mat(0x75aadb, { roughness: 0.6 })) };
+  // A stand is one stepped cross-section (d = outward from the pitch, y = up), extruded
+  // along straight sides and lathed around the corners so the ring closes seamlessly.
+  const terrace = (D, H, steps, parapet = 1.1) => {
+    const pts = [[0, 0]];
+    for (let i = 0; i < steps; i++) pts.push([(D * i) / steps, (H * (i + 1)) / steps], [(D * (i + 1)) / steps, (H * (i + 1)) / steps]);
+    pts.push([D - 0.35, H], [D - 0.35, H + parapet], [D, H + parapet], [D, 0]);
+    return pts;
+  };
+  // straight stand on the side with outward local normal (nu, nv), inner edge at `off`
+  const side = (F, prof, nu, nv, off, len, m) => {
+    const shape = new THREE.Shape(prof.map(([d, y]) => new THREE.Vector2(d, y)));
+    const g = new THREE.ExtrudeGeometry(shape, { depth: len, bevelEnabled: false });
+    const out = new THREE.Vector3(nu, 0, nv), along = new THREE.Vector3(-nv, 0, nu);
+    const local = new THREE.Matrix4().makeBasis(out, new THREE.Vector3(0, 1, 0), along)
+      .setPosition(out.clone().multiplyScalar(off).addScaledVector(along, -len / 2));
+    kit.add(g, m, F.clone().multiply(local));
+  };
+  const corner = (F, prof, cu, cv, u, v, m) => {
+    const au = cu > 0 ? Math.PI / 2 : Math.PI * 1.5, av = cv > 0 ? 0 : Math.PI;
+    const start = Math.abs(au - av) > Math.PI ? Math.max(au, av) : Math.min(au, av);
+    const g = new THREE.LatheGeometry(prof.map(([d, y]) => new THREE.Vector2(Math.max(0.01, d), y)), 10, start, Math.PI / 2);
+    kit.add(g, m, at(F, cu * u, 0, cv * v));
+  };
+  const standBox = (o, nu, nv, off, D, len, h) => {
+    const c = [[-len / 2, off], [len / 2, off], [len / 2, off + D], [-len / 2, off + D]];
+    collision.addPolygon(c.map(([t, d]) => (nu ? toWorld(o, nu * d, t) : toWorld(o, t, nv * d))), h, 'building');
+  };
+  const floodlights = (o, F, reach, H) => {
+    for (const [cu, cv] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const u = cu * (o.hu + reach), v = cv * (o.hv + reach);
+      const pole = new THREE.CylinderGeometry(0.45, 0.8, H, 8);
+      pole.translate(0, H / 2, 0);
+      kit.add(pole, M.metal, at(F, u, 0, v));
+      kit.add(boxAt(5, 3, 0.6), M.flood, at(F, u, H - 1, v, Math.atan2(-cu, -cv)));
+      collision.addCircle(...toWorld(o, u, v), 1, 'pole');
+    }
+  };
+  const wallSign = (F, text, bg, nu, nv, d, y, w, h) => {
+    const sMat = new THREE.MeshStandardMaterial({ map: signTexture(text, bg, '#ffffff'), roughness: 0.6 });
+    kit.add(new THREE.PlaneGeometry(w, h), sMat, at(F, nu * d, y, nv * d, Math.atan2(nu, nv)));
+  };
+
   for (const sd of byType('stadium')) {
     const o = sd.box;
     const F = frame(o);
+    if (/centenario/i.test(sd.name)) {
+      // Estadio Centenario (1995, arq. Iván Urbán): closed concrete ring, no roof,
+      // plateas on the long sides, populares behind the goals.
+      const gap = 3, D = sd.depth, H = sd.height;
+      const prof = terrace(D, H, 12);
+      const main = streetSide(o, graph);
+      for (const [nu, nv, off, len] of [[0, 1, o.hv + gap, 2 * (o.hu + gap)], [0, -1, o.hv + gap, 2 * (o.hu + gap)], [1, 0, o.hu + gap, 2 * (o.hv + gap)], [-1, 0, o.hu + gap, 2 * (o.hv + gap)]]) {
+        side(F, prof, nu, nv, off, len, nv ? S.blue : S.concrete);
+        if (nv) side(F, [[D, 0], [D + 0.08, 0], [D + 0.08, H + 1.1], [D, H + 1.1]], nu, nv, off, len, S.concrete);
+        standBox(o, nu, nv, off, D, len, H);
+        if (nu === main.nu && nv === main.nv) {
+          wallSign(F, 'ESTADIO CENTENARIO · QUILMES ATLÉTICO CLUB', '#1b3a8c', nu, nv, off + D + 0.14, H * 0.55, Math.min(60, len * 0.6), 4);
+        }
+      }
+      for (const [cu, cv] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        corner(F, prof, cu, cv, o.hu + gap, o.hv + gap, S.concrete);
+        const c = toWorld(o, cu * (o.hu + gap + D * 0.5), cv * (o.hv + gap + D * 0.5));
+        collision.addCircle(c[0], c[1], D * 0.6, 'building');
+      }
+      wallSign(F, 'QUILMES', '#1b3a8c', 1, 0, o.hu + gap + D * 0.55, H * 0.55 + 1, 26, 4.5);
+      floodlights(o, F, gap + D + 4, H + 26);
+      keepOut.push([o.cx, o.cz, Math.hypot(o.hu, o.hv) + D + 10]);
+      continue;
+    }
+    if (/argentino/i.test(sd.name)) {
+      // "La Barranca" (1906): the 1927 covered platea, the first concrete stand in
+      // Argentina, faces the 2010 concrete popular; low walls behind the goals.
+      const gap = 3;
+      const main = streetSide(o, graph);
+      const [pu, pv] = [main.nu, main.nv];
+      const platea = { D: 12, H: 6, len: (pu ? o.hv : o.hu) * 1.4, off: (pu ? o.hu : o.hv) + gap };
+      side(F, terrace(platea.D, platea.H, 8, 0.2), pu, pv, platea.off, platea.len, S.concrete);
+      standBox(o, pu, pv, platea.off, platea.D, platea.len, platea.H + 5);
+      // back wall, sloped roof on iron columns, celeste fascia with the club name
+      const back = new THREE.Shape([[platea.D - 0.4, 0], [platea.D, 0], [platea.D, platea.H + 5.2], [platea.D - 0.4, platea.H + 5.2]].map(([d, y]) => new THREE.Vector2(d, y)));
+      const along = new THREE.Vector3(-pv, 0, pu), out = new THREE.Vector3(pu, 0, pv);
+      const basis = (off) => F.clone().multiply(new THREE.Matrix4().makeBasis(out, new THREE.Vector3(0, 1, 0), along)
+        .setPosition(out.clone().multiplyScalar(off).addScaledVector(along, -platea.len / 2)));
+      kit.add(new THREE.ExtrudeGeometry(back, { depth: platea.len, bevelEnabled: false }), S.white, basis(platea.off));
+      const roof = new THREE.Shape([[-1.2, platea.H + 3.6], [platea.D + 0.4, platea.H + 5.2], [platea.D + 0.4, platea.H + 5.45], [-1.2, platea.H + 3.85]].map(([d, y]) => new THREE.Vector2(d, y)));
+      kit.add(new THREE.ExtrudeGeometry(roof, { depth: platea.len, bevelEnabled: false }), S.metal, basis(platea.off));
+      const fascia = new THREE.Shape([[-1.3, platea.H + 2.9], [-1.1, platea.H + 2.9], [-1.1, platea.H + 3.9], [-1.3, platea.H + 3.9]].map(([d, y]) => new THREE.Vector2(d, y)));
+      kit.add(new THREE.ExtrudeGeometry(fascia, { depth: platea.len, bevelEnabled: false }), S.celeste, basis(platea.off));
+      for (let t = -platea.len / 2 + 3; t <= platea.len / 2 - 3; t += 7) {
+        const col = new THREE.CylinderGeometry(0.12, 0.14, platea.H + 3.7, 6);
+        col.translate(0, (platea.H + 3.7) / 2, 0);
+        const d = platea.off - 0.9;
+        kit.add(col, S.iron, pu ? at(F, pu * d, 0, t) : at(F, t, 0, pv * d));
+      }
+      wallSign(F, 'CLUB ATLÉTICO ARGENTINO DE QUILMES', '#4f8fc9', -pu, -pv, -(platea.off - 1.35), platea.H + 3.4, Math.min(40, platea.len * 0.8), 1);
+      wallSign(F, 'ARGENTINO DE QUILMES · PLATEA 1927', '#4f8fc9', pu, pv, platea.off + platea.D + 0.05, platea.H * 0.6, Math.min(34, platea.len * 0.7), 2.6);
+      // popular across the pitch
+      const popLen = 2 * ((pu ? o.hv : o.hu) + gap), popOff = platea.off;
+      side(F, terrace(10, 5, 10), -pu, -pv, popOff, popLen, S.concrete);
+      side(F, [[9.6, 5], [10, 5], [10, 6.1], [9.6, 6.1]], -pu, -pv, popOff, popLen, S.celeste);
+      standBox(o, -pu, -pv, popOff, 10, popLen, 6);
+      // low perimeter walls behind the goals, white with a celeste band
+      const endOff = (pu ? o.hv : o.hu) + gap, endLen = 2 * ((pu ? o.hu : o.hv) + gap);
+      for (const k of [1, -1]) {
+        const [nu, nv] = pu ? [0, k] : [k, 0];
+        side(F, [[0, 0], [0, 2.2], [0.3, 2.2], [0.3, 0]], nu, nv, endOff + 2, endLen, S.white);
+        side(F, [[-0.02, 1.4], [-0.02, 1.9], [0.32, 1.9], [0.32, 1.4]], nu, nv, endOff + 2, endLen, S.celeste);
+        standBox(o, nu, nv, endOff + 2, 0.3, endLen, 2.2);
+      }
+      floodlights(o, F, gap + 8, 22);
+      keepOut.push([o.cx, o.cz, Math.hypot(o.hu, o.hv) + 16]);
+      continue;
+    }
     const seat = sd.colors.map((c) => mat(c, { roughness: 0.6 }));
     const D = sd.depth, H = sd.height, steps = D > 16 ? 6 : 4;
     const gap = 3;

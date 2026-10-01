@@ -42,6 +42,28 @@ def rows(z, name):
         yield from csv.DictReader(io.TextIOWrapper(f, encoding='utf-8-sig'))
 
 
+def enu_projection(lat0, lon0):
+    """Same WGS84 ENU tangent plane as src/world/geo.js makeProjection."""
+    a, f = 6378137.0, 1 / 298.257223563
+    e2 = f * (2 - f)
+
+    def ecef(la, lo):
+        p, l = math.radians(la), math.radians(lo)
+        n = a / math.sqrt(1 - e2 * math.sin(p) ** 2)
+        return n * math.cos(p) * math.cos(l), n * math.cos(p) * math.sin(l), n * (1 - e2) * math.sin(p)
+
+    p0, l0 = math.radians(lat0), math.radians(lon0)
+    x0, y0, z0 = ecef(lat0, lon0)
+
+    def to_world(la, lo):
+        x, y, z = ecef(la, lo)
+        dx, dy, dz = x - x0, y - y0, z - z0
+        east = -math.sin(l0) * dx + math.cos(l0) * dy
+        north = -math.sin(p0) * math.cos(l0) * dx - math.sin(p0) * math.sin(l0) * dy + math.cos(p0) * dz
+        return east, -north
+    return to_world
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--gtfs', default=os.path.join(ROOT, '.cache', 'colectivos-gtfs.zip'))
@@ -53,8 +75,7 @@ def main():
     with open(a.city) as f:
         city = json.load(f)
     lat0, lon0 = city['origin']['lat'], city['origin']['lon']
-    kx, kz = math.cos(math.radians(lat0)) * 111320, 110540
-    to_world = lambda la, lo: ((lo - lon0) * kx, -(la - lat0) * kz)  # noqa: E731
+    to_world = enu_projection(lat0, lon0)
     b = city['bounds']
     lim = (b['minX'] - a.margin, b['minZ'] - a.margin, b['maxX'] + a.margin, b['maxZ'] + a.margin)
     inside = lambda x, z: lim[0] <= x <= lim[2] and lim[1] <= z <= lim[3]  # noqa: E731

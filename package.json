@@ -8,7 +8,10 @@
     "preview": "vite preview",
     "fetch-osm": "node scripts/fetch-osm.mjs",
     "fetch-overture": "python3 scripts/fetch_overture.py --radius 2500 && node scripts/fetch-osm.mjs --input .cache/overture-raw.json --radius 2500",
-    "fetch-buses": "python3 scripts/fetch_buses.py"
+    "fetch-buses": "python3 scripts/fetch_buses.py",
+    "fetch-shops": "node scripts/fetch-shops.mjs",
+    "import-places": "node scripts/import-places.mjs",
+    "check": "node scripts/check-geo.mjs"
   },
   "repository": {
     "type": "git",

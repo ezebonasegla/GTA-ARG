@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Vehicle } from './vehicle.js';
+import { closestOnSegment } from '../world/geo.js';
 
 const MAX_BUSES = 9;
 const SPAWN_MIN = 120, SPAWN_MAX = 320, DESPAWN = 420;
@@ -10,7 +11,22 @@ const DWELL = 7;
 const LANE = 2.3; // meters to the right of the route line
 const CHUNK = 250;
 
-// Livery per company (the GTFS has no colors; these are representative).
+// Real liveries [upper, lower, trim] from busarg.com.ar/colores.htm; MOQSA (159, 219,
+// 300, 372) switched its green trim to yellow in 1998. Other lines aren't documented
+// there, so they get a representative color per company.
+const CREMA = 0xefe6c8, BLANCO = 0xf4f4f4, NEGRO = 0x1c1c1c;
+const LINE_COLORS = {
+  22: [CREMA, 0x8cc98a, 0x8a8f94],
+  85: [CREMA, 0x1f7a3a, NEGRO],
+  98: [CREMA, 0x1d4d2b, 0xc62828],
+  129: [BLANCO, 0xc62828, 0x1d4fa0],
+  148: [0xf2c200, 0x2e7d32, NEGRO],
+  159: [BLANCO, BLANCO, 0xf2c200],
+  219: [BLANCO, BLANCO, 0xf2c200],
+  300: [BLANCO, BLANCO, 0xf2c200],
+  372: [BLANCO, BLANCO, 0xf2c200],
+  178: [BLANCO, 0xc62828, NEGRO],
+};
 const LIVERIES = [0xd1302f, 0x1d4fa0, 0xf2b705, 0x2f8f4e, 0xe36b1e, 0x7a2d8c, 0x0e8c8c, 0xc2185b, 0x5d6d7e, 0x8e5a2b];
 function hash(s) {
   let h = 2166136261;
@@ -82,6 +98,7 @@ export class Buses {
     this.collision = collision;
     this.routes = busData.routes.map((r) => ({ ...r, pathObj: new Path(r.path) }));
     this.stops = busData.stops;
+    this.stopById = new Map(this.stops.map((st) => [st.id, st]));
     this.list = [];
     this.spawnTimer = 0;
     this.buildStops();
@@ -117,6 +134,14 @@ export class Buses {
     })();
     const poleMat = new THREE.MeshStandardMaterial({ color: 0x2f5d3a, roughness: 0.6, metalness: 0.4 });
     const plateMat = new THREE.MeshStandardMaterial({ map: plate, roughness: 0.6, side: THREE.DoubleSide });
+    const shelterMat = new THREE.MeshStandardMaterial({ color: 0x5b6670, roughness: 0.5, metalness: 0.6 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0xbfd8e0, roughness: 0.1, transparent: true, opacity: 0.35, depthWrite: false });
+    // refugio de chapa y vidrio, local x = along the street, z = away from it
+    const part = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z);
+    const frameParts = [part(3.4, 0.08, 1.4, 0, 2.4, 0), part(2.4, 0.06, 0.4, 0, 0.45, 0.35),
+      ...[-1.6, 1.6].flatMap((x) => [part(0.07, 2.4, 0.07, x, 0, 0.6), part(0.07, 2.4, 0.07, x, 0, -0.6)])];
+    const glassPart = part(3.2, 2.0, 0.03, 0, 0.3, 0.62);
+    const up = new THREE.Vector3(0, 1, 0);
     const groups = new Map();
     for (const st of this.stops) {
       const key = `${Math.floor(st.x / CHUNK)},${Math.floor(st.z / CHUNK)}`;
@@ -124,14 +149,18 @@ export class Buses {
       groups.get(key).push(st);
     }
     for (const list of groups.values()) {
-      const poles = [], plates = [];
+      const poles = [], plates = [], frames = [], glass = [];
       for (const st of list) {
-        // stand the pole at the curb, facing the street it serves
+        // stand the pole on the real curb of the street it serves (the GTFS shape is not
+        // the road centerline), on the right-hand side of the direction of travel
         const r = this.routes.find((r) => r.stops.some((s) => s.id === st.id));
-        const p = r ? r.pathObj.at(r.stops.find((s) => s.id === st.id).s, LANE + 3.2) : { x: st.x, z: st.z, dx: 1, dz: 0 };
-        st.px = p.x;
-        st.pz = p.z;
-        const yaw = Math.atan2(p.dx, p.dz);
+        const sOn = r?.stops.find((s) => s.id === st.id).s;
+        const p = r ? this.curb(r.pathObj.at(sOn), 0.6) : { x: st.x, z: st.z, dx: 1, dz: 0 };
+        const at = r ? r.pathObj.at(sOn, LANE) : p;
+        st.px = p?.x ?? at.x;
+        st.pz = p?.z ?? at.z;
+        if (!p) continue;
+        const yaw = Math.atan2(p.dx, p.dz) + Math.PI; // plate faces the oncoming bus
         const pole = new THREE.CylinderGeometry(0.05, 0.06, 2.7, 6);
         pole.translate(0, 1.35, 0);
         pole.applyMatrix4(new THREE.Matrix4().makeRotationY(yaw).setPosition(p.x, 0, p.z));
@@ -141,12 +170,81 @@ export class Buses {
         pl.applyMatrix4(new THREE.Matrix4().makeRotationY(yaw).setPosition(p.x, 0, p.z));
         plates.push(pl);
         this.collision.addCircle(p.x, p.z, 0.12, 'pole');
+        if (r && st.lines?.length >= 3) {
+          const c = this.curb(r.pathObj.at(sOn + 3), 1.9);
+          if (!c) continue;
+          const out = new THREE.Vector3(c.ox, 0, c.oz);
+          const posts = [-1.6, 1.6].flatMap((k) => [[c.x + out.z * k + out.x * 0.6, c.z - out.x * k + out.z * 0.6], [c.x + out.z * k - out.x * 0.6, c.z - out.x * k - out.z * 0.6]]);
+          if (posts.some(([x, z]) => this.onRoad(x, z))) continue;
+          const m = new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(up, out), up, out).setPosition(c.x, 0, c.z);
+          for (const g of frameParts) frames.push(g.clone().applyMatrix4(m));
+          glass.push(glassPart.clone().applyMatrix4(m));
+          for (const k of [-1.6, 1.6]) this.collision.addCircle(c.x + out.z * k + out.x * 0.6, c.z - out.x * k + out.z * 0.6, 0.1, 'pole');
+        }
       }
+      if (!poles.length) continue;
       const pm = new THREE.Mesh(mergeGeometries(poles), poleMat);
       pm.castShadow = true;
       const lm = new THREE.Mesh(mergeGeometries(plates), plateMat);
       this.scene.add(pm, lm);
+      if (frames.length) {
+        const fm = new THREE.Mesh(mergeGeometries(frames), shelterMat);
+        fm.castShadow = true;
+        this.scene.add(fm, new THREE.Mesh(mergeGeometries(glass), glassMat));
+      }
     }
+  }
+
+  // Bus the player is standing next to (for boarding), or null.
+  near(x, z, maxD = 4.5) {
+    return this.list.find((b) => b.v.driver === 'bus' && Math.min(...b.v.circles().map(([cx, cz]) => Math.hypot(cx - x, cz - z))) < maxD) || null;
+  }
+
+  nextStopName(b) {
+    const st = b.r.stops[b.nextStop];
+    return st ? this.stopById.get(st.id)?.name || 'parada' : 'terminal';
+  }
+
+  // Point `extra` m past the curb of the road under path point p, on the right of travel.
+  // Returns { x, z, dx, dz, ox, oz } with (ox, oz) pointing away from the street.
+  curb(p, extra) {
+    const n = this.parallelRoad(p) || this.graph?.nearest(p.x, p.z, 25);
+    if (!n) return { ...p, x: p.x - p.dz * (LANE + 2 + extra), z: p.z + p.dx * (LANE + 2 + extra), ox: -p.dz, oz: p.dx };
+    const { a, b, road } = n.seg;
+    const l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    let ox = -(b.z - a.z) / l, oz = (b.x - a.x) / l;
+    if (ox * -p.dz + oz * p.dx < 0) { ox = -ox; oz = -oz; }
+    // off every carriageway: dual carriageways overlap (step outwards) and corners fall inside
+    // the cross street (slide along the block, like real stops set back from the corner)
+    const ux = (b.x - a.x) / l, uz = (b.z - a.z) / l;
+    for (const along of [0, -5, 5, -10, 10, -15, 15]) {
+      for (let off = road.w / 2 + extra; off < road.w / 2 + extra + 8; off += 1) {
+        const x = n.x + ox * off + ux * along, z = n.z + oz * off + uz * along;
+        const m = this.graph.nearest(x, z, 20);
+        if (!m || m.seg.road.kind === 'footway' || m.seg.road.kind === 'pedestrian' || m.dist > m.seg.road.w / 2 + 0.5) return { x, z, dx: p.dx, dz: p.dz, ox, oz };
+      }
+    }
+    return null; // nothing but carriageway around (big junctions): no pole
+  }
+
+  // Closest road segment near p that runs along the direction of travel (at corners the
+  // cross street can be nearer than the one the bus is on).
+  parallelRoad(p) {
+    if (!this.graph) return null;
+    let best = null;
+    for (const seg of this.graph.segIndex.query(p.x - 25, p.z - 25, p.x + 25, p.z + 25)) {
+      if (seg.road.kind === 'footway' || seg.road.kind === 'pedestrian') continue;
+      const dx = seg.b.x - seg.a.x, dz = seg.b.z - seg.a.z, l = Math.hypot(dx, dz) || 1;
+      if (Math.abs((dx * p.dx + dz * p.dz) / l) < 0.8) continue;
+      const [x, z, , d2] = closestOnSegment(p.x, p.z, seg.a.x, seg.a.z, seg.b.x, seg.b.z);
+      if (d2 < 625 && (!best || d2 < best.d2)) best = { seg, x, z, d2, dist: Math.sqrt(d2) };
+    }
+    return best;
+  }
+
+  onRoad(x, z) {
+    const m = this.graph?.nearest(x, z, 20);
+    return !!m && m.seg.road.kind !== 'footway' && m.seg.road.kind !== 'pedestrian' && m.dist < m.seg.road.w / 2 + 0.3;
   }
 
   nearestStop(x, z, maxD = 10) {
@@ -173,7 +271,7 @@ export class Buses {
       const p = pth.at(s, LANE);
       if (Math.hypot(p.x - px, p.z - pz) < SPAWN_MIN * 0.8) continue;
       if (this.traffic.vehicles.some((v) => Math.hypot(v.x - p.x, v.z - p.z) < 15)) continue;
-      const color = LIVERIES[hash(r.agency || r.line) % LIVERIES.length];
+      const color = LINE_COLORS[r.line] || [BLANCO, LIVERIES[hash(r.agency || r.line) % LIVERIES.length], NEGRO];
       const v = new Vehicle('bus', p.x, p.z, Math.atan2(p.dx, p.dz), color);
       v.driver = 'bus';
       v.managed = true;
@@ -226,6 +324,10 @@ export class Buses {
         this.release(b); // stolen by the player
         continue;
       }
+      if (b === ctx.riding && b.s > b.r.pathObj.length - 8) {
+        b.ended = true; // end of the line: the passenger gets off, then the bus goes
+        continue;
+      }
       if (Math.hypot(v.x - px, v.z - pz) > DESPAWN || b.s > b.r.pathObj.length - 8) {
         this.traffic.remove(v);
         this.list.splice(this.list.indexOf(b), 1);
@@ -255,7 +357,8 @@ export class Buses {
     // lane: right-hand lane of the street under the bus (narrow one-way streets
     // have parked cars along the curb), or the center while overtaking a blockage
     const road = this.graph?.nearest(v.x, v.z, 20)?.seg.road;
-    let lane = road ? (road.oneway ? road.w * 0.12 : Math.min(LANE, road.w * 0.25)) : LANE;
+    // clear of the parked cars along the curb (they sit 1 m in from the road edge)
+    let lane = road ? Math.min(road.oneway ? road.w * 0.12 : Math.min(LANE, road.w * 0.25), Math.max(road.oneway ? 0 : 0.3, road.w / 2 - 3.4)) : LANE;
     if (b.overtake > 0) {
       b.overtake -= dt;
       lane = 0;
@@ -293,11 +396,43 @@ export class Buses {
     }
     if (b.overtake > 0 && obst < Infinity) target = Math.max(target, 3);
     const err = target - speed;
-    v.update(dt, {
+    const steer = Math.max(-1, Math.min(1, diff * 2.2));
+    const input = {
       throttle: err > 0.3 ? Math.min(1, err * 0.3) : 0,
       brake: err < -0.4 && speed > 0.6 ? Math.min(1, -err * 0.3) : 0,
       handbrake: target === 0 && speed < 1.5, // hold still without rolling backwards
-      steer: Math.max(-1, Math.min(1, diff * 2.2)),
-    }, this.collision);
+      steer,
+    };
+    // wedged against a wall (wants to go, nothing ahead): reverse with opposite lock,
+    // and after a few tries put it back on its route a bit further on
+    if (b.reverse > 0) {
+      b.reverse -= dt;
+      Object.assign(input, { throttle: 0, brake: 1, handbrake: false, steer: -steer });
+    } else if (b.wait <= 0 && target >= 1 && speed < 0.4 && obst === Infinity) {
+      b.wall = (b.wall || 0) + dt;
+      if (b.wall > 3) {
+        b.wall = 0;
+        b.reverse = 2;
+        b.fails = (b.fails || 0) + 1;
+        if (b.fails >= 3) {
+          b.fails = 0;
+          b.reverse = 0;
+          for (const ahead of [8, 16, 24, 32]) {
+            const p = pth.at(b.s + ahead, lane);
+            if (this.collision.isBlocked(p.x, p.z, v.radius)) continue;
+            b.s += ahead;
+            v.x = p.x;
+            v.z = p.z;
+            v.heading = Math.atan2(p.dx, p.dz);
+            v.vx = v.vz = 0;
+            break;
+          }
+        }
+      }
+    } else {
+      b.wall = Math.max(0, (b.wall || 0) - dt);
+      if (speed > 3) b.fails = 0;
+    }
+    v.update(dt, input, this.collision);
   }
 }

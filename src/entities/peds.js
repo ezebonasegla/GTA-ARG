@@ -23,6 +23,27 @@ export class Peds {
     return [(-dz / l) * off * side, (dx / l) * off * side];
   }
 
+  // Where to walk for the leg from -> to: the sidewalk next to `to`, on `side` if that
+  // spot is free (corner buildings often cover it), else the other sidewalk, or a few
+  // meters back along the block.
+  legTarget(p) {
+    const { from, to } = p;
+    const dx = to.x - from.x, dz = to.z - from.z, l = Math.hypot(dx, dz) || 1;
+    for (const back of [0, 3, 6, 10]) {
+      for (const side of [p.side, -p.side]) {
+        const [ox, oz] = this.sideOffset(from, to, side);
+        const x = to.x - (dx / l) * Math.min(back, l / 2) + ox, z = to.z - (dz / l) * Math.min(back, l / 2) + oz;
+        if (!this.collision.isBlocked(x, z, 0.35)) {
+          p.side = side;
+          p.tx = x;
+          p.tz = z;
+          return;
+        }
+      }
+    }
+    [p.tx, p.tz] = [to.x, to.z]; // nothing free: walk on the street itself
+  }
+
   spawn(px, pz, minD, maxD) {
     // only consider street segments around the player (the city can be huge)
     const segs = [...this.graph.segIndex.query(px - maxD, pz - maxD, px + maxD, pz + maxD)];
@@ -46,6 +67,7 @@ export class Peds {
         speed: (look.age === 'elder' ? 0.8 : 1.1) + this.rng() * (look.age === 'kid' ? 0.8 : 0.45), state: 'walk', timer: 0,
         vy: 0, y: 0, vx: 0, vz: 0, dead: false, panic: this.rng() < 0.3, spin: 0, spinV: 0, back: true,
       };
+      this.legTarget(p);
       this.list.push(p);
       return p;
     }
@@ -153,12 +175,14 @@ export class Peds {
           if (n && n.neighbors.size) {
             p.from = n;
             p.to = [...n.neighbors][Math.floor(this.rng() * n.neighbors.size)];
+            p.side ||= 1;
+            this.legTarget(p);
           }
         }
       } else {
-        const [ox, oz] = this.sideOffset(p.from, p.to, p.side);
-        tx = p.to.x + ox;
-        tz = p.to.z + oz;
+        if (p.tx === undefined) this.legTarget(p);
+        tx = p.tx;
+        tz = p.tz;
         if (Math.hypot(tx - p.x, tz - p.z) < 1.2) {
           const opts = [...p.to.neighbors].filter((n) => n !== p.from);
           const next = opts.length ? opts[Math.floor(this.rng() * opts.length)] : p.from;
@@ -169,6 +193,31 @@ export class Peds {
             p.state = 'idle';
             p.timer = 2 + this.rng() * 6;
           }
+          this.legTarget(p);
+        }
+        // not getting anywhere (pressed against a wall): turn back, then give up
+        p.watch = (p.watch || 0) + dt;
+        if (p.watch > 2) {
+          const moved = Math.hypot(p.x - (p.wx ?? p.x + 9), p.z - (p.wz ?? p.z));
+          p.watch = 0;
+          p.wx = p.x;
+          p.wz = p.z;
+          if (moved < 0.5) {
+            p.stuck = (p.stuck || 0) + 1;
+            if (p.stuck >= 3 && Math.hypot(p.x - px, p.z - pz) > 40) {
+              p.dead = true; // removed next frame (timer 0)
+              p.timer = 0;
+              p.mesh.visible = false;
+              continue;
+            }
+            if (p.stuck >= 3) {
+              p.x = p.tx;
+              p.z = p.tz;
+            }
+            [p.from, p.to] = [p.to, p.from];
+            p.side = -p.side;
+            this.legTarget(p);
+          } else p.stuck = 0;
         }
       }
       const dx = tx - p.x, dz = tz - p.z;

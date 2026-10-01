@@ -2,13 +2,15 @@
 import * as THREE from 'three';
 import { makeTextures } from './textures.js';
 import { buildLandmarks } from './landmarks.js';
+import { buildShops } from './shops.js';
 import { buildStreetSigns } from './streetSigns.js';
 import { CollisionWorld } from './collision.js';
 import { RoadGraph } from './roadGraph.js';
-import { mulberry32, hashString, polygonArea, pointInPolygon, bbox } from './geo.js';
+import { mulberry32, hashString, polygonArea, pointInPolygon, bbox, SpatialHash, nearestBuilding } from './geo.js';
 
 const CHUNK = 220;
 const SIDEWALK = 3;
+const WHITE = new THREE.Color(1, 1, 1);
 
 // Tint palettes (sRGB hex) per facade style.
 const PALETTES = {
@@ -17,8 +19,8 @@ const PALETTES = {
   apartments: ['#ffffff', '#efece6', '#e6e1d6', '#d9d6d0', '#f3eadb', '#dfe3e6'],
   office: ['#ffffff', '#dfe8ee', '#e8efe8', '#d6dde6'],
   church: ['#ffffff', '#f4ead6'],
-  shop: ['#ffffff'],
 };
+
 
 const STYLE_MAP = {
   house: 'house', ph: 'house', apartments: 'apartments', brick: 'brick', office: 'office',
@@ -26,7 +28,7 @@ const STYLE_MAP = {
   industrial: 'brick', school: 'brick', hospital: 'apartments', brewery: 'brick',
 };
 
-class GeoBuf {
+export class GeoBuf {
   constructor() {
     this.pos = [];
     this.nor = [];
@@ -248,7 +250,7 @@ export function buildWorld(data, renderer, scene) {
 
   // ---------------------------------------------------------------- buildings
   const wallMats = {};
-  for (const style of ['house', 'brick', 'apartments', 'office', 'church', 'shop']) {
+  for (const style of ['house', 'brick', 'apartments', 'office', 'church']) {
     const m = new THREE.MeshStandardMaterial({
       map: tex[style].map,
       emissiveMap: tex[style].emissive,
@@ -274,10 +276,31 @@ export function buildWorld(data, renderer, scene) {
     return b;
   };
 
+
+  // stadium stands replace whatever footprints the data has under them
+  const stadiums = (data.specials || []).filter((s) => s.type === 'stadium').map((s) => [s.box, 3 + Math.max(s.depth || 0, 12)]);
+  const underStand = (x, z) => stadiums.some(([o, r]) => {
+    const dx = x - o.cx, dz = z - o.cz;
+    return Math.abs(dx * o.ux + dz * o.uz) < o.hu + r && Math.abs(dx * o.vx + dz * o.vz) < o.hv + r;
+  });
+
+  // facade detail: cornices, front fences with rejas, balconies, air conditioners
+  const plainMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
+  const rejaMat = new THREE.MeshStandardMaterial({ map: barsTexture(), color: 0x1b1d1f, metalness: 0.5, roughness: 0.5, alphaTest: 0.5, side: THREE.DoubleSide });
+  const shopBuildings = new Set();
+  {
+    const idx = new SpatialHash(30);
+    for (const b of data.buildings) idx.insert(b, bbox(b.pts));
+    for (const s of data.shops || []) shopBuildings.add(nearestBuilding(idx, s.x, s.z, 15));
+  }
+  const balconies = [], acUnits = [];
+  const fenceColors = ['#f2efe8', '#e8e0d0', '#b5653f', '#d9d4ca', '#f4f4f4'].map((c) => new THREE.Color(c));
+
   const tanks = [];
   data.buildings.forEach((bld, idx) => {
     let pts = bld.pts;
     if (pts.length < 3) return;
+    if (!bld.special && underStand(pts[0][0], pts[0][1])) return;
     // cathedral and churches are modelled entirely in landmarks.js
     if (bld.special && (bld.special.type === 'cathedral' || bld.special.type === 'church')) return;
     if (polygonArea(pts) < 0) pts = pts.slice().reverse();
@@ -286,40 +309,35 @@ export function buildWorld(data, renderer, scene) {
     const h = Math.max(2.5, bld.h || 6);
     const palette = PALETTES[style];
     const tint = new THREE.Color(bld.color || palette[Math.floor(rng() * palette.length)]);
-    const shopH = bld.shop ? Math.min(4, h) : 0;
     const bb = bbox(pts);
     const cx = (bb.minX + bb.maxX) / 2, cz = (bb.minZ + bb.maxZ) / 2;
-    const wallMat = wallMats[style];
-    const walls = bufFor(cx, cz, wallMat);
-    const shopBuf = shopH ? bufFor(cx, cz, wallMats.shop) : null;
-    const shopTint = new THREE.Color(1, 1, 1);
+    const walls = bufFor(cx, cz, wallMats[style]);
     const uOffset = Math.floor(rng() * 4) * 0.25;
 
     let dist = 0;
+    const fronts = [];
     for (let i = 0; i < pts.length; i++) {
       const p0 = pts[i], p1 = pts[(i + 1) % pts.length];
       const dx = p1[0] - p0[0], dz = p1[1] - p0[1];
       const len = Math.hypot(dx, dz);
       if (len < 0.01) continue;
       const out = [dz / len, 0, -dx / len];
-      if (shopH) {
-        const u0 = -dist / 4 + uOffset * 4, u1 = -(dist + len) / 4 + uOffset * 4;
-        shopBuf.quad([p0[0], 0, p0[1]], [p1[0], 0, p1[1]], [p1[0], shopH, p1[1]], [p0[0], shopH, p0[1]],
-          [u0 / 4, 0], [u1 / 4, 0], [u1 / 4, 1], [u0 / 4, 1], shopTint, out);
-      }
-      const y0 = shopH;
+      const y0 = 0;
       if (h - y0 > 0.1) {
         const u0 = -dist / 6 + uOffset, u1 = -(dist + len) / 6 + uOffset;
         walls.quad([p0[0], y0, p0[1]], [p1[0], y0, p1[1]], [p1[0], h, p1[1]], [p0[0], h, p0[1]],
           [u0, 0], [u1, 0], [u1, (h - y0) / 6], [u0, (h - y0) / 6], tint, out);
       }
       dist += len;
+      const front = frontRoad(graph, p0, p1);
+      if (front && len > 2) fronts.push({ p0, p1, len, ox: out[0], oz: out[2], room: front.room });
     }
 
     // Roofs
     const roofShade = 0.85 + rng() * 0.3;
     const roofTint = new THREE.Color(roofShade, roofShade, roofShade);
-    if (bld.roof === 'gable' && pts.length === 4) {
+    const chalet = bld.levels <= 2 && (style === 'house' || style === 'brick') && cx * cx + cz * cz > 700 * 700 && rng() < 0.35;
+    if ((bld.roof === 'gable' || chalet) && pts.length === 4) {
       addGable(pts, h, bufFor(cx, cz, roofTileMat), walls, tint, roofTint);
     } else if (bld.roof === 'spire' && pts.length >= 3) {
       const apex = [cx, h + Math.max(8, h * 0.35), cz];
@@ -340,6 +358,43 @@ export function buildWorld(data, renderer, scene) {
       const area = Math.abs(polygonArea(pts));
       if (style !== 'office' && style !== 'church' && area > 40 && rng() < 0.7 && pointInPolygon(cx, cz, pts)) {
         tanks.push([cx + (rng() - 0.5) * 2, cz + (rng() - 0.5) * 2, h, h > 12 ? 1.6 : 1]);
+      }
+    }
+    // ---- street-facing detail
+    const flat = !((bld.roof === 'gable' || chalet) && pts.length === 4) && bld.roof !== 'spire';
+    const apt = (style === 'apartments' || style === 'brick') && bld.levels >= 3;
+    const house = (style === 'house' || style === 'brick') && bld.levels <= 2 && !shopBuildings.has(bld);
+    const detail = fronts.length ? bufFor(cx, cz, plainMat) : null;
+    const cornice = tint.clone().lerp(new THREE.Color(1, 1, 1), 0.45);
+    for (const f of fronts) {
+      const { p0, p1, ox, oz, len } = f;
+      const ux = (p1[0] - p0[0]) / len, uz = (p1[1] - p0[1]) / len, yaw = Math.atan2(ox, oz);
+      // cornisa: a band sticking out at the top of flat-roofed street facades
+      if (flat && style !== 'church') slab(detail, p0, p1, ox, oz, -0.02, 0.22, h - 0.34, h + 0.2, cornice);
+      if (apt) {
+        // balcones: one column every ~3.4 m, from the first floor up
+        const n = Math.floor((len - 0.6) / 3.4);
+        for (let k = 0; k < n; k++) {
+          if (rng() < 0.2) continue;
+          const t = (k + 0.5) / n, x = p0[0] + ux * len * t, z = p0[1] + uz * len * t;
+          const acFloor = rng() < 0.4 ? 1 + Math.floor(rng() * (bld.levels - 1)) : 0;
+          for (let fl = 1; fl < bld.levels; fl++) {
+            balconies.push([x, z, fl * 3, yaw]);
+            if (fl === acFloor) acUnits.push([x + ux * 1.75, z + uz * 1.75, fl * 3 + 1.9, yaw]);
+          }
+        }
+      } else if (house && f.room > 4.3) {
+        // jardín adelante: murito + reja on the property line, 3 m back from the curb
+        const d = f.room - 3;
+        const a = [p0[0] - ux * 0.3, p0[1] - uz * 0.3], b = [p1[0] + ux * 0.3, p1[1] + uz * 0.3];
+        slab(detail, a, b, ox, oz, d - 0.1, d + 0.1, 0, 0.55, fenceColors[Math.floor(rng() * fenceColors.length)]);
+        const A = [a[0] + ox * d, a[1] + oz * d], B = [b[0] + ox * d, b[1] + oz * d];
+        bufFor(cx, cz, rejaMat).quad([A[0], 0.55, A[1]], [B[0], 0.55, B[1]], [B[0], 1.75, B[1]], [A[0], 1.75, A[1]],
+          [0, 0], [(len + 0.6) / 0.12, 0], [(len + 0.6) / 0.12, 1], [0, 1], WHITE, [ox, 0, oz]);
+        collision.addPolygon([[A[0] - ox * 0.1, A[1] - oz * 0.1], [B[0] - ox * 0.1, B[1] - oz * 0.1], [B[0] + ox * 0.1, B[1] + oz * 0.1], [A[0] + ox * 0.1, A[1] + oz * 0.1]], 1.75, 'building');
+        if (rng() < 0.3) acUnits.push([p0[0] + ux * len * 0.3, p0[1] + uz * len * 0.3, Math.min(2.3, h - 0.8), yaw]);
+      } else if (house && rng() < 0.25) {
+        acUnits.push([p0[0] + ux * len * (0.2 + rng() * 0.6), p0[1] + uz * len * (0.2 + rng() * 0.6), Math.min(2.3, h - 0.8), yaw]);
       }
     }
     collision.addPolygon(pts, h, 'building');
@@ -368,6 +423,24 @@ export function buildWorld(data, renderer, scene) {
     instancedChunks(root, legs, new THREE.MeshStandardMaterial({ color: 0x9a968f }), tanks, tankMatrix, { cast: true });
   }
 
+  {
+    // balcones: slab + iron railing (front and sides)
+    const slabG = new THREE.BoxGeometry(2.6, 0.16, 1.0).translate(0, 0, 0.5);
+    const rail = new GeoBuf();
+    rail.quad([-1.3, 0.08, 1], [1.3, 0.08, 1], [1.3, 1.08, 1], [-1.3, 1.08, 1], [0, 0], [2.6 / 0.12, 0], [2.6 / 0.12, 1], [0, 1], WHITE, [0, 0, 1]);
+    for (const sx of [-1.3, 1.3]) rail.quad([sx, 0.08, 0], [sx, 0.08, 1], [sx, 1.08, 1], [sx, 1.08, 0], [0, 0], [1 / 0.12, 0], [1 / 0.12, 1], [0, 1], WHITE, [Math.sign(sx), 0, 0]);
+    const yAxis = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1);
+    const atWall = (m, [x, z, y, yaw]) => m.compose(new THREE.Vector3(x, y, z), q.setFromAxisAngle(yAxis, yaw), one);
+    instancedChunks(root, slabG, new THREE.MeshStandardMaterial({ color: 0xd9d6cf, roughness: 0.9 }), balconies, atWall, { cast: true, receive: true });
+    instancedChunks(root, rail.geometry(), rejaMat, balconies, atWall);
+    // aires acondicionados colgados de la fachada
+    const acG = mergeSimple([new THREE.BoxGeometry(0.82, 0.56, 0.3).translate(0, 0, 0.17), new THREE.BoxGeometry(0.05, 0.05, 0.3).translate(-0.3, -0.3, 0.15), new THREE.BoxGeometry(0.05, 0.05, 0.3).translate(0.3, -0.3, 0.15)]);
+    instancedChunks(root, acG, new THREE.MeshStandardMaterial({ color: 0xe9ebec, roughness: 0.6 }), acUnits, atWall, { cast: true });
+  }
+
+  // ---------------------------------------------------------------- real businesses
+  const shops = buildShops(data, { root, graph, collision, nightMaterials });
+
   // ---------------------------------------------------------------- landmarks
   const landmarks = buildLandmarks(data, { root, collision, graph, tex });
   const outside = (x, z) => !landmarks.keepOut.some(([kx, kz, r]) => (x - kx) ** 2 + (z - kz) ** 2 < r * r);
@@ -377,10 +450,25 @@ export function buildWorld(data, renderer, scene) {
 
   // ---------------------------------------------------------------- trees & lights
   const rng = mulberry32(99);
+  // true when (x, z) is on a carriageway (any road but footways and pedestrian streets)
+  const onRoad = (x, z, pad) => {
+    const n = graph.nearest(x, z, 20);
+    return !!n && n.seg.road.kind !== 'footway' && n.seg.road.kind !== 'pedestrian' && n.dist < n.seg.road.w / 2 + pad;
+  };
   const trees = [];
   const lights = [];
+  const cables = new Map(); // chunk -> flat [x, y, z, ...] line-segment pairs
+  const cable = (a, b) => {
+    const key = `${Math.floor(a[0] / CHUNK)},${Math.floor(a[2] / CHUNK)}`;
+    if (!cables.has(key)) cables.set(key, []);
+    const out = cables.get(key);
+    const sag = 0.3 + Math.hypot(b[0] - a[0], b[2] - a[2]) * 0.012;
+    const P = (t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t - sag * 4 * t * (1 - t), a[2] + (b[2] - a[2]) * t];
+    for (let k = 0; k < 4; k++) out.push(...P(k / 4), ...P((k + 1) / 4));
+  };
   for (const road of data.roads) {
     if (road.kind === 'footway') continue;
+    let last = null;
     const ped = road.kind === 'pedestrian';
     const spacing = ped ? 14 : 11;
     for (let i = 0; i < road.pts.length - 1; i++) {
@@ -394,14 +482,20 @@ export function buildWorld(data, renderer, scene) {
         for (let t = 8 + rng() * 4; t < len - 8; t += spacing + rng() * 4) {
           if (rng() > (road.kind === 'primary' ? 0.55 : 0.8)) continue;
           const x = ax + dx * t + nx * off * side, z = az + dz * t + nz * off * side;
-          if (collision.isBlocked(x, z, 1.2) || !outside(x, z)) continue;
+          if (collision.isBlocked(x, z, 1.2) || !outside(x, z) || onRoad(x, z, 0.8)) continue;
           trees.push([x, z, 0.8 + rng() * 0.6, rng()]);
         }
         if (side === 1 && !ped) {
           for (let t = 15; t < len - 5; t += 34) {
             const x = ax + dx * t + nx * (road.w / 2 + 0.4), z = az + dz * t + nz * (road.w / 2 + 0.4);
-            if (collision.isBlocked(x, z, 0.3)) continue;
+            if (collision.isBlocked(x, z, 0.3) || onRoad(x, z, 0.3)) continue;
             lights.push([x, z, Math.atan2(-nx, -nz)]);
+            // cables aéreos: poste a poste, y cada dos postes uno cruza a la vereda de enfrente
+            const topP = [x, 6.4, z];
+            if (last && Math.hypot(last[0] - x, last[2] - z) < 45) cable(last, topP);
+            const across = road.w + 0.4 + SIDEWALK;
+            if (lights.length % 2) cable(topP, [x - nx * across, 5, z - nz * across]);
+            last = topP;
           }
         }
       }
@@ -413,7 +507,7 @@ export function buildWorld(data, renderer, scene) {
     const count = Math.min(400, Math.abs(polygonArea(area.pts)) / (area.kind === 'plaza' ? 120 : 220));
     for (let k = 0; k < count; k++) {
       const x = bb.minX + rng() * (bb.maxX - bb.minX), z = bb.minZ + rng() * (bb.maxZ - bb.minZ);
-      if (!pointInPolygon(x, z, area.pts) || collision.isBlocked(x, z, 2) || !outside(x, z)) continue;
+      if (!pointInPolygon(x, z, area.pts) || collision.isBlocked(x, z, 2) || !outside(x, z) || onRoad(x, z, 1.5)) continue;
       trees.push([x, z, 0.9 + rng() * 0.9, rng()]);
     }
   }
@@ -443,7 +537,7 @@ export function buildWorld(data, renderer, scene) {
     color: ([, , , r]) => c.setHSL(0.2 + r * 0.1, 0.35 + r * 0.2, 0.22 + r * 0.1),
   });
 
-  const pole = new THREE.CylinderGeometry(0.08, 0.12, 7, 5);
+  const pole = new THREE.CylinderGeometry(0.1, 0.17, 7, 6);
   pole.translate(0, 3.5, 0);
   const arm = new THREE.BoxGeometry(0.1, 0.1, 2.2);
   arm.translate(0, 7, 1.1);
@@ -454,7 +548,70 @@ export function buildWorld(data, renderer, scene) {
     q.setFromAxisAngle(up, h);
     m.compose(new THREE.Vector3(x, 0, z), q, one);
   };
-  instancedChunks(root, mergeSimple([pole, arm]), new THREE.MeshStandardMaterial({ color: 0x4a4f52, metalness: 0.6, roughness: 0.5 }), lights, lampMatrix, { cast: true });
+  instancedChunks(root, mergeSimple([pole, arm]), new THREE.MeshStandardMaterial({ color: 0x9e9b94, roughness: 0.95 }), lights, lampMatrix, { cast: true });
+  const cableMat = new THREE.LineBasicMaterial({ color: 0x1b1b1b });
+  for (const pts of cables.values()) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    root.add(new THREE.LineSegments(g, cableMat));
+  }
+
+  // cestos de basura enrejados sobre un caño, en la vereda de enfrente a los postes
+  {
+    const prng = mulberry32(5);
+    const cestos = [];
+    for (const road of data.roads) {
+      if (road.kind !== 'residential') continue;
+      for (let i = 0; i < road.pts.length - 1; i++) {
+        const [ax, az] = road.pts[i], [bx, bz] = road.pts[i + 1];
+        const len = Math.hypot(bx - ax, bz - az);
+        const dx = (bx - ax) / len, dz = (bz - az) / len;
+        const off = road.w / 2 + 0.6;
+        for (let t = 10; t < len - 10; t += 26) {
+          if (prng() > 0.3) continue;
+          const x = ax + dx * t + dz * off, z = az + dz * t - dx * off;
+          if (collision.isBlocked(x, z, 0.6) || !outside(x, z) || onRoad(x, z, 0.3)) continue;
+          collision.addCircle(x, z, 0.2, 'pole');
+          cestos.push([x, z]);
+        }
+      }
+    }
+    const cano = new THREE.CylinderGeometry(0.03, 0.03, 1.1, 5);
+    cano.translate(0, 0.55, 0);
+    const cesto = new THREE.CylinderGeometry(0.24, 0.19, 0.42, 10, 1, true);
+    cesto.translate(0, 1.3, 0);
+    const grid = gridTexture();
+    grid.repeat.set(6, 2);
+    const at = (m, [x, z]) => m.makeTranslation(x, 0, z);
+    instancedChunks(root, cano, new THREE.MeshStandardMaterial({ color: 0x2a2d2e, metalness: 0.5, roughness: 0.6 }), cestos, at, { cast: true });
+    instancedChunks(root, cesto, new THREE.MeshStandardMaterial({ color: 0x2a2d2e, map: grid, alphaTest: 0.5, side: THREE.DoubleSide }), cestos, at);
+  }
+
+  // cordones pintados de amarillo en las esquinas
+  {
+    const curbs = [];
+    for (const node of graph.nodes) {
+      if (node.degree < 3) continue;
+      let maxW = 0;
+      for (const r of node.roads) maxW = Math.max(maxW, r.w);
+      const s0 = maxW / 2 + SIDEWALK + 2.5;
+      for (const [nb, road] of node.links) {
+        if (road.kind === 'footway' || road.kind === 'pedestrian' || road.kind === 'service') continue;
+        const len = Math.hypot(nb.x - node.x, nb.z - node.z);
+        if (len < s0 + 6) continue;
+        const ux = (nb.x - node.x) / len, uz = (nb.z - node.z) / len;
+        for (const side of [-1, 1]) {
+          const o = side * (road.w / 2 + 0.12);
+          curbs.push([node.x + ux * s0 - uz * o, node.z + uz * s0 + ux * o, Math.atan2(ux, uz)]);
+        }
+      }
+    }
+    const strip = new THREE.PlaneGeometry(0.3, 5);
+    strip.rotateX(-Math.PI / 2);
+    strip.translate(0, 0.085, 0);
+    const curbMat = new THREE.MeshStandardMaterial({ color: 0xe6bf1e, roughness: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
+    for (const m of instancedChunks(root, strip, curbMat, curbs, lampMatrix, { receive: true })) m.renderOrder = -5;
+  }
   instancedChunks(root, head, lampMat, lights, lampMatrix);
   // Fake light pools on the pavement (cheaper than hundreds of real lights).
   const poolG = new THREE.PlaneGeometry(14, 14);
@@ -475,10 +632,13 @@ export function buildWorld(data, renderer, scene) {
       lampMat.emissiveIntensity = n * 3;
       poolMat.opacity = n * 0.55;
       poolMat.visible = n > 0.05;
+      shops.setNight(n);
       landmarks.setNight(n);
       streetSigns.setNight(n);
     },
     streetSigns,
+    shops: shops.count,
+    shopList: shops.placed,
     // Per-frame work that depends on where the player is.
     update(x, z) {
       streetSigns.update(x, z);
@@ -486,9 +646,27 @@ export function buildWorld(data, renderer, scene) {
   };
 }
 
+// Street a footprint edge p0->p1 (counter-clockwise ring) looks onto, or null for back
+// and party walls: a road must run parallel to the edge, on its outer side, within a
+// sidewalk plus a front garden. `room` is the free depth between facade and curb.
+export function frontRoad(graph, p0, p1) {
+  const dx = p1[0] - p0[0], dz = p1[1] - p0[1], len = Math.hypot(dx, dz);
+  if (len < 2.5) return null;
+  const ox = dz / len, oz = -dx / len;
+  const mx = (p0[0] + p1[0]) / 2, mz = (p0[1] + p1[1]) / 2;
+  const hit = graph.nearest(mx + ox * (SIDEWALK + 2), mz + oz * (SIDEWALK + 2), 14);
+  if (!hit || hit.seg.road.kind === 'footway') return null;
+  const { a, b, road } = hit.seg;
+  const sx = b.x - a.x, sz = b.z - a.z;
+  if (Math.abs(dx * sx + dz * sz) < 0.8 * len * Math.hypot(sx, sz)) return null;
+  const d = (hit.x - mx) * ox + (hit.z - mz) * oz;
+  if (d <= 0 || d > road.w / 2 + SIDEWALK + 6) return null;
+  return { road, room: d - road.w / 2 };
+}
+
 // One InstancedMesh per spatial chunk so that frustum culling (and the shadow pass)
 // only processes nearby instances.
-function instancedChunks(root, geometry, material, items, setMatrix, opts = {}) {
+export function instancedChunks(root, geometry, material, items, setMatrix, opts = {}) {
   const groups = new Map();
   for (const it of items) {
     const key = `${Math.floor(it[0] / CHUNK)},${Math.floor(it[1] / CHUNK)}`;
@@ -542,6 +720,59 @@ function waveNormalMap() {
   return t;
 }
 
+// Box volume along wall a->b, from d0 to d1 outwards (ox, oz), between heights y0 and y1.
+function slab(buf, a, b, ox, oz, d0, d1, y0, y1, color) {
+  const P = (p, d, y) => [p[0] + ox * d, y, p[1] + oz * d];
+  const ux = b[0] - a[0], uz = b[1] - a[1];
+  buf.quad(P(a, d1, y0), P(b, d1, y0), P(b, d1, y1), P(a, d1, y1), [0, 0], [1, 0], [1, 1], [0, 1], color, [ox, 0, oz]);
+  buf.quad(P(a, d0, y1), P(a, d1, y1), P(b, d1, y1), P(b, d0, y1), [0, 0], [1, 0], [1, 1], [0, 1], color, [0, 1, 0]);
+  buf.quad(P(a, d0, y0), P(b, d0, y0), P(b, d1, y0), P(a, d1, y0), [0, 0], [1, 0], [1, 1], [0, 1], color, [0, -1, 0]);
+  if (d0 > 0) buf.quad(P(a, d0, y0), P(a, d0, y1), P(b, d0, y1), P(b, d0, y0), [0, 0], [1, 0], [1, 1], [0, 1], color, [-ox, 0, -oz]);
+  buf.quad(P(a, d0, y0), P(a, d1, y0), P(a, d1, y1), P(a, d0, y1), [0, 0], [1, 0], [1, 1], [0, 1], color, [-ux, 0, -uz]);
+  buf.quad(P(b, d0, y0), P(b, d0, y1), P(b, d1, y1), P(b, d1, y0), [0, 0], [1, 0], [1, 1], [0, 1], color, [ux, 0, uz]);
+}
+
+// vertical iron bars with a top rail (alpha-tested); one bar per 0.12 m of u
+function barsTexture() {
+  const c = document.createElement('canvas');
+  c.width = 16;
+  c.height = 64;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(6, 0, 3, 64);
+  ctx.fillRect(0, 0, 16, 4);
+  ctx.fillRect(0, 60, 16, 4);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = THREE.RepeatWrapping;
+  return t;
+}
+
+export function stripeTexture(color) {
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 4;
+  const ctx = c.getContext('2d');
+  for (let i = 0; i < 8; i++) {
+    ctx.fillStyle = i % 2 ? '#f4efe4' : color;
+    ctx.fillRect(i * 8, 0, 8, 4);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function gridTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 16;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, 16, 3);
+  ctx.fillRect(0, 0, 3, 16);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
 function radialTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 64;
@@ -577,7 +808,7 @@ function addGable(pts, h, roofBuf, wallBuf, wallTint, roofTint) {
   wallBuf.tri(P(p[3]), P(p[0]), r0, [0, h / 6], [shortLen / 6, h / 6], [shortLen / 12, (h + rise) / 6], wallTint, out(p[3], p[0]));
 }
 
-function mergeSimple(geoms) {
+export function mergeSimple(geoms) {
   const pos = [], nor = [], idx = [];
   let base = 0;
   for (const g of geoms) {

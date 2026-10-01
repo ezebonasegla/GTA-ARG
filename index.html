@@ -60,6 +60,22 @@
       .photo-panel label { font-weight: bold; color: var(--accent); }
       .photo-panel input { font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.08); color: #fff; }
       .photo-panel small { opacity: 0.75; line-height: 1.4; }
+      #gps { position: absolute; left: 20px; bottom: 236px; background: rgba(0, 0, 0, 0.72); border-left: 4px solid #b44bff; padding: 6px 12px; border-radius: 4px; font-size: 15px; display: none; max-width: 320px; }
+      #gps b { color: #f5c518; font-size: 18px; margin-right: 4px; }
+      #bigmap { position: fixed; inset: 0; z-index: 25; background: #0b0f16; }
+      #bigmap canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+      #bigmap .bar { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); width: min(560px, 92vw); }
+      #bigmap input { width: 100%; font: inherit; font-size: 16px; padding: 10px 14px; border-radius: 8px; border: 2px solid #b44bff; background: rgba(10, 12, 20, 0.92); color: #fff; }
+      #bigmap .results { list-style: none; margin: 4px 0 0; padding: 0; background: rgba(10, 12, 20, 0.95); border-radius: 8px; overflow: hidden; }
+      #bigmap .results li { padding: 8px 14px; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+      #bigmap .results li:hover { background: rgba(180, 75, 255, 0.35); }
+      #bigmap .results li.none { cursor: default; opacity: 0.7; }
+      #bigmap .results small { opacity: 0.6; }
+      #bigmap .tools { position: absolute; right: 14px; bottom: 14px; display: flex; gap: 8px; }
+      #bigmap .tools button { font: inherit; font-weight: bold; min-width: 44px; height: 44px; padding: 0 14px; border-radius: 8px; border: 2px solid rgba(255, 255, 255, 0.5); background: rgba(0, 0, 0, 0.6); color: #fff; cursor: pointer; }
+      #bigmap .tip { position: absolute; left: 14px; bottom: 20px; font-size: 13px; opacity: 0.8; text-shadow: 1px 1px 0 #000; }
+      body.touch #gps { left: calc(12px + env(safe-area-inset-left)); top: 150px; bottom: auto; font-size: 13px; }
+      body.touch #bigmap .tip { display: none; }
       /* ---- touch controls ---- */
       body.touch { touch-action: none; -webkit-user-select: none; user-select: none; }
       #touch { position: fixed; inset: 0; z-index: 12; touch-action: none; }
@@ -75,6 +91,7 @@
       .pedals { position: absolute; right: calc(210px + env(safe-area-inset-right)); bottom: 22px; display: flex; gap: 12px; }
       .tb.pedal { border-radius: 14px; width: 74px; height: 96px; font-size: 13px; }
       .tb.gas { background: rgba(46, 204, 113, 0.35); }
+      .tb.map { position: absolute; top: calc(12px + env(safe-area-inset-top)); left: calc(50% + 80px); width: 60px; height: 40px; border-radius: 8px; font-size: 13px; }
       .tb.help { position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); width: 40px; height: 40px; font-size: 18px; }
       #touch .car-only { display: none; }
       #touch.in-car .car-only { display: flex; }
@@ -98,6 +115,7 @@
         body.touch #rotate { display: flex; position: fixed; inset: 0; z-index: 30; background: rgba(5, 8, 14, 0.92); align-items: center; justify-content: center; text-align: center; padding: 24px; font-size: 20px; flex-direction: column; gap: 12px; }
       }
       @media (max-width: 700px) {
+        #gps { left: 12px; bottom: 200px; }
         #minimap { width: 130px; height: 130px; left: 12px; bottom: 16px; }
         #health { left: 16px; width: 120px; bottom: 6px; }
         #street { left: 16px; bottom: 160px; font-size: 18px; }
@@ -119,7 +137,22 @@
       <div id="message"></div>
       <div id="hint"></div>
       <div id="toast"></div>
+      <div id="gps"></div>
       <div id="source"></div>
+    </div>
+    <div id="bigmap" class="hidden">
+      <canvas></canvas>
+      <div class="bar">
+        <input type="search" placeholder="Buscá una dirección (Rivadavia 450), un negocio o un lugar…" autocomplete="off" />
+        <ul class="results"></ul>
+      </div>
+      <div class="tools">
+        <button class="zin" title="Acercar">+</button>
+        <button class="zout" title="Alejar">−</button>
+        <button class="clear" title="Borrar destino">Borrar destino</button>
+        <button class="close" title="Cerrar (M)">Cerrar</button>
+      </div>
+      <div class="tip">Hacé clic en el mapa para marcar un destino · arrastrá para moverte · rueda para zoom</div>
     </div>
     <div id="help" class="hidden">
       <h3>Controles</h3>
@@ -128,7 +161,8 @@
         <b>Mouse</b><span>mover la cámara (clic para capturar)</span>
         <b>Shift</b><span>correr</span>
         <b>Espacio</b><span>saltar / freno de mano</span>
-        <b>E</b><span>subir / bajar / robar auto</span>
+        <b>E</b><span>subir / bajar / robar auto · viajar en colectivo (y bajarte en la próxima parada)</span>
+        <b>R</b><span>robar (también colectivos)</span>
         <b>H</b><span>bocina</span>
         <b>F</b><span>empujar</span>
         <b>C</b><span>cambiar cámara</span>
@@ -137,6 +171,7 @@
         <b>O</b><span>pantalla completa</span>
         <b>G</b><span>modo fotorrealista (Google 3D) / ciudad generada</span>
         <b>V</b><span>modo fantasma (volar por la ciudad)</span>
+        <b>M</b><span>mapa: marcá un destino o buscá una dirección</span>
         <b>W A S D + Espacio / Shift</b><span>moverse en modo fantasma (Control = más rápido)</span>
         <b>Tab</b><span>mostrar / ocultar ayuda</span>
       </div>

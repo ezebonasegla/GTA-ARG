@@ -80,26 +80,52 @@ export class RoadGraph {
     return Math.hypot(a.x - x, a.z - z) < Math.hypot(b.x - x, b.z - z) ? a : b;
   }
 
-  // Undirected shortest path (police ignore one-way streets). Returns node list.
-  path(from, to, maxNodes = 4000) {
+  // A* shortest path, returns the node list or null. Undirected by default (police and
+  // pedestrians ignore one-way streets); `directed` follows the traffic direction.
+  path(from, to, maxNodes = 4000, directed = false) {
     if (!from || !to) return null;
     const dist = new Map([[from, 0]]);
     const prev = new Map();
-    const open = [from];
-    let visited = 0;
-    while (open.length && visited++ < maxNodes) {
-      let bi = 0;
-      for (let i = 1; i < open.length; i++) if (dist.get(open[i]) + h(open[i]) < dist.get(open[bi]) + h(open[bi])) bi = i;
-      const n = open.splice(bi, 1)[0];
+    const done = new Set();
+    const heap = [[Math.hypot(from.x - to.x, from.z - to.z), from]];
+    const push = (item) => {
+      heap.push(item);
+      for (let i = heap.length - 1; i > 0;) {
+        const p = (i - 1) >> 1;
+        if (heap[p][0] <= heap[i][0]) break;
+        [heap[p], heap[i]] = [heap[i], heap[p]];
+        i = p;
+      }
+    };
+    const pop = () => {
+      const top = heap[0], last = heap.pop();
+      if (heap.length) {
+        heap[0] = last;
+        for (let i = 0; ;) {
+          const l = i * 2 + 1, r = l + 1;
+          let m = i;
+          if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+          if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+          if (m === i) break;
+          [heap[m], heap[i]] = [heap[i], heap[m]];
+          i = m;
+        }
+      }
+      return top[1];
+    };
+    while (heap.length && done.size < maxNodes) {
+      const n = pop();
+      if (done.has(n)) continue;
       if (n === to) break;
-      for (const m of n.neighbors) {
-        const road = n.links.get(m);
-        if (road && road.kind === 'footway') continue;
+      done.add(n);
+      const next = directed ? n.out.map((e) => e.b) : n.neighbors;
+      for (const m of next) {
+        if (!directed && n.links.get(m)?.kind === 'footway') continue;
         const d = dist.get(n) + Math.hypot(m.x - n.x, m.z - n.z);
         if (d < (dist.get(m) ?? Infinity)) {
-          if (!dist.has(m)) open.push(m);
           dist.set(m, d);
           prev.set(m, n);
+          push([d + Math.hypot(m.x - to.x, m.z - to.z), m]);
         }
       }
     }
@@ -107,9 +133,6 @@ export class RoadGraph {
     const out = [to];
     while (out[0] !== from) out.unshift(prev.get(out[0]));
     return out;
-    function h(n) {
-      return Math.hypot(n.x - to.x, n.z - to.z);
-    }
   }
 
   // Random directed edge among the streets within maxD of (x, z).

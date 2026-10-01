@@ -15,7 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   QUILMES_CENTER, makeProjection, mulberry32, polygonArea, pointInPolygon,
-  closestOnSegment, bbox, SpatialHash,
+  closestOnSegment, bbox, SpatialHash, nearestBuilding,
 } from '../src/world/geo.js';
 import { detectSpecials } from './specials.mjs';
 import { computeStreetSigns } from '../src/world/alturas.js';
@@ -504,21 +504,7 @@ function convert(osm) {
   const bIndex = new SpatialHash(30);
   buildings.forEach((b) => bIndex.insert(b, bbox(b.pts)));
   for (const [x, z] of shopNodes) {
-    let best = null, bestD = 12;
-    for (const b of bIndex.query(x - 12, z - 12, x + 12, z + 12)) {
-      if (pointInPolygon(x, z, b.pts)) {
-        best = b;
-        break;
-      }
-      const p = b.pts;
-      for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
-        const d = Math.sqrt(closestOnSegment(x, z, p[j][0], p[j][1], p[i][0], p[i][1])[3]);
-        if (d < bestD) {
-          bestD = d;
-          best = b;
-        }
-      }
-    }
+    const best = nearestBuilding(bIndex, x, z);
     if (best && best.h >= 3) best.shop = true;
   }
 

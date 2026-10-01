@@ -3,15 +3,26 @@
 
 export const QUILMES_CENTER = { lat: -34.7206, lon: -58.2546 };
 
+// Exact local tangent plane (ENU) on the WGS84 ellipsoid, the same frame the
+// Google 3D Tiles ReorientationPlugin uses, so both maps line up everywhere.
+const A = 6378137, F = 1 / 298.257223563, E2 = F * (2 - F);
+function ecef(lat, lon) {
+  const p = (lat * Math.PI) / 180, l = (lon * Math.PI) / 180;
+  const n = A / Math.sqrt(1 - E2 * Math.sin(p) ** 2);
+  return [n * Math.cos(p) * Math.cos(l), n * Math.cos(p) * Math.sin(l), n * (1 - E2) * Math.sin(p)];
+}
+
 export function makeProjection(origin) {
-  const kx = Math.cos((origin.lat * Math.PI) / 180) * 111320;
-  const kz = 110540;
+  const p = (origin.lat * Math.PI) / 180, l = (origin.lon * Math.PI) / 180;
+  const sp = Math.sin(p), cp = Math.cos(p), sl = Math.sin(l), cl = Math.cos(l);
+  const [x0, y0, z0] = ecef(origin.lat, origin.lon);
   return {
     toWorld(lat, lon) {
-      return [(lon - origin.lon) * kx, -(lat - origin.lat) * kz];
-    },
-    toLatLon(x, z) {
-      return { lat: origin.lat - z / kz, lon: origin.lon + x / kx };
+      const [x, y, z] = ecef(lat, lon);
+      const dx = x - x0, dy = y - y0, dz = z - z0;
+      const east = -sl * dx + cl * dy;
+      const north = -sp * cl * dx - sp * sl * dy + cp * dz;
+      return [east, -north];
     },
   };
 }
@@ -107,6 +118,24 @@ export class SpatialHash {
     }
     return out;
   }
+}
+
+// Building containing (x, z), else the one with the closest wall within maxD.
+// `index` is a SpatialHash of buildings keyed by their bbox.
+export function nearestBuilding(index, x, z, maxD = 12) {
+  let best = null, bestD = maxD;
+  for (const b of index.query(x - maxD, z - maxD, x + maxD, z + maxD)) {
+    if (pointInPolygon(x, z, b.pts)) return b;
+    const p = b.pts;
+    for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+      const d = Math.sqrt(closestOnSegment(x, z, p[j][0], p[j][1], p[i][0], p[i][1])[3]);
+      if (d < bestD) {
+        bestD = d;
+        best = b;
+      }
+    }
+  }
+  return best;
 }
 
 // Minimum-area oriented bounding box. u is the long axis.

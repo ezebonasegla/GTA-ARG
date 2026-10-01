@@ -8,6 +8,7 @@ export class Input {
     this.locked = false;
     this.canvas = canvas;
     addEventListener('keydown', (e) => {
+      if (e.target instanceof HTMLInputElement) return; // typing in a text box, not playing
       if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
       if (!this.keys.has(e.code)) this.pressed.add(e.code);
       this.keys.add(e.code);

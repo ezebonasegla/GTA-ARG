@@ -1,6 +1,6 @@
 // Canvas-generated textures. Facades are painted light/neutral so that per-building
 // vertex colors can tint them (revoque, ladrillo, hormigón...). Each facade tile covers
-// 2 bays x 2 floors (6 m x 6 m); each shopfront tile covers 4 m x 4 m.
+// 2 bays x 2 floors (6 m x 6 m). Shopfronts live in shops.js.
 import * as THREE from 'three';
 import { mulberry32 } from './geo.js';
 
@@ -208,60 +208,6 @@ export function makeTextures(renderer) {
     },
   });
 
-  // Planta baja comercial: vidriera, marquesina con cartel y persiana metálica.
-  {
-    const rng = mulberry32(6);
-    const [c, ctx] = canvas(S * 4, S);
-    const [e, ectx] = canvas(S * 4, S);
-    ectx.fillStyle = '#000';
-    ectx.fillRect(0, 0, S * 4, S);
-    const signs = ['KIOSCO', 'FARMACIA', 'PANADERÍA', 'ROTISERÍA', 'PIZZERÍA', 'FERRETERÍA', 'ALMACÉN', 'VERDULERÍA', 'LIBRERÍA', 'HELADERÍA', 'CARNICERÍA', 'BAR', 'ZAPATERÍA', 'ÓPTICA', 'CERVECERÍA', 'PARRILLA'];
-    for (let k = 0; k < 4; k++) {
-      const x = k * S;
-      ctx.fillStyle = '#d9d4ca';
-      ctx.fillRect(x, 0, S, S);
-      noise(ctx, S, S, 400, rng);
-      const hue = Math.floor(rng() * 360);
-      // cartel
-      ctx.fillStyle = `hsl(${hue},65%,38%)`;
-      ctx.fillRect(x + 6, 10, S - 12, 46);
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 30px Arial, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const sign = signs[Math.floor(rng() * signs.length)];
-      ctx.fillText(sign, x + S / 2, 34, S - 24);
-      ectx.fillStyle = `hsl(${hue},80%,55%)`;
-      ectx.fillRect(x + 6, 10, S - 12, 46);
-      ectx.fillStyle = '#fff';
-      ectx.font = 'bold 30px Arial, sans-serif';
-      ectx.textAlign = 'center';
-      ectx.textBaseline = 'middle';
-      ectx.fillText(sign, x + S / 2, 34, S - 24);
-      // vidriera o persiana metálica
-      if (rng() < 0.7) {
-        glowOrGlass(ctx, x + 14, 72, S - 28, S - 80, false, rng);
-        ctx.fillStyle = 'rgba(255,255,255,0.15)';
-        ctx.fillRect(x + 20, 80, 30, S - 100);
-        ctx.fillStyle = '#333';
-        ctx.fillRect(x + S * 0.62, 72, 5, S - 80);
-        ectx.fillStyle = '#e9d7a8';
-        ectx.fillRect(x + 14, 72, S - 28, S - 80);
-      } else {
-        ctx.fillStyle = '#8f9396';
-        ctx.fillRect(x + 14, 72, S - 28, S - 80);
-        ctx.fillStyle = 'rgba(0,0,0,0.3)';
-        for (let yy = 72; yy < S - 8; yy += 6) ctx.fillRect(x + 14, yy, S - 28, 2);
-        // graffiti
-        ctx.strokeStyle = `hsl(${rng() * 360},80%,50%)`;
-        ctx.lineWidth = 6;
-        ctx.beginPath();
-        for (let q = 0; q < 6; q++) ctx.lineTo(x + 40 + rng() * (S - 80), 110 + rng() * 100);
-        ctx.stroke();
-      }
-    }
-    tex.shop = { map: toTexture(c, renderer), emissive: toTexture(e, renderer) };
-  }
 
   // Techos.
   {

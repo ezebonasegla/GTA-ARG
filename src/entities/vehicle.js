@@ -12,6 +12,7 @@ export class Vehicle {
     this.spec = VEHICLE_TYPES[type];
     color ??= this.spec.colors[Math.floor(Math.random() * this.spec.colors.length)];
     this.mesh = createVehicleMesh(type, color);
+    this.spec = this.mesh.userData.spec || this.spec;
     this.x = x;
     this.z = z;
     this.heading = heading;
@@ -129,7 +130,7 @@ export class Vehicle {
     const wheels = this.mesh.userData.wheels || [];
     wheels.forEach((w, i) => {
       w.rotation.x = this.wheelSpin;
-      if (i < 2) w.rotation.y = this.steer;
+      if (i < (this.mesh.userData.steer ?? 2)) w.rotation.y = this.steer;
     });
     // subtle body roll/pitch
     if (this.mesh.userData.tail) this.mesh.userData.tail.emissiveIntensity = this.braking ? 2.5 : 0.35;

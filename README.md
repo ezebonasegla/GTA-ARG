@@ -28,7 +28,8 @@ También podés forzarla con `?mapa=procedural` en la URL.
 | Mouse | mover la cámara (hacé clic para capturar el mouse) |
 | `Shift` | correr |
 | `Espacio` | saltar / freno de mano (derrapar) |
-| `E` | subir, bajar o robar un auto |
+| `E` | subir, bajar o robar un auto; junto a un colectivo detenido, viajar como pasajero (E de nuevo: bajás en la próxima parada) |
+| `R` | robar el vehículo más cercano, colectivos incluidos |
 | `H` | bocina |
 | `F` | empujar |
 | `C` | cambiar distancia de cámara |
@@ -36,6 +37,7 @@ También podés forzarla con `?mapa=procedural` en la URL.
 | `T` | adelantar el reloj 1 hora |
 | `P` | pausar el reloj |
 | `V` | activar/desactivar modo fantasma (vuelo libre) |
+| `M` | mapa: marcá un destino con un clic o buscá una dirección ("Rivadavia 450"), un negocio o un lugar; el minimapa te guía por las calles y muestra cuánto falta |
 | En modo fantasma: `W A S D` + `Espacio`/`Shift` (`Control` acelera) | volar por el cielo |
 | `Tab` | ayuda |
 
@@ -185,6 +187,18 @@ Formas legítimas de acercarse más a la realidad:
 2. **Google Photorealistic 3D Tiles** (API oficial de Map Tiles): permite mostrar la malla fotorrealista de Google
    dentro de una app 3D con una API key propia, respetando sus términos y atribución. Es un posible paso futuro
    (por ejemplo con `3d-tiles-renderer` para Three.js), aunque es mucho más pesado y no sirve para colisiones.
+
+## Modelos 3D y datos de terceros
+
+- Autos: réplicas del Fiat Uno, Peugeot 206, 208 y 308 (Sketchfab, CC-BY-4.0; autores en
+  [public/models/cars/CREDITS.md](public/models/cars/CREDITS.md)), preparadas con `scripts/prep_car.py` en Blender.
+  La pickup es del [Car Kit](https://kenney.nl/assets/car-kit) de Kenney, CC0.
+- Colectivos: [LowPoly Public Transport](https://opengameart.org/content/lowpoly-public-transport) de Quaternius, CC0.
+  Colores por línea según [BusARG](https://www.busarg.com.ar/colores.htm) (22, 85, 98, 129, 148, 159, 178 y las
+  demás de MOQSA); las líneas que no figuran ahí usan un color representativo de la empresa.
+- Negocios con nombre: OpenStreetMap (`npm run fetch-shops`), © colaboradores de OpenStreetMap, ODbL.
+  También se pueden sumar lugares desde un CSV exportado de Google Maps (`npm run import-places -- archivo.csv`):
+  se guardan sólo nombre, tipo y posición. Revisá sus condiciones de uso antes de publicar esos datos.
 
 ## Estructura del código
 

@@ -21,8 +21,12 @@ function wrapAngle(a) {
   return a;
 }
 
+// parked cars sit at PARK_OFF from the centerline; the lane keeps a car's width
+// plus a margin away from them so traffic slips past instead of queueing behind them
+const parkOffset = (road) => road.w / 2 - 1.0;
 function laneOffset(road) {
-  return road.oneway ? road.w * 0.18 : road.w * 0.25;
+  const ideal = road.oneway ? road.w * 0.18 : road.w * 0.25;
+  return Math.min(ideal, Math.max(road.oneway ? 0 : 0.4, parkOffset(road) - 2.1));
 }
 
 function speedLimit(road) {
@@ -101,7 +105,7 @@ export class Traffic {
     const speed = speedLimit(edge.road) * 0.7;
     v.vx = edge.dx * speed;
     v.vz = edge.dz * speed;
-    this.npc.set(v, { path: [edge], stuck: 0, cruise: 0.8 + this.rng() * 0.35 });
+    this.npc.set(v, { path: [edge], stuck: 0, reverse: 0, fails: 0, cruise: 0.8 + this.rng() * 0.35 });
     return v;
   }
 
@@ -113,7 +117,7 @@ export class Traffic {
     });
     if (!edge || edge.len < 30) return null;
     const s = 12 + this.rng() * (edge.len - 24);
-    const off = edge.road.w / 2 - 1.1;
+    const off = parkOffset(edge.road);
     const x = edge.a.x + edge.dx * s - edge.dz * off;
     const z = edge.a.z + edge.dz * s + edge.dx * off;
     if (this.vehicles.some((v) => Math.hypot(v.x - x, v.z - z) < 6)) return null;
@@ -200,17 +204,19 @@ export class Traffic {
   obstacleAhead(v, ctx, range) {
     const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
     let nearest = Infinity;
-    const check = (x, z, halfW) => {
+    const check = (x, z, halfW, base = 1.6) => {
       const rx = x - v.x, rz = z - v.z;
       const along = rx * fx + rz * fz;
       if (along <= 0 || along > range) return;
       const lat = Math.abs(rx * fz - rz * fx);
-      if (lat < 1.6 + halfW) nearest = Math.min(nearest, along);
+      if (lat < base + halfW) nearest = Math.min(nearest, along);
     };
     for (const o of this.vehicles) {
       if (o === v) continue;
       if (Math.abs(o.x - v.x) > range + 6 || Math.abs(o.z - v.z) > range + 6) continue;
-      for (const [cx, cz] of o.circles()) check(cx, cz, o.radius * 0.6);
+      // a parked car only blocks if the two bodies would actually touch
+      if (o.parked) for (const [cx, cz] of o.circles()) check(cx, cz, o.spec.width / 2, v.spec.width / 2 + 0.1);
+      else for (const [cx, cz] of o.circles()) check(cx, cz, o.radius * 0.6);
     }
     if (!ctx.playerVehicle) check(ctx.px, ctx.pz, 0.3);
     for (const t of ctx.trainBoxes || []) {
@@ -281,7 +287,69 @@ export class Traffic {
       steer,
     };
     if (ctx.horn && Math.hypot(ctx.px - v.x, ctx.pz - v.z) < 25 && obst < 20) input.throttle *= 0.3;
+    // wedged against a wall: back out with opposite lock, then give up and re-place
+    if (c.reverse > 0) {
+      c.reverse -= dt;
+      Object.assign(input, { throttle: 0, brake: 1, steer: -steer });
+    } else if (target > 2 && speed < 0.4 && obst === Infinity) {
+      c.stuck += dt;
+      if (c.stuck > 2.5) {
+        c.stuck = 0;
+        c.reverse = 1.6;
+        c.fails = (c.fails || 0) + 1;
+        if (c.fails >= 3) {
+          c.fails = 0;
+          if (Math.hypot(ctx.px - v.x, ctx.pz - v.z) > 60) {
+            this.remove(v);
+            return;
+          }
+          const [x, z] = this.lanePoint(e, Math.min(e.len, Math.max(0, s) + 6));
+          if (!this.collision.isBlocked(x, z, v.radius)) {
+            v.x = x;
+            v.z = z;
+            v.heading = Math.atan2(e.dx, e.dz);
+            v.vx = v.vz = 0;
+            c.reverse = 0;
+          }
+        }
+      }
+    } else {
+      c.stuck = Math.max(0, c.stuck - dt);
+      if (speed > 3) c.fails = 0;
+    }
+    // jammed behind something that never moves (a deadlock on a narrow street, a car
+    // left in the lane): lose patience, back up and take another way
+    if (obst < Infinity && speed < 0.4 && c.reverse <= 0) c.blocked = (c.blocked || 0) + dt;
+    else c.blocked = 0;
+    if (c.blocked > 12) {
+      c.blocked = 0;
+      if (Math.hypot(ctx.px - v.x, ctx.pz - v.z) > 120) {
+        this.remove(v);
+        return;
+      }
+      c.reverse = 1.8;
+      c.path = null;
+    }
     v.update(dt, input, this.collision);
+
+    // last resort, whatever the reason: no real progress in 20 s
+    if (!c.anchor || Math.hypot(v.x - c.anchor[0], v.z - c.anchor[1]) > 3) {
+      c.anchor = [v.x, v.z];
+      c.idle = 0;
+    } else if ((c.idle += dt) > 20) {
+      c.idle = 0;
+      if (Math.hypot(ctx.px - v.x, ctx.pz - v.z) > 60) {
+        this.remove(v);
+        return;
+      }
+      const [x, z] = this.lanePoint(e, Math.min(e.len, Math.max(0, s) + 8));
+      if (!this.collision.isBlocked(x, z, v.radius)) {
+        v.x = x;
+        v.z = z;
+        v.heading = Math.atan2(e.dx, e.dz);
+        v.vx = v.vz = 0;
+      }
+    }
 
     // got pushed off its route -> re-acquire
     const dev = Math.abs((v.x - e.a.x) * -e.dz + (v.z - e.a.z) * e.dx - laneOffset(e.road));

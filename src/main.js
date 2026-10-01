@@ -7,6 +7,7 @@ import { Input } from './input.js';
 import { TouchControls, isTouchDevice } from './touch.js';
 import { enterFullscreen, exitFullscreen, fullscreenElement, setupFullscreenButton } from './fullscreen.js';
 import { Hud } from './hud.js';
+import { Gps } from './gps.js';
 import { Audio } from './audio.js';
 import { Player, doorPoint } from './entities/player.js';
 import { Vehicle } from './entities/vehicle.js';
@@ -15,7 +16,7 @@ import { Peds } from './entities/peds.js';
 import { Trains, trainHit } from './entities/train.js';
 import { Buses } from './entities/buses.js';
 import { Photoreal, defaultToken, savedToken, saveToken } from './world/photoreal.js';
-import { headlightMaterial } from './entities/models.js';
+import { headlightMaterial, loadVehicleModels } from './entities/models.js';
 
 const loadingText = document.getElementById('loading-text');
 const setLoading = (t) => (loadingText.textContent = t);
@@ -58,6 +59,7 @@ async function main() {
 
   setLoading('Cargando datos de Quilmes…');
   await nextFrame();
+  const models = loadVehicleModels(import.meta.env.BASE_URL);
   const data = await loadCityData();
   setLoading(`Construyendo ${data.buildings.length.toLocaleString('es-AR')} edificios y ${data.roads.length.toLocaleString('es-AR')} calles…`);
   await nextFrame();
@@ -72,8 +74,10 @@ async function main() {
   if (mobile) env.sun.shadow.mapSize.set(1024, 1024); // lighter on phones
   const hud = new Hud(data);
   setupFullscreenButton((msg) => hud.toast(msg, 7));
+  const gps = new Gps(data, world.graph, hud);
   const audio = new Audio();
   const rng = mulberry32(Date.now() & 0xffff);
+  await models;
   const traffic = new Traffic(scene, world.graph, world.collision, rng);
   const peds = new Peds(scene, world.graph, world.collision, rng);
   const trains = new Trains(scene, data);
@@ -121,6 +125,7 @@ async function main() {
   let bustedTimer = 0;
   let totalTime = 0;
   let deadTimer = 0;
+  let riding = null; // bus the player travels in as a passenger
   const crimeCooldown = new Map();
   const onCrime = (what, amount) => {
     const last = crimeCooldown.get(what) || -10;
@@ -183,7 +188,7 @@ async function main() {
   const setGhostMode = (on) => {
     if (on === ghost.on) return;
     if (on) {
-      if (player.vehicle || player.transition || deadTimer > 0) {
+      if (player.vehicle || riding || player.transition || deadTimer > 0) {
         hud.toast('Salí del auto y quedate a pie para activar el modo fantasma.', 5);
         return;
       }
@@ -258,6 +263,39 @@ async function main() {
     });
   }
 
+  // Passenger: board a stopped colectivo, ride its real route, get off at a stop.
+  function board(b) {
+    if (wanted > 0) {
+      hud.toast('Con la policía atrás el chofer no te deja subir. Robalo con R.');
+      return;
+    }
+    if (Math.abs(b.v.speed) > 1.5) {
+      hud.toast('Esperá a que el colectivo frene para subir.');
+      return;
+    }
+    riding = b;
+    b.getOff = false;
+    player.mesh.visible = false;
+    hud.toast(`Pagaste con la SUBE. Viajás en el ${b.v.busLine} ${b.v.busHeadsign}. E: bajar en la próxima parada.`, 5);
+  }
+
+  function alight(reason) {
+    const v = riding.v;
+    const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
+    // onto the sidewalk by the parada pole; away from a stop, the right-hand curb
+    const st = buses.stopById.get(riding.r.stops[riding.nextStop]?.id);
+    const nearStop = st && Math.hypot(st.px - v.x, st.pz - v.z) < 25;
+    const curb = nearStop ? { x: st.px - fx * 1.2, z: st.pz - fz * 1.2 } : buses.curb({ x: v.x, z: v.z, dx: fx, dz: fz }, 1.2) || { x: v.x - fz * 4, z: v.z + fx * 4 };
+    const d = world.collision.resolve(curb.x, curb.z, 0.35);
+    player.x = d.x;
+    player.z = d.z;
+    player.heading = v.heading;
+    player.mesh.visible = true;
+    player.sync();
+    hud.toast(reason);
+    riding = null;
+  }
+
   function exitVehicle() {
     const v = player.vehicle;
     player.vehicle = null;
@@ -280,10 +318,11 @@ async function main() {
   }
 
   function frame() {
-    const dt = Math.min(0.05, clock.getDelta());
+    const dt = gps.open ? 0 : Math.min(0.05, clock.getDelta()); // the map pauses the game
     totalTime += dt;
     hours = (hours + dt * timeScale) % 24;
 
+    if (input.hit('KeyM') || (gps.open && input.hit('Escape'))) gps.toggle(!gps.open, ghost.on ? ghost.x : player.x, ghost.on ? ghost.z : player.z);
     if (input.hit('Tab')) helpEl.classList.toggle('hidden');
     if (input.hit('KeyT')) hours = (hours + 1) % 24;
     if (input.hit('KeyG')) setPhotoMode(!photoMode);
@@ -344,6 +383,26 @@ async function main() {
         while (d < -Math.PI) d += Math.PI * 2;
         if (cam.idle > 0.3) cam.yaw += d * Math.min(1, dt * 3);
       }
+    } else if (riding) {
+      const b = riding, v = b.v;
+      player.x = v.x;
+      player.z = v.z;
+      player.heading = v.heading;
+      const stopped = b.wait > 0 && Math.abs(v.speed) < 0.5;
+      if (!buses.list.includes(b) || v.driver !== 'bus') alight('El colectivo quedó fuera de servicio. Te bajaste.');
+      else if (b.ended) alight(`Fin del recorrido del ${v.busLine}. Te bajaste.`);
+      else if (stopped && (b.getOff || input.hit('KeyE'))) alight(`Bajaste en ${buses.stopById.get(b.r.stops[b.nextStop]?.id)?.name || 'la parada'}.`);
+      else if (input.hit('KeyE') && !b.getOff) {
+        b.getOff = true;
+        hud.toast(`Te bajás en la próxima parada: ${buses.nextStopName(b)}.`);
+      }
+      if (cam.idle > 1.2 && Math.abs(v.speed) > 2) {
+        let d = v.heading - cam.yaw;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        cam.yaw += d * Math.min(1, dt * 2);
+        cam.pitch += (0.28 - cam.pitch) * Math.min(1, dt * 2);
+      }
     } else if (inCar) {
       const v = player.vehicle;
       throttle = input.down('KeyW', 'ArrowUp') ? 1 : 0;
@@ -375,7 +434,12 @@ async function main() {
       }
     } else {
       player.update(dt, input, cam.yaw, world.collision);
-      if (input.hit('KeyE')) tryEnterVehicle();
+      const bus = buses?.near(player.x, player.z);
+      if (input.hit('KeyE')) {
+        if (bus) board(bus);
+        else tryEnterVehicle();
+      }
+      if (input.hit('KeyR')) tryEnterVehicle(); // steal whatever is closest, colectivos included
       if (input.hit('KeyF')) {
         // empujón
         player.push();
@@ -410,7 +474,7 @@ async function main() {
     const trainBoxes = trains.update(dt);
     if (!ghost.on) for (const box of trainBoxes) {
       const moving = Math.hypot(box.vx, box.vz) > 1;
-      if (!player.vehicle && deadTimer <= 0) {
+      if (!player.vehicle && !riding && deadTimer <= 0) {
         const h = trainHit(box, player.x, player.z, 0.35);
         if (h) {
           player.x += h.nx * h.push;
@@ -454,7 +518,7 @@ async function main() {
 
     const px = ghost.on ? ghost.x : player.x;
     const pz = ghost.on ? ghost.z : player.z;
-    const ctx = { px, pz, playerVehicle: player.vehicle, peds: peds.list, wanted, time: totalTime, horn, onCrime, trainBoxes };
+    const ctx = { px, pz, riding, playerVehicle: player.vehicle, peds: peds.list, wanted, time: totalTime, horn, onCrime, trainBoxes };
     const carHit = traffic.update(dt, ctx);
     buses?.update(dt, ctx, rng);
     if (!ghost.on && carHit > 3) audio.thump(carHit);
@@ -472,7 +536,7 @@ async function main() {
         if (!wanted) hud.toast('Perdiste a la policía');
       }
       const slow = !player.vehicle || Math.abs(player.vehicle.speed) < 2.5;
-      if (nearestCop < 7 && slow) bustedTimer += dt;
+      if (nearestCop < 7 && slow && !riding) bustedTimer += dt;
       else bustedTimer = Math.max(0, bustedTimer - dt);
       if (bustedTimer > 2) {
         bustedTimer = 0;
@@ -487,8 +551,9 @@ async function main() {
 
     // ------------------------------------------------------------- camera
     inCar = !!player.vehicle; // may have changed this frame (got in/out, busted)
-    const focusY = inCar ? 1.6 : 1.5 + player.y;
-    const baseDist = inCar ? 5 + player.vehicle.spec.length * 0.9 : 4.2;
+    const camV = player.vehicle || riding?.v;
+    const focusY = camV ? (riding ? 2.4 : 1.6) : 1.5 + player.y;
+    const baseDist = camV ? 5 + camV.spec.length * 0.9 : 4.2;
     cam.base = cam.base ? cam.base + (baseDist - cam.base) * Math.min(1, dt * 3) : baseDist; // smooth zoom on enter/exit
     const dist = cam.base * camModes[cam.mode];
     const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
@@ -541,11 +606,17 @@ async function main() {
     hud.setClock(hours);
     hud.setHealth(ghost.on ? player.health : inCar ? player.vehicle.health : player.health);
     let hint = '';
-    if (!ghost.on && !inCar && deadTimer <= 0 && !player.transition) {
+    if (!ghost.on && !inCar && !riding && deadTimer <= 0 && !player.transition) {
       const v = traffic.vehicles.find((v) => Math.min(...v.circles().map(([x, z]) => Math.hypot(x - px, z - pz))) < 4.5);
-      if (v) hint = v.driver === 'npc' ? 'E: robar el auto' : v.driver === 'police' ? 'E: robar el patrullero' : v.driver === 'bus' ? `E: robar el colectivo ${v.busLine}` : 'E: subir al auto';
+      if (v) hint = v.driver === 'npc' ? 'E: robar el auto' : v.driver === 'police' ? 'E: robar el patrullero' : v.driver === 'bus' ? `E: viajar en el ${v.busLine} ${v.busHeadsign} · R: robarlo` : 'E: subir al auto';
     }
-    if (!hint && !inCar && buses && !ghost.on) {
+    if (!hint && !inCar && !riding && !ghost.on) {
+      // in front of a business: its name and what it is
+      const shop = world.shopList?.find((p) => Math.hypot(p.x + p.ox * 1.5 - px, p.z + p.oz * 1.5 - pz) < 3.5);
+      if (shop) hint = `${shop.shop.name} · ${shop.label}`;
+    }
+    if (riding) hint = `Línea ${riding.v.busLine} ${riding.v.busHeadsign} · Próxima: ${buses.nextStopName(riding)}${riding.getOff ? ' (bajás)' : ' · E: bajar'}`;
+    if (!hint && !inCar && !riding && buses && !ghost.on) {
       const st = buses.nearestStop(px, pz, 6);
       if (st) hint = `Parada ${st.name} · Líneas ${st.lines.join(', ')}`;
     }
@@ -553,7 +624,8 @@ async function main() {
     const blips = [];
     for (const t of trainBoxes) blips.push({ x: t.x, z: t.z, color: '#1d4fa0', r: 3 });
     for (const v of traffic.vehicles) if (v.driver === 'police') blips.push({ x: v.x, z: v.z, color: Math.floor(totalTime * 4) % 2 ? '#e74c3c' : '#3498db', r: 4 });
-    hud.drawMinimap(px, pz, ghost.on ? ghost.yaw : player.heading, cam.yaw, blips);
+    gps.update(dt, px, pz, inCar || !!riding);
+    hud.drawMinimap(px, pz, ghost.on ? ghost.yaw : player.heading, cam.yaw, blips, gps);
     hud.update(dt);
     audio.update({ inCar, speed: inCar ? player.vehicle.speed : 0, throttle, horn, sirenDist: nearestCop, time: totalTime });
 
