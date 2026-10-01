@@ -15,7 +15,7 @@ const r1 = (v) => Math.round(v * 10) / 10;
 export const FENCE_TYPES = ['reja', 'muro', 'bajo', 'ligustro', 'alambre', 'porton'];
 const F = Object.fromEntries(FENCE_TYPES.map((t, i) => [t, i]));
 
-export function conurbano({ roads, buildings, areas, rails, specials = [], divisions = [], radius, log = console.log }) {
+export function conurbano({ roads, buildings, areas, rails, specials = [], divisions = [], radius, inside = null, log = console.log }) {
   const rng = mulberry32(1917);
   const L = Math.ceil((radius * 1.05 + 40) / C) * C;
   const N = (2 * L) / C;
@@ -537,7 +537,7 @@ export function conurbano({ roads, buildings, areas, rails, specials = [], divis
   const lim = radius * 1.05 - 10;
   const inMap = (k) => {
     const [x, z] = center(k);
-    return Math.abs(x) < lim && Math.abs(z) < lim;
+    return inside ? inside([x, z]) : Math.abs(x) < lim && Math.abs(z) < lim;
   };
   const emptyCell = (k) => inMap(k) && zone[k] < 0 && (mask[k] === 0 || mask[k] === 3) && rdA[k] > 2 && (!nearOcc[k] || mask[k] === 3);
   const wf = flood(emptyCell);

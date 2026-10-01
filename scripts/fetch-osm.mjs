@@ -4,6 +4,7 @@
 //
 //   npm run fetch-osm                          # 2 km around Plaza San Martín (reaches the river)
 //   npm run fetch-osm -- --radius 2500         # bigger area (heavier)
+//   npm run fetch-osm -- --extent scripts/extent.json   # playable area = union of polygons (world m)
 //   npm run fetch-osm -- --lat -34.72 --lon -58.25
 //   npm run fetch-osm -- --input raw.json      # convert a saved Overpass response
 //   npm run fetch-osm -- --no-infill           # don't fill blocks missing buildings
@@ -25,7 +26,11 @@ import { conurbano } from './conurbano.mjs';
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const args = parseArgs(process.argv.slice(2));
 const center = { lat: +(args.lat ?? QUILMES_CENTER.lat), lon: +(args.lon ?? QUILMES_CENTER.lon) };
-const radius = +(args.radius ?? 2000);
+// Playable area: a square of `radius` around the center, or the union of the
+// polygons (world meters) in an extent file.
+const extent = args.extent ? JSON.parse(fs.readFileSync(path.resolve(path.dirname(path.dirname(fileURLToPath(import.meta.url))), args.extent))).polygons : null;
+const ext = extent ? bbox(extent.flat()) : null;
+const radius = ext ? Math.ceil(Math.max(-ext.minX, ext.maxX, -ext.minZ, ext.maxZ) / 1.05) : +(args.radius ?? 2000);
 const outFile = path.resolve(root, args.out ?? 'public/data/quilmes.json');
 const cacheFile = path.resolve(root, '.cache/osm-raw.json');
 
@@ -49,9 +54,9 @@ function parseArgs(argv) {
 }
 
 async function download() {
-  const dLat = radius / 110540;
-  const dLon = radius / (111320 * Math.cos((center.lat * Math.PI) / 180));
-  const bb = [center.lat - dLat, center.lon - dLon, center.lat + dLat, center.lon + dLon].map((v) => v.toFixed(6)).join(',');
+  const kx = 111320 * Math.cos((center.lat * Math.PI) / 180), kz = 110540;
+  const e = ext || { minX: -radius, minZ: -radius, maxX: radius, maxZ: radius };
+  const bb = [center.lat - (e.maxZ + 300) / kz, center.lon + (e.minX - 300) / kx, center.lat - (e.minZ - 300) / kz, center.lon + (e.maxX + 300) / kx].map((v) => v.toFixed(6)).join(',');
   const query = `[out:json][timeout:240];
 (
   way["building"](${bb});
@@ -284,7 +289,9 @@ function convert(osm) {
   const shopNodes = [], addresses = [];
   const overture = osm.generator === 'overture';
   const lim = radius * 1.05;
-  const inside = ([x, z]) => Math.abs(x) <= lim && Math.abs(z) <= lim;
+  // R: rectangle around the playable area; inside(): really in it
+  const R = ext ? { minX: ext.minX - 130, minZ: ext.minZ - 130, maxX: ext.maxX + 130, maxZ: ext.maxZ + 130 } : { minX: -lim, minZ: -lim, maxX: lim, maxZ: lim };
+  const inside = ([x, z]) => x >= R.minX && x <= R.maxX && z >= R.minZ && z <= R.maxZ && (!extent || extent.some((poly) => pointInPolygon(x, z, poly)));
 
   // Points of interest first, so buildings that contain a known place keep their
   // whole footprint (they are not split into lots) and get a special shape.
@@ -366,12 +373,13 @@ function convert(osm) {
           oneway = true;
           rpts = pts.slice().reverse();
         }
+        if (extent && !rpts.some(inside)) continue;
         roads.push({ pts: rpts, w, name: t.name || '', kind, oneway });
         continue;
       }
       if (t.railway) {
         // keep only the runs inside the playable area (plus a margin)
-        const m = lim + 300;
+        const m = 300;
         let run = [], hasInside = false;
         const flush = () => {
           if (hasInside && run.length > 1) rails.push({ pts: run });
@@ -379,7 +387,7 @@ function convert(osm) {
           hasInside = false;
         };
         for (const p of pts) {
-          if (Math.abs(p[0]) <= m && Math.abs(p[1]) <= m) {
+          if (p[0] >= R.minX - m && p[0] <= R.maxX + m && p[1] >= R.minZ - m && p[1] <= R.maxZ + m) {
             run.push(p);
             hasInside = true;
           } else {
@@ -432,11 +440,11 @@ function convert(osm) {
   }
 
   function addArea(kind, ring, t) {
-    const clipped = clipRect(ring, -lim - 200, -lim - 200, lim + 200, lim + 200);
+    const clipped = clipRect(ring, R.minX - 200, R.minZ - 200, R.maxX + 200, R.maxZ + 200);
     if (clipped.length < 3) return;
     if (kind === 'water' && Math.abs(polygonArea(ring)) > 4e6) {
       // big river: draw it to the horizon, collide only inside the playable area
-      const far = clipRect(ring, -lim - 6000, -lim - 6000, lim + 6000, lim + 6000);
+      const far = clipRect(ring, R.minX - 6000, R.minZ - 6000, R.maxX + 6000, R.maxZ + 6000);
       areas.push({ kind, pts: far, noCollide: true });
       barriers.push({ pts: clipped });
       return;
@@ -497,7 +505,7 @@ function convert(osm) {
       const len = Math.hypot(bx - ax, bz - az) || 1;
       const nx = -(bz - az) / len, nz = (bx - ax) / len; // right side
       normals.push([nx, nz]);
-      if (Math.max(ax, bx) < -lim || Math.min(ax, bx) > lim || Math.max(az, bz) < -lim || Math.min(az, bz) > lim) continue;
+      if (Math.max(ax, bx) < R.minX || Math.min(ax, bx) > R.maxX || Math.max(az, bz) < R.minZ || Math.min(az, bz) > R.maxZ) continue;
       areas.push({ kind: 'water', noCollide: true, pts: [[ax, az], [bx, bz], [r1(bx + nx * L), r1(bz + nz * L)], [r1(ax + nx * L), r1(az + nz * L)]] });
       barriers.push({ pts: [[ax, az], [bx, bz], [r1(bx + nx * near), r1(bz + nz * near)], [r1(ax + nx * near), r1(az + nz * near)]] });
     }
@@ -532,7 +540,7 @@ function convert(osm) {
   let extra = {};
   if (args.conurbano !== false) {
     const t0 = Date.now();
-    const c = conurbano({ roads, buildings, areas, rails, specials, divisions, radius });
+    const c = conurbano({ roads, buildings, areas, rails, specials, divisions, radius, inside: extent ? inside : null });
     roads.push(...c.pasillos);
     delete c.pasillos;
     extra = c;
@@ -600,6 +608,7 @@ function convert(osm) {
       generated: new Date().toISOString(),
       origin: center,
       radius,
+      ...(extent ? { extent } : {}),
       bounds,
       roads, buildings, areas, rails, barriers, specials,
       ...extra,

@@ -12,9 +12,9 @@ npm install
 npm run dev         # abrí http://localhost:5173
 ```
 
-El repositorio ya incluye el **mapa real de Quilmes** (`public/data/quilmes.json`): un cuadrado de 5 km
-centrado en la Plaza San Martín, con **4.816 calles** con su nombre y sentido reales y **67.579 edificios**
-(Quilmes centro, Bernal, Quilmes Oeste, Ezpeleta, la autopista, la ribera y el Río de la Plata).
+El repositorio ya incluye el **mapa real de Quilmes** (`public/data/quilmes.json`): desde la Plaza San Martín
+hasta el río, y por Quilmes Oeste hasta Avellaneda (Bernal), Av. Mosconi y Av. Oscar Smith
+(`scripts/extent.json`), con **6.864 calles** con su nombre y sentido reales y **99.133 edificios**.
 Para regenerarlo o ampliarlo mirá [Mapa real](#mapa-real-de-quilmes).
 
 Si el archivo no está, el juego arranca con una **aproximación procedural** del centro de Quilmes.

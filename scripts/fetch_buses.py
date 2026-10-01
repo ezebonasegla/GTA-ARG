@@ -78,7 +78,21 @@ def main():
     to_world = enu_projection(lat0, lon0)
     b = city['bounds']
     lim = (b['minX'] - a.margin, b['minZ'] - a.margin, b['maxX'] + a.margin, b['maxZ'] + a.margin)
-    inside = lambda x, z: lim[0] <= x <= lim[2] and lim[1] <= z <= lim[3]  # noqa: E731
+    polys = city.get('extent')  # playable area as polygons (world m), if the map has one
+
+    def in_poly(x, z, pts):
+        c = False
+        for i in range(len(pts)):
+            (xi, zi), (xj, zj) = pts[i], pts[i - 1]
+            if (zi > z) != (zj > z) and x < (xj - xi) * (z - zi) / (zj - zi) + xi:
+                c = not c
+        return c
+
+    def inside(x, z):
+        if not (lim[0] <= x <= lim[2] and lim[1] <= z <= lim[3]):
+            return False
+        # within the margin of the playable polygons (test the point and 4 offsets)
+        return not polys or any(in_poly(x + dx, z + dz, p) for p in polys for dx, dz in ((0, 0), (a.margin, 0), (-a.margin, 0), (0, a.margin), (0, -a.margin)))
 
     if not os.path.exists(a.gtfs):
         os.makedirs(os.path.dirname(a.gtfs), exist_ok=True)

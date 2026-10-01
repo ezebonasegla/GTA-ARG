@@ -5,7 +5,7 @@
 // nearby) is updated in place instead of duplicated.
 //   node scripts/import-places.mjs ~/Downloads/places.csv [--kind restaurant]
 import fs from 'node:fs';
-import { makeProjection } from '../src/world/geo.js';
+import { makeProjection, pointInPolygon } from '../src/world/geo.js';
 
 const [csvPath, ...rest] = process.argv.slice(2);
 if (!csvPath) throw new Error('uso: node scripts/import-places.mjs archivo.csv [--kind restaurant]');
@@ -77,7 +77,7 @@ for (const r of parseCsv(fs.readFileSync(csvPath, 'utf8'))) {
   const m = (r['Maps URL'] || '').match(/!3d(-?[\d.]+)!4d(-?[\d.]+)/);
   if (!m || !r.Name) continue;
   const [x, z] = proj.toWorld(+m[1], +m[2]).map((v) => Math.round(v * 10) / 10);
-  if (x < minX || x > maxX || z < minZ || z > maxZ) { skipped++; continue; }
+  if (x < minX || x > maxX || z < minZ || z > maxZ || (data.extent && !data.extent.some((poly) => pointInPolygon(x, z, poly)))) { skipped++; continue; }
   const name = r.Name.replace(/\s*[|·-]\s*(quilmes.*)?$/i, '').replace(/^"|"$/g, '').trim() || r.Name;
   if (PLACE.test(r.Category) || /^(plaza|parque|plazoleta)\b/i.test(name)) {
     const near = data.landmarks.some((l) => Math.hypot(l.pos[0] - x, l.pos[1] - z) < 120 && norm(l.name).includes(norm(name).replace(/^(plaza|parque) /, '')));

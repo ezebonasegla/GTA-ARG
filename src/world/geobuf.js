@@ -23,9 +23,10 @@ class List {
     if (y !== undefined) a[this.length++] = y;
     if (z !== undefined) a[this.length++] = z;
   }
-  // the filled part, as a view (no copy: copying every buffer doubled the peak memory)
+  // the filled part: a view when the buffer is nearly full, else a trimmed copy so the
+  // doubling slack (up to half the buffer) doesn't stay alive with the mesh
   take() {
-    const out = this.a.subarray(0, this.length);
+    const out = this.length > this.a.length * 0.8 ? this.a.subarray(0, this.length) : this.a.slice(0, this.length);
     this.a = new this.Type(0);
     this.length = 0;
     return out;
@@ -105,34 +106,64 @@ export class GeoBuf {
 const _v = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _nm = new THREE.Matrix3();
+// Props are kept as a compact list (template, matrix, color: ~84 bytes each) and only
+// baked into a mesh when needed: a baked cube is 36 full vertices, and the whole
+// city's props baked at once was the largest chunk of memory on phones.
+const _m4 = new THREE.Matrix4();
 export class PropBuf {
   constructor() {
-    this.pos = new List(Float32Array);
-    this.nor = new List(Int8Array);
-    this.col = new List(Uint8Array);
+    this.tpls = [];
+    this.tpl = new List(Uint16Array);
+    this.mat = new List(Float32Array);
+    this.col = new List(Float32Array);
   }
   add(template, matrix, color, shade = 0) {
-    const p = template.attributes.position.array, n = template.attributes.normal.array;
-    _nm.getNormalMatrix(matrix);
-    for (let i = 0; i < p.length; i += 3) {
-      _v.set(p[i], p[i + 1], p[i + 2]).applyMatrix4(matrix);
-      _n.set(n[i], n[i + 1], n[i + 2]).applyMatrix3(_nm).normalize();
-      this.pos.push(_v.x, _v.y, _v.z);
-      this.nor.push(n8(_n.x), n8(_n.y), n8(_n.z));
-      const k = shade ? 1 - shade * ((i * 7919) % 13) / 13 : 1;
-      this.col.push(c8(color.r * k), c8(color.g * k), c8(color.b * k));
-    }
+    let t = this.tpls.indexOf(template);
+    if (t < 0) t = this.tpls.push(template) - 1;
+    this.tpl.push(t);
+    const e = matrix.elements;
+    for (let i = 0; i < 16; i += 2) this.mat.push(e[i], e[i + 1]);
+    this.col.push(color.r, color.g, color.b);
+    this.col.push(shade);
   }
   get empty() {
-    return this.pos.length === 0;
+    return this.tpl.length === 0;
   }
+  // Baked geometry; the list is kept so the mesh can be rebuilt after a dispose.
   geometry() {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(this.pos.take(), 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(this.nor.take(), 3, true));
-    g.setAttribute('color', new THREE.BufferAttribute(this.col.take(), 3, true));
-    g.computeBoundingSphere();
-    return g;
+    let verts = 0;
+    for (let k = 0; k < this.tpl.length; k++) verts += this.tpls[this.tpl.a[k]].attributes.position.count;
+    const pos = new Float32Array(verts * 3), nor = new Int8Array(verts * 3), col = new Uint8Array(verts * 3);
+    let o = 0;
+    for (let k = 0; k < this.tpl.length; k++) {
+      const tp = this.tpls[this.tpl.a[k]];
+      const p = tp.attributes.position.array, n = tp.attributes.normal.array;
+      _m4.fromArray(this.mat.a, k * 16);
+      _nm.getNormalMatrix(_m4);
+      const r = this.col.a[k * 4], g = this.col.a[k * 4 + 1], b = this.col.a[k * 4 + 2], shade = this.col.a[k * 4 + 3];
+      for (let i = 0; i < p.length; i += 3, o += 3) {
+        _v.set(p[i], p[i + 1], p[i + 2]).applyMatrix4(_m4);
+        _n.set(n[i], n[i + 1], n[i + 2]).applyMatrix3(_nm).normalize();
+        pos[o] = _v.x; pos[o + 1] = _v.y; pos[o + 2] = _v.z;
+        nor[o] = n8(_n.x); nor[o + 1] = n8(_n.y); nor[o + 2] = n8(_n.z);
+        const k2 = shade ? 1 - shade * ((i * 7919) % 13) / 13 : 1;
+        col[o] = c8(r * k2); col[o + 1] = c8(g * k2); col[o + 2] = c8(b * k2);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3, true));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3, true));
+    geo.computeBoundingSphere();
+    return geo;
+  }
+  // trim the lists once filling is over
+  pack() {
+    for (const l of [this.tpl, this.mat, this.col]) {
+      const n = l.length;
+      l.a = l.a.slice(0, n);
+      l.length = n;
+    }
   }
 }
 
@@ -149,6 +180,7 @@ export class ChunkSet {
     this.size = size;
     this.map = new Map();
     this.detail = []; // small stuff hidden beyond `range` meters
+    this.lazy = []; // props baked only while the camera is near
   }
   at(x, z) {
     const key = `${Math.floor(x / this.size)},${Math.floor(z / this.size)}`;
@@ -157,6 +189,8 @@ export class ChunkSet {
     return c;
   }
   build(root, mats) {
+    this.root = root;
+    this.mats = mats;
     for (const [key, c] of this.map) {
       const [ix, iz] = key.split(',').map(Number);
       const cx = (ix + 0.5) * this.size, cz = (iz + 0.5) * this.size;
@@ -167,10 +201,9 @@ export class ChunkSet {
         root.add(m);
       }
       if (!c.props.empty) {
-        const m = new THREE.Mesh(freeAfterUpload(c.props.geometry()), mats.props);
-        m.castShadow = m.receiveShadow = true;
-        root.add(m);
-        detail(m, 420);
+        // baked on demand near the camera (see updateDetail)
+        c.props.pack();
+        this.lazy.push({ props: c.props, mesh: null, cx, cz, range: 420 + this.size * 0.7 });
       }
       if (!c.alpha.empty) {
         const m = new THREE.Mesh(freeAfterUpload(c.alpha.geometry()), mats.alpha);
@@ -191,8 +224,24 @@ export class ChunkSet {
       this.map.delete(key); // let this chunk's buffers go before the next one
     }
   }
-  // Show the small details only around the camera.
+  // Show the small details only around the camera; bake nearby props (a couple per
+  // frame so driving doesn't stutter) and free the far ones.
   updateDetail(p) {
     for (const d of this.detail) d.mesh.visible = (d.cx - p.x) ** 2 + (d.cz - p.z) ** 2 < d.range * d.range;
+    let budget = 2;
+    for (const l of this.lazy) {
+      const d2 = (l.cx - p.x) ** 2 + (l.cz - p.z) ** 2;
+      if (d2 < l.range * l.range) {
+        if (!l.mesh && budget-- > 0) {
+          l.mesh = new THREE.Mesh(freeAfterUpload(l.props.geometry()), this.mats.props);
+          l.mesh.castShadow = l.mesh.receiveShadow = true;
+          this.root.add(l.mesh);
+        }
+      } else if (l.mesh && d2 > (l.range * 1.4) ** 2) {
+        this.root.remove(l.mesh);
+        l.mesh.geometry.dispose();
+        l.mesh = null;
+      }
+    }
   }
 }

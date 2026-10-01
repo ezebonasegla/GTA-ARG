@@ -133,14 +133,23 @@ def main():
     ap.add_argument('--lat', type=float, default=-34.7206)
     ap.add_argument('--lon', type=float, default=-58.2546)
     ap.add_argument('--radius', type=float, default=2500, help='metros')
+    ap.add_argument('--extent', default=None, help='archivo con poligonos en metros del juego (scripts/extent.json); reemplaza --radius')
     ap.add_argument('--release', default=None)
     ap.add_argument('--out', default=os.path.join(os.path.dirname(__file__), '..', '.cache', 'overture-raw.json'))
     ap.add_argument('--only-addresses', action='store_true', help='solo actualizar las direcciones de un --out existente')
     a = ap.parse_args()
 
-    dlat = a.radius / 110540 * 1.1
-    dlon = a.radius / (111320 * math.cos(math.radians(a.lat))) * 1.1
-    bb = (a.lon - dlon, a.lat - dlat, a.lon + dlon, a.lat + dlat)
+    kx, kz = 111320 * math.cos(math.radians(a.lat)), 110540
+    if a.extent:
+        with open(a.extent) as f:
+            pts = [p for poly in json.load(f)['polygons'] for p in poly]
+        xs, zs = [p[0] for p in pts], [p[1] for p in pts]
+        # world x east, z south -> lon/lat, with a 300 m margin
+        bb = (a.lon + (min(xs) - 300) / kx, a.lat - (max(zs) + 300) / kz, a.lon + (max(xs) + 300) / kx, a.lat - (min(zs) - 300) / kz)
+    else:
+        dlat = a.radius / kz * 1.1
+        dlon = a.radius / kx * 1.1
+        bb = (a.lon - dlon, a.lat - dlat, a.lon + dlon, a.lat + dlat)
     s3 = pafs.S3FileSystem(anonymous=True, region='us-west-2')
     release = a.release or latest_release(s3)
     print(f'Overture {release}, bbox {tuple(round(v, 4) for v in bb)}')

@@ -3,7 +3,7 @@
 //   npm run fetch-shops
 // Map data © OpenStreetMap contributors, available under the ODbL.
 import fs from 'node:fs';
-import { makeProjection } from '../src/world/geo.js';
+import { makeProjection, pointInPolygon } from '../src/world/geo.js';
 
 const file = new URL('../public/data/quilmes.json', import.meta.url);
 const data = JSON.parse(fs.readFileSync(file));
@@ -34,6 +34,7 @@ for (const el of osm.elements) {
   const t = el.tags;
   const [x, z] = proj.toWorld(lat, lon);
   if (x < minX || x > maxX || z < minZ || z > maxZ) continue;
+  if (data.extent && !data.extent.some((poly) => pointInPolygon(x, z, poly))) continue;
   const key = `${t.name}@${Math.round(x / 10)},${Math.round(z / 10)}`;
   if (seen.has(key)) continue;
   seen.add(key);
