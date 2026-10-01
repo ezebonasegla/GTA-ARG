@@ -20,6 +20,7 @@ const RUBROS = {
   hogar: ['furniture', 'bed', 'interior_decoration'],
   flores: ['florist', 'garden_centre'],
   libreria: ['books', 'stationery'],
+  boliche: ['nightclub'],
 };
 const RUBRO_OF = Object.fromEntries(Object.entries(RUBROS).flatMap(([r, kinds]) => kinds.map((k) => [k, r])));
 // storefront width (m) and sign color per rubro
@@ -27,11 +28,11 @@ const STYLE = {
   kiosco: { w: 3, sign: '#c0392b' }, farmacia: { w: 5, sign: '#1f8a4c' }, comida: { w: 6, sign: '#7a2b1f' },
   almacen: { w: 6, sign: '#b8431b' }, ferreteria: { w: 5, sign: '#c46a12' }, ropa: { w: 5, sign: '#4a2a63' },
   banco: { w: 7, sign: '#1d3f8a' }, taller: { w: 6, sign: '#3d4a55' }, tecno: { w: 4, sign: '#1e6f8a' }, local: { w: 4.5, sign: '#34495e' },
-  hotel: { w: 6, sign: '#1f2a3a' }, hogar: { w: 7, sign: '#8a5a2b' }, flores: { w: 4, sign: '#2e7d32' }, libreria: { w: 4.5, sign: '#5d4037' },
+  hotel: { w: 6, sign: '#1f2a3a' }, boliche: { w: 9, sign: '#6a1b9a' }, hogar: { w: 7, sign: '#8a5a2b' }, flores: { w: 4, sign: '#2e7d32' }, libreria: { w: 4.5, sign: '#5d4037' },
 };
 const RUBRO_LABEL = {
   kiosco: 'Kiosco', farmacia: 'Farmacia', almacen: 'Almacén', ferreteria: 'Ferretería', ropa: 'Ropa y accesorios', banco: 'Banco',
-  taller: 'Autos y talleres', tecno: 'Tecnología', hotel: 'Hotel', hogar: 'Muebles y hogar', flores: 'Florería', libreria: 'Librería', local: 'Local',
+  taller: 'Autos y talleres', tecno: 'Tecnología', hotel: 'Hotel', boliche: 'Boliche', hogar: 'Muebles y hogar', flores: 'Florería', libreria: 'Librería', local: 'Local',
 };
 export function rubroOf(shop) {
   // OSM often tags appliance chains as shop=electrical (a ferretería-like rubro)
@@ -49,6 +50,44 @@ export function buildShops(data, { root, graph, collision, nightMaterials }) {
   if (!shops.length) return { count: 0, setNight() {} };
   const bIndex = new SpatialHash(30);
   for (const b of data.buildings) if (!b.special && b.h >= 3) bIndex.insert(b, bbox(b.pts));
+
+  // Boliches are big sheds that the building data often lacks: give them one, facing
+  // the nearest street, so they show up where they really are.
+  const sheds = new GeoBuf();
+  for (const shop of shops) {
+    if (rubroOf(shop) !== 'boliche' || nearestBuilding(bIndex, shop.x, shop.z, 15)) continue;
+    const n = graph.nearest(shop.x, shop.z, 120);
+    if (!n) continue;
+    const { a, b } = n.seg;
+    const l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    const ux = (b.x - a.x) / l, uz = (b.z - a.z) / l;
+    let ox = n.x - shop.x, oz = n.z - shop.z; // from the venue towards the street
+    const ol = Math.hypot(ox, oz) || 1;
+    ox /= ol; oz /= ol;
+    // front on the property line: a 3 m sidewalk back from the curb
+    const off = n.seg.road.w / 2 + 3;
+    const fx = n.x - ox * off, fz = n.z - oz * off;
+    const W = 18, D = 14, H = 7;
+    const P = (along, depth) => [fx + ux * along - ox * depth, fz + uz * along - oz * depth];
+    let pts = [P(-W / 2, 0), P(W / 2, 0), P(W / 2, D), P(-W / 2, D)];
+    if (polygonArea(pts) < 0) pts = pts.reverse();
+    if (pts.some(([x, z]) => collision.isBlocked(x, z, 0))) continue;
+    const bld = { pts, h: H, levels: 1, style: 'industrial' };
+    const dark = new THREE.Color(0.16, 0.15, 0.18);
+    for (let i = 0; i < 4; i++) {
+      const p0 = pts[i], p1 = pts[(i + 1) % 4];
+      sheds.quad([p0[0], 0, p0[1]], [p1[0], 0, p1[1]], [p1[0], H, p1[1]], [p0[0], H, p0[1]], [0, 0], [1, 0], [1, 1], [0, 1], dark, [p1[1] - p0[1], 0, p0[0] - p1[0]]);
+    }
+    sheds.quad(...pts.map(([x, z]) => [x, H, z]), [0, 0], [1, 0], [1, 1], [0, 1], new THREE.Color(0.35, 0.35, 0.36), [0, 1, 0]);
+    collision.addPolygon(pts, H, 'building');
+    data.buildings.push(bld);
+    bIndex.insert(bld, bbox(pts));
+  }
+  if (!sheds.empty) {
+    const m = new THREE.Mesh(sheds.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }));
+    m.castShadow = m.receiveShadow = true;
+    root.add(m);
+  }
 
   const used = new Map(); // `${building}:${edge}` -> taken [s0, s1] intervals along the edge
   const placed = [];
@@ -445,6 +484,36 @@ const DRAW = {
       }
     }
     door(ctx, ectx, x + 186, 70, 60, 186, '#5d4037');
+  },
+  boliche(ctx, ectx, x, S, rng) {
+    frame(ctx, x, S, '#0d0d12', '#000');
+    // tiras de neón (lit at night through the emissive map)
+    const neon = pick(rng, [['#ff3fd0', '#3fe6ff'], ['#a64dff', '#ffe03f'], ['#ff4d4d', '#4dff9a']]);
+    for (const [y, c] of [[64, neon[0]], [236, neon[1]]]) {
+      ctx.fillStyle = c;
+      ctx.fillRect(x, y, S, 5);
+      ectx.fillStyle = c;
+      ectx.fillRect(x, y - 2, S, 9);
+    }
+    for (let i = 0; i < 6; i++) {
+      ctx.fillStyle = ectx.fillStyle = neon[i % 2];
+      ctx.fillRect(x + 8 + i * 42, 80, 3, 140);
+      ectx.fillRect(x + 7 + i * 42, 80, 5, 140);
+    }
+    // puerta doble y boletería
+    ctx.fillStyle = '#1a1a22';
+    ctx.fillRect(x + 70, 96, 116, 140);
+    ctx.fillStyle = '#2b2b38';
+    ctx.fillRect(x + 74, 100, 52, 136);
+    ctx.fillRect(x + 130, 100, 52, 136);
+    ctx.fillStyle = '#c0c4c8';
+    ctx.fillRect(x + 120, 160, 4, 20);
+    ctx.fillRect(x + 132, 160, 4, 20);
+    glass(ctx, ectx, x + 200, 130, 44, 40, '#2a1f30', '#ff9ad0');
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 9px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('BOLETERÍA', x + 222, 182);
   },
   local(ctx, ectx, x, S, rng) {
     frame(ctx, x, S, pick(rng, ['#e6e0d4', '#d9dfe3', '#efe3c8']), '#444');

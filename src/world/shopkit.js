@@ -39,9 +39,9 @@ export const FOOD = {
   resto: { label: 'Restaurante', sign: '#7a2b1f', awning: ['#7a1f1f', '#2f4f3a', '#b3261e', '#1f5f9e'], props: ['tables', 'chalkboard'], icon: 'fork' },
 };
 // blade-sign icons for the other rubros (farmacia keeps its green cross)
-export const RUBRO_ICON = { kiosco: 'candy', ferreteria: 'hammer', ropa: 'hanger', tecno: 'phone', almacen: 'cart', banco: 'coin', taller: 'wrench', hotel: 'bed', hogar: 'sofa', flores: 'flower', libreria: 'book' };
+export const RUBRO_ICON = { kiosco: 'candy', ferreteria: 'hammer', ropa: 'hanger', tecno: 'phone', almacen: 'cart', banco: 'coin', taller: 'wrench', hotel: 'bed', hogar: 'sofa', flores: 'flower', libreria: 'book', boliche: 'disco' };
 // extra street furniture for non-food rubros
-const RUBRO_EXTRA = { hotel: { canopy: 0x1b1b1b, props: ['planters'] }, flores: { props: ['flowers'] } };
+const RUBRO_EXTRA = { hotel: { canopy: 0x1b1b1b, props: ['planters'] }, flores: { props: ['flowers'] }, boliche: { canopy: 0x0b0b0b, props: ['vallas'] } };
 
 // ------------------------------------------------ facades (256 px tile = 4 m x 3.8 m)
 const pick = (rng, a) => a[Math.floor(rng() * a.length)];
@@ -317,6 +317,12 @@ const ICON = {
   phone(c) { c.fillRect(42, 16, 44, 96); c.fillStyle = 'rgba(0,0,0,0.45)'; c.fillRect(48, 26, 32, 70); },
   cart(c) { c.fillRect(26, 40, 70, 36); c.fillRect(14, 30, 18, 6); c.beginPath(); c.arc(40, 92, 9, 0, Math.PI * 2); c.arc(84, 92, 9, 0, Math.PI * 2); c.fill(); },
   coin(c) { c.beginPath(); c.arc(64, 64, 40, 0, Math.PI * 2); c.fill(); c.fillStyle = 'rgba(0,0,0,0.4)'; c.font = 'bold 56px Arial'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('$', 64, 66); },
+  disco(c) {
+    c.beginPath(); c.arc(64, 70, 34, 0, Math.PI * 2); c.fill();
+    c.fillStyle = 'rgba(0,0,0,0.35)';
+    for (let i = -3; i <= 3; i++) { c.fillRect(30, 70 + i * 9, 68, 2); c.fillRect(64 + i * 9, 36, 2, 68); }
+    c.fillStyle = '#fff'; c.fillRect(62, 14, 4, 24);
+  },
   bed(c) { c.fillRect(18, 62, 92, 22); c.fillRect(18, 84, 8, 22); c.fillRect(102, 84, 8, 22); c.fillRect(18, 40, 8, 30); c.beginPath(); c.ellipse(42, 56, 14, 8, 0, 0, Math.PI * 2); c.fill(); },
   sofa(c) { c.fillRect(22, 58, 84, 30); c.fillRect(14, 50, 16, 40); c.fillRect(98, 50, 16, 40); c.fillRect(22, 40, 84, 20); c.fillRect(22, 88, 8, 12); c.fillRect(98, 88, 8, 12); },
   flower(c) { for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; c.beginPath(); c.arc(64 + Math.cos(a) * 20, 52 + Math.sin(a) * 20, 13, 0, Math.PI * 2); c.fill(); } c.fillRect(61, 70, 6, 42); c.fillStyle = 'rgba(0,0,0,0.35)'; c.beginPath(); c.arc(64, 52, 10, 0, Math.PI * 2); c.fill(); },
@@ -362,7 +368,7 @@ export function buildShopKit(root, placed, { graph, collision, nightMaterials })
   };
   const block = (t, r) => collision.addCircle(t[0], t[1], r, 'pole');
   const rng = mulberry32(17);
-  const L = { flowers: [], blades: new Map(), awnings: new Map(), canopies: new Map(), tables: [], umbrellas: [], barrels: [], lamps: [], lanterns: [], noren: [], chalk: [], planters: [], bulbs: [], chimneys: [] };
+  const L = { vallas: [], flowers: [], blades: new Map(), awnings: new Map(), canopies: new Map(), tables: [], umbrellas: [], barrels: [], lamps: [], lanterns: [], noren: [], chalk: [], planters: [], bulbs: [], chimneys: [] };
   const push = (map, key, item) => (map.get(key) || map.set(key, []).get(key)).push(item);
 
   for (const p of placed) {
@@ -390,6 +396,11 @@ export function buildShopKit(root, placed, { graph, collision, nightMaterials })
         const t = at(p, s * (p.w / 2 - 0.55), 0.3);
         if (free(t)) { L.planters.push(t); block(t, 0.4); }
       }
+    }
+    if (props.has('vallas') && p.room > 2) {
+      // vallas con cordón rojo marking the line at the door
+      const t = at(p, 0, 1.3);
+      if (free(t)) { L.vallas.push([...t, 1]); block(t, 0.3); }
     }
     if (props.has('flowers') && p.room > 1.8) {
       for (let j = 0; j < 4; j++) {
@@ -504,6 +515,14 @@ export function buildShopKit(root, placed, { graph, collision, nightMaterials })
   // maceteros con plantas
   instancedChunks(root, new THREE.BoxGeometry(0.85, 0.45, 0.38).translate(0, 0.225, 0), new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.9 }), L.planters, place, { cast: true });
   instancedChunks(root, new THREE.IcosahedronGeometry(0.36, 0).scale(1.2, 0.8, 0.6).translate(0, 0.72, 0), new THREE.MeshStandardMaterial({ color: 0x3f7a2f, roughness: 0.9, flatShading: true }), L.planters, place, { cast: true });
+
+  // vallas: two chrome posts and the red rope between them, along the facade
+  const vallaG = mergeSimpleUV([
+    ...[-1.4, 0, 1.4].flatMap((x) => [new THREE.CylinderGeometry(0.035, 0.035, 0.95, 8).translate(x, 0.475, 0), new THREE.CylinderGeometry(0.16, 0.18, 0.05, 10).translate(x, 0.025, 0), new THREE.SphereGeometry(0.06, 8, 6).translate(x, 0.97, 0)]),
+  ]);
+  instancedChunks(root, vallaG, new THREE.MeshStandardMaterial({ color: 0xd8dde2, metalness: 0.9, roughness: 0.25 }), L.vallas, (m, [x, z, y, yaw]) => m.compose(new THREE.Vector3(x, y, z), q.setFromAxisAngle(yAxis, yaw), new THREE.Vector3(1, 1, 1)), { cast: true });
+  const ropeG = mergeSimpleUV([-0.7, 0.7].map((x) => new THREE.TorusGeometry(0.7, 0.03, 6, 16, Math.PI).rotateZ(Math.PI).scale(1, 0.3, 1).translate(x, 0.92, 0)));
+  instancedChunks(root, ropeG, new THREE.MeshStandardMaterial({ color: 0xb3121f, roughness: 0.6 }), L.vallas, (m, [x, z, y, yaw]) => m.compose(new THREE.Vector3(x, y, z), q.setFromAxisAngle(yAxis, yaw), new THREE.Vector3(1, 1, 1)));
 
   // baldes de flores de la florería
   instancedChunks(root, new THREE.CylinderGeometry(0.2, 0.16, 0.4, 10).translate(0, 0.2, 0), new THREE.MeshStandardMaterial({ color: 0x9aa3a8, metalness: 0.5, roughness: 0.4 }), L.flowers, place, { cast: true });

@@ -77,11 +77,12 @@ export class Environment {
     const golden = THREE.MathUtils.smoothstep(elev, 0, 20);
     this.sun.intensity = 2.8 * THREE.MathUtils.smoothstep(elev, -2, 10);
     this.sun.color.setHSL(0.09 + golden * 0.04, 0.8 - golden * 0.5, 0.6 + golden * 0.3);
-    this.hemi.intensity = 0.55 + 0.35 * day;
-    this.hemi.color.setHSL(0.6, 0.5 - 0.1 * day, 0.35 + 0.45 * day);
-    this.hemi.groundColor.setHSL(0.08, 0.3, 0.12 + 0.2 * day);
-    this.renderer.toneMappingExposure = 0.75 + 0.1 * day;
-    const fogDay = new THREE.Color(0xc9d6e2), fogGold = new THREE.Color(0xe0b98f), fogNight = new THREE.Color(0x0c1220);
+    // nights keep the city glow of the conurbano (street lights, sodium haze), not pitch black
+    this.hemi.intensity = 0.95 - 0.05 * day;
+    this.hemi.color.setHSL(0.6, 0.45 - 0.05 * day, 0.55 + 0.25 * day);
+    this.hemi.groundColor.setHSL(0.08, 0.35, 0.22 + 0.1 * day);
+    this.renderer.toneMappingExposure = 0.95 - 0.1 * day;
+    const fogDay = new THREE.Color(0xc9d6e2), fogGold = new THREE.Color(0xe0b98f), fogNight = new THREE.Color(0x1a2238);
     const fog = fogNight.clone().lerp(fogGold, day).lerp(fogDay, golden);
     this.scene.fog.color.copy(fog);
     this.starMat.opacity = this.night;
@@ -89,7 +90,7 @@ export class Environment {
 
     const lightDir = elev > 0 ? sunDir : new THREE.Vector3(0.3, 0.8, 0.2).normalize(); // moonlight
     if (elev <= 0) {
-      this.sun.intensity = 0.25;
+      this.sun.intensity = 0.6;
       this.sun.color.set(0x8fa6ff);
     }
     // snap to texel grid to avoid shimmering

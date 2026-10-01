@@ -33,6 +33,7 @@ function parseCsv(text) {
 const PLACE = /parque|plaza|estaci[oó]n de tren|museo|biblioteca|centro cultural|centro art[ií]stico|parroquia|iglesia|urbanizaci[oó]n|complejo de viviendas|condominio|oficinas de administraci|boleter[ií]a/i;
 // Google category (Spanish) -> OSM-like kind
 const CATEGORY = [
+  [/discoteca|boliche|bailable|nightclub/i, 'nightclub'],
   [/hotel|motel|apartamento vacacional|hostel/i, 'hotel'],
   [/colchoner|mueble/i, 'furniture'],
   [/florer|jardiner[ií]a/i, 'florist'],
@@ -91,7 +92,7 @@ for (const r of parseCsv(fs.readFileSync(csvPath, 'utf8'))) {
   const key = norm(name);
   const same = data.shops.find((s) => Math.hypot(s.x - x, s.z - z) < 80 && (norm(s.name).includes(key) || key.includes(norm(s.name))));
   if (same) {
-    Object.assign(same, { x, z, kind: same.kind === 'restaurant' || !same.kind ? kind : same.kind });
+    Object.assign(same, { x, z, kind: same.kind === 'restaurant' || !same.kind || kind === 'nightclub' ? kind : same.kind });
     updated++;
   } else {
     data.shops.push({ name, kind, x, z });
