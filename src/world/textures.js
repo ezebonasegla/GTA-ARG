@@ -3,6 +3,7 @@
 // 2 bays x 2 floors (6 m x 6 m). Shopfronts live in shops.js.
 import * as THREE from 'three';
 import { mulberry32 } from './geo.js';
+import { painters, groundFloor, groundTextures, atlasTexture, facadeArray, layerCanvas } from './conurbanoTextures.js';
 
 const S = 256;
 
@@ -51,7 +52,7 @@ function facade(renderer, { base, drawWall, drawWindow, seed }) {
       if (lit) drawWindow(ectx, bx * cell, fy * cell, cell, cell, rng, true);
     }
   }
-  return { map: toTexture(c, renderer), emissive: toTexture(e, renderer) };
+  return { map: toTexture(c, renderer), emissive: toTexture(e, renderer), canvas: c, ecanvas: e };
 }
 
 function glowOrGlass(ctx, x, y, w, h, lit, rng) {
@@ -219,6 +220,7 @@ export function makeTextures(renderer) {
     ctx.fillStyle = 'rgba(60,40,30,0.25)';
     for (let i = 0; i < 6; i++) ctx.fillRect(rng() * S, rng() * S, 40 + rng() * 60, 30 + rng() * 60);
     tex.roofFlat = toTexture(c, renderer);
+    tex.roofFlatCanvas = c;
   }
   {
     const rng = mulberry32(8);
@@ -236,6 +238,7 @@ export function makeTextures(renderer) {
       ctx.fillRect(0, y + 14, S, 2);
     }
     tex.roofTile = toTexture(c, renderer);
+    tex.roofTileCanvas = c;
   }
 
   // Calle: asfalto con línea central discontinua (doble mano) o sin línea (mano única).
@@ -349,5 +352,23 @@ export function makeTextures(renderer) {
     noise(ctx, S, S, 6000, rng, 0.1);
     tex.pitch = toTexture(c, renderer);
   }
+  Object.assign(tex, groundTextures(renderer, toTexture));
+  tex.atlas = atlasTexture(renderer);
+
+  // Every facade and roof in one texture array (one material per chunk).
+  const layers = [
+    { name: 'house', ...tex.house },
+    { name: 'brick', ...tex.brick },
+    { name: 'apartments', ...tex.apartments },
+    { name: 'office', ...tex.office, rough: 0.35, metal: 0.3 },
+    { name: 'church', ...tex.church },
+    ...[0, 1, 2, 3].map((v) => ({ name: `ground${v}`, ...layerCanvas((c, e, r) => groundFloor(c, e, r, v), 50 + v) })),
+    ...['medianera', 'medianeraLadrillo', 'hueco', 'villa', 'muro0', 'muro1', 'muro2', 'porton', 'roofMembrana', 'roofBaldosa', 'chapa'].map((name, i) => ({
+      name, ...layerCanvas(painters[name], 60 + i), rough: name === 'chapa' ? 0.55 : name === 'porton' ? 0.6 : 0.9, metal: name === 'chapa' ? 0.45 : name === 'porton' ? 0.3 : 0,
+    })),
+    { name: 'roofFlat', canvas: tex.roofFlatCanvas, rough: 1 },
+    { name: 'roofTile', canvas: tex.roofTileCanvas, rough: 0.8 },
+  ];
+  tex.facades = facadeArray(layers);
   return tex;
 }

@@ -629,6 +629,7 @@ async function main() {
     hud.update(dt);
     audio.update({ inCar, speed: inCar ? player.vehicle.speed : 0, throttle, horn, sirenDist: nearestCop, time: totalTime });
 
+    world.updateDetail(camera.position);
     renderer.render(scene, camera);
     input.endFrame();
     requestAnimationFrame(frame);
