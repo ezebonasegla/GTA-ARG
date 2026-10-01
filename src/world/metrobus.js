@@ -54,7 +54,7 @@ export function markMetro(roads) {
 export const busLaneOffset = (road) => road.metro.median + BUS_W / 2;
 export const carLaneOffset = (road) => Math.min(road.metro.median + BUS_W + PLAT_W + 1.6, road.w / 2 - 1.4);
 
-function offsetLine(pts, off) {
+export function offsetLine(pts, off) {
   return pts.map((p, i) => {
     const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
     const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;

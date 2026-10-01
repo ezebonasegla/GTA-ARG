@@ -2,6 +2,7 @@
 // driving on the right), parked cars along the curbs, and police chasing the player.
 import * as THREE from 'three';
 import { Vehicle, collideVehicles } from './vehicle.js';
+import { disposeVehicleMesh } from './models.js';
 import { carLaneOffset } from '../world/metrobus.js';
 
 const TYPE_WEIGHTS = [['sedan', 40], ['hatch', 28], ['pickup', 11], ['taxi', 15]]; // colectivos come from buses.js
@@ -59,6 +60,7 @@ export class Traffic {
     this.vehicles.splice(this.vehicles.indexOf(vehicle), 1);
     this.npc.delete(vehicle);
     this.scene.remove(vehicle.mesh);
+    disposeVehicleMesh(vehicle.mesh);
   }
 
   lanePoint(edge, s) {

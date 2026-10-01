@@ -16,6 +16,27 @@ const plateMat = new THREE.MeshStandardMaterial({ color: 0xf2f2f2 });
 
 export { headMat as headlightMaterial };
 
+// Resources shared between vehicles (templates, module materials, paint caches) are
+// tagged `keep`; everything else in a vehicle is its own and is freed with it, or every
+// car that drives out of range leaves its buffers and textures on the GPU.
+function keep(o) {
+  if (!o) return;
+  if (o.isObject3D) return o.traverse((c) => { keep(c.geometry); [].concat(c.material || []).forEach(keep); });
+  o.userData.keep = true;
+  if (o.isMaterial) for (const v of Object.values(o)) if (v?.isTexture) v.userData.keep = true;
+}
+[wheelGeo, wheelMat, glassMat, chromeMat, headMat, plateMat].forEach(keep);
+export function disposeVehicleMesh(root) {
+  root.traverse((o) => {
+    if (o.geometry && !o.geometry.userData.keep) o.geometry.dispose();
+    for (const m of [].concat(o.material || [])) {
+      if (m.userData.keep) continue;
+      for (const v of Object.values(m)) if (v?.isTexture && !v.userData.keep) v.dispose();
+      m.dispose();
+    }
+  });
+}
+
 export const VEHICLE_TYPES = {
   sedan: { length: 4.5, width: 1.8, height: 1.45, maxSpeed: 46, accel: 7.5, mass: 1.2, colors: [0xb8bcc0, 0x2a2d31, 0xe6e6e6, 0x7d1d1d, 0x1f3b66, 0x5b5f63, 0x9c8f7a, 0x3d5a3a] },
   hatch: { length: 3.9, width: 1.72, height: 1.5, maxSpeed: 40, accel: 7, mass: 1, colors: [0xd0d3d6, 0xa31c1c, 0x2e5c8a, 0xf0f0f0, 0x333333, 0xc9a227] },
@@ -49,6 +70,13 @@ export async function loadVehicleModels(base) {
   }
   jobs.push(new OBJLoader().loadAsync(`${base}models/bus/Bus.obj`).then((o) => { templates.bus = prepBus(o); }));
   const res = await Promise.allSettled(jobs);
+  for (const t of Object.values(templates)) {
+    keep(t.scene);
+    keep(t.material);
+    if (t.body) [t.body, ...t.axles].forEach((a) => keep(a.geometry));
+  }
+  for (const c of real) keep(c.scene);
+  Object.values(BUS_FIXED).forEach(keep);
   for (const r of res) if (r.status === 'rejected') console.warn('vehicle model missing, using procedural:', r.reason);
 }
 
@@ -107,6 +135,7 @@ function paintMaterial(t, color) {
   map.magFilter = map.minFilter = THREE.NearestFilter;
   const m = t.material.clone();
   m.map = map;
+  keep(m);
   t.variants.set(key, m);
   return m;
 }
@@ -327,6 +356,7 @@ function repaint(car, mat, color) {
     }
     m.map = greyMaps.get(mat.map);
   }
+  keep(m);
   car.paints.set(key, m);
   return m;
 }

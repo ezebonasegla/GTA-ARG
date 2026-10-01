@@ -88,6 +88,10 @@ export class Helicopter {
 
   dispose() {
     this.scene.remove(this.mesh);
+    this.mesh.traverse((o) => {
+      o.geometry?.dispose();
+      o.material?.dispose();
+    });
   }
 }
 

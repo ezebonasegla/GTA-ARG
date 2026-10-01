@@ -1,5 +1,5 @@
 // Turns city data (OSM export or procedural) into Three.js meshes + collision.
-import { markMetro, drawMetroLanes } from './metrobus.js';
+import { markMetro, drawMetroLanes, offsetLine } from './metrobus.js';
 import * as THREE from 'three';
 import { makeTextures } from './textures.js';
 import { facadeMaterial } from './conurbanoTextures.js';
@@ -92,6 +92,8 @@ export function buildWorld(data, renderer, scene) {
   const sidewalkBuf = new GeoBuf();
   const roadBufs = { road1: new GeoBuf(), road2: new GeoBuf(), ped: new GeoBuf(), pasillo: new GeoBuf(), dirt: new GeoBuf(), concrete: new GeoBuf() };
   const white = new THREE.Color(1, 1, 1);
+  const vergeBuf = new GeoBuf();
+  const bumps = [];
   function ribbon(buf, pts, w, y, vScale) {
     const n = pts.length;
     const left = [], right = [];
@@ -146,6 +148,17 @@ export function buildWorld(data, renderer, scene) {
     // many residential streets of the conurbano are concrete slabs
     const concrete = road.kind === 'residential' && (hashString(`${road.pts[0][0]},${road.pts[0][1]}`) % 100) < 45;
     ribbon(concrete ? roadBufs.concrete : road.oneway || road.w < 8 ? roadBufs.road1 : roadBufs.road2, road.pts, road.w, 0.06, 1 / 12);
+    // barrio streets: grass verge between the curb and the sidewalk, and lomos de burro
+    const [x0, z0] = road.pts[0];
+    if (road.kind === 'residential' && x0 * x0 + z0 * z0 > 900 * 900) {
+      const h = hashString(`v${x0},${z0}`);
+      if (h % 100 < 55) for (const o of [-1, 1]) ribbon(vergeBuf, offsetLine(road.pts, o * (road.w / 2 + 1.0)), 1.1, 0.042, 1 / 6);
+      for (let i = 0; i < road.pts.length - 1; i++) {
+        const [ax, az] = road.pts[i], [bx, bz] = road.pts[i + 1];
+        const len = Math.hypot(bx - ax, bz - az);
+        if (len > 70 && (h >>> (8 + i % 16)) % 4 === 0) bumps.push([(ax + bx) / 2, (az + bz) / 2, Math.atan2(bx - ax, bz - az), road.w]);
+      }
+    }
   }
   const patchBuf = new GeoBuf();
   const walkPatchBuf = new GeoBuf();
@@ -172,7 +185,24 @@ export function buildWorld(data, renderer, scene) {
     root.add(mesh);
   };
   addFlat(sidewalkBuf, sidewalkMat, -8);
+  addFlat(vergeBuf, flatMat(tex.grass, 0xb4c494), -7.8);
   addFlat(walkPatchBuf, sidewalkMat, -7.5);
+  {
+    // lomo de burro: low hump across the street, painted yellow and black
+    const g = new THREE.CylinderGeometry(1, 1, 1, 12, 1, false, 0, Math.PI); // upper half once laid down
+    g.rotateZ(Math.PI / 2);
+    const map = stripeTexture('#1c1c1c');
+    map.wrapS = map.wrapT = THREE.RepeatWrapping;
+    map.center.set(0.5, 0.5);
+    map.rotation = Math.PI / 2; // bands across the hump
+    map.repeat.set(1, 2);
+    const mat = new THREE.MeshStandardMaterial({ map, color: 0xf2c200, roughness: 0.8 });
+    const _q = new THREE.Quaternion(), yAxis = new THREE.Vector3(0, 1, 0);
+    instancedChunks(root, g, mat, bumps, (m, [x, z, a, w]) => {
+      _q.setFromAxisAngle(yAxis, a);
+      m.compose(new THREE.Vector3(x, 0.06, z), _q, new THREE.Vector3(w, 0.11, 0.9));
+    }, { receive: true, range: 300 });
+  }
   addFlat(roadBufs.road2, flatMat(tex.road2), -7);
   addFlat(roadBufs.road1, flatMat(tex.road1), -7);
   addFlat(roadBufs.concrete, flatMat(tex.concrete), -7);
@@ -278,6 +308,8 @@ export function buildWorld(data, renderer, scene) {
     const n = graph.nearest(x, z, 20);
     return !!n && n.seg.road.kind !== 'footway' && n.seg.road.kind !== 'pedestrian' && n.dist < n.seg.road.w / 2 + pad;
   };
+  // 0 fresno / plátano (round), 1 paraíso / tipa (umbrella), 2 álamo / ciprés (tall), 3 jacarandá
+  const streetSpecies = (r) => (r < 0.55 ? 0 : r < 0.8 ? 1 : r < 0.9 ? 2 : 3);
   const trees = [];
   const lights = [];
   for (const road of data.roads) {
@@ -296,7 +328,7 @@ export function buildWorld(data, renderer, scene) {
           if (rng() > (road.kind === 'primary' ? 0.55 : 0.8)) continue;
           const x = ax + dx * t + nx * off * side, z = az + dz * t + nz * off * side;
           if (collision.isBlocked(x, z, 1.2) || !outside(x, z) || nearPasillo(x, z, 1.2) || onRoad(x, z, 0.8)) continue;
-          trees.push([x, z, 0.8 + rng() * 0.6, rng()]);
+          trees.push([x, z, 0.8 + rng() * 0.6, rng(), streetSpecies(rng()), x * x + z * z > 900 * 900 && rng() < 0.55]);
         }
         if (side === 1 && !ped) {
           for (let t = 15; t < len - 5; t += 34) {
@@ -315,7 +347,7 @@ export function buildWorld(data, renderer, scene) {
     for (let k = 0; k < count; k++) {
       const x = bb.minX + rng() * (bb.maxX - bb.minX), z = bb.minZ + rng() * (bb.maxZ - bb.minZ);
       if (!pointInPolygon(x, z, area.pts) || collision.isBlocked(x, z, 2) || !outside(x, z) || onRoad(x, z, 1.5)) continue;
-      trees.push([x, z, 0.9 + rng() * 0.9, rng()]);
+      trees.push([x, z, 0.9 + rng() * 0.9, rng(), area.kind === 'wood' ? (rng() < 0.3 ? 2 : 0) : streetSpecies(rng()), false]);
     }
   }
   for (const [x, z] of trees) collision.addCircle(x, z, 0.35, 'tree');
@@ -327,9 +359,12 @@ export function buildWorld(data, renderer, scene) {
 
   const trunkG = new THREE.CylinderGeometry(0.18, 0.28, 3.2, 5);
   trunkG.translate(0, 1.6, 0);
-  const crownG = new THREE.IcosahedronGeometry(2.4, 0);
-  crownG.scale(1, 0.85, 1);
-  crownG.translate(0, 4.6, 0);
+  const crowns = [
+    new THREE.IcosahedronGeometry(2.4, 0).scale(1, 0.85, 1).translate(0, 4.6, 0),
+    new THREE.IcosahedronGeometry(2.5, 0).scale(1.35, 0.55, 1.35).translate(0, 4.7, 0),
+    new THREE.IcosahedronGeometry(1.5, 0).scale(0.75, 2.6, 0.75).translate(0, 6, 0),
+    new THREE.IcosahedronGeometry(2.5, 0).scale(1.3, 0.6, 1.3).translate(0, 4.6, 0),
+  ];
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5b4636, roughness: 1 });
   const crownMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true });
   const c = new THREE.Color();
@@ -337,13 +372,20 @@ export function buildWorld(data, renderer, scene) {
     q.setFromAxisAngle(up, r * 6.28);
     m.compose(new THREE.Vector3(x, 0, z), q, new THREE.Vector3(s, s * (0.9 + r * 0.3), s));
   };
+  const leaf = [
+    (r) => c.setHSL(0.2 + r * 0.1, 0.35 + r * 0.2, 0.22 + r * 0.1),
+    (r) => c.setHSL(0.24 + r * 0.06, 0.4, 0.2 + r * 0.08),
+    (r) => c.setHSL(0.27 + r * 0.05, 0.35, 0.17 + r * 0.06),
+    (r) => c.setHSL(0.74 + r * 0.04, 0.45, 0.5 + r * 0.1), // lilac blossom
+  ];
   instancedChunks(root, trunkG, trunkMat, trees, treeMatrix, { cast: true, range: 600 });
-  instancedChunks(root, crownG, crownMat, trees, treeMatrix, {
-    cast: true,
-    range: 950,
-    receive: true,
-    color: ([, , , r]) => c.setHSL(0.2 + r * 0.1, 0.35 + r * 0.2, 0.22 + r * 0.1),
+  crowns.forEach((g, k) => {
+    const list = trees.filter((t) => t[4] === k);
+    if (list.length) instancedChunks(root, g, crownMat, list, treeMatrix, { cast: true, range: 950, receive: true, color: ([, , , r]) => leaf[k](r) });
   });
+  // street trees painted with cal at the base
+  const calG = new THREE.CylinderGeometry(0.3, 0.33, 1.1, 6).translate(0, 0.55, 0);
+  instancedChunks(root, calG, new THREE.MeshStandardMaterial({ color: 0xf2f0ea, roughness: 1 }), trees.filter((t) => t[5]), (m, [x, z, s]) => m.makeScale(s * 1.05, 1, s * 1.05).setPosition(x, 0, z), { range: 260 });
 
   const pole = new THREE.CylinderGeometry(0.1, 0.17, 7, 6);
   pole.translate(0, 3.5, 0);

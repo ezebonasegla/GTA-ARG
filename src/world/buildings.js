@@ -32,6 +32,10 @@ const TPL = {
   stone: template(new THREE.OctahedronGeometry(0.2, 0).scale(1, 0.6, 1)),
   tank: template(new THREE.CylinderGeometry(0.55, 0.5, 1.1, 8, 1, true).translate(0, 0.55, 0)),
   lid: template(new THREE.CylinderGeometry(0.3, 0.55, 0.18, 8).translate(0, 1.19, 0)),
+  pipe: template(new THREE.CylinderGeometry(0.5, 0.5, 1, 6).translate(0, 0.5, 0)),
+  hat: template(new THREE.ConeGeometry(0.5, 0.4, 6).translate(0, 0.2, 0)),
+  // DirecTV-style dish: shallow disc tilted up towards the north-east sky
+  dish: template(new THREE.CylinderGeometry(0.42, 0.3, 0.08, 10).rotateX(1.1).translate(0, 0.75, 0)),
 };
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
 function place(x, y, z, sx, sy, sz, ry = 0, rx = 0, rz = 0) {
@@ -42,7 +46,7 @@ function place(x, y, z, sx, sy, sz, ry = 0, rx = 0, rz = 0) {
 const col = (hex) => new THREE.Color(hex);
 const C = {
   concrete: col('#9d988e'), rebar: col('#5b3b28'), tire: col('#1d1d1d'), stone: col('#8a857c'), brick: col('#b5603c'),
-  metal: col('#6d6f70'), rust: col('#7a4a2c'), black: col('#202020'), beige: col('#d6cba2'), blue: col('#2d5f9a'), white: col('#e8e8e4'),
+  metal: col('#6d6f70'), alu: col('#b8bcbf'), pilar: col('#c9c3b6'), meter: col('#8e9396'), rust: col('#7a4a2c'), black: col('#202020'), beige: col('#d6cba2'), blue: col('#2d5f9a'), white: col('#e8e8e4'),
 };
 
 export function buildBuildings(data, { chunks, collision, tex }) {
@@ -154,6 +158,7 @@ export function buildBuildings(data, { chunks, collision, tex }) {
       if (style !== 'office' && style !== 'church' && area > 40 && rng() < 0.7 && pointInPolygon(cx, cz, pts)) {
         tanks.push([cx + (rng() - 0.5) * 2, cz + (rng() - 0.5) * 2, h, h > 12 ? 1.6 : 1]);
       }
+      if (low && pointInPolygon(cx, cz, pts)) roofGear(chunk.props, cx, cz, h, rng, 1);
       if (low) {
         if (unfinished) esperas(chunk.props, pts, h, rng, 0.6);
         // terraza con baranda sobre el frente
@@ -197,13 +202,37 @@ export function buildBuildings(data, { chunks, collision, tex }) {
             if (f === acFloor) chunk.props.add(TPL.cube, place(x + ux * 1.75 + ox * 0.17, y + 1.62, z + uz * 1.75 + oz * 0.17, 0.82, 0.56, 0.3, ry), C.white);
           }
         }
-      } else if (low && rng() < 0.22) {
+      }
+      // pilar de luz: the electricity meter column on the front wall, by the gate
+      if (low && rng() < 0.3 && len > 4) {
+        const t = rng() < 0.5 ? 0.12 : 0.88, x = p0[0] + ux * len * t + ox * 0.25, z = p0[1] + uz * len * t + oz * 0.25;
+        chunk.props.add(TPL.cube, place(x, 0, z, 0.5, 1.7, 0.32, ry), C.pilar, 0.2);
+        chunk.props.add(TPL.cube, place(x + ox * 0.17, 0.9, z + oz * 0.17, 0.34, 0.42, 0.06, ry), C.meter);
+        chunk.props.add(TPL.pipe, place(x, 1.7, z, 0.05, 1.2, 0.05), C.metal);
+      }
+      if (!apt && low && rng() < 0.22) {
         const t = 0.2 + rng() * 0.6;
         chunk.props.add(TPL.cube, place(p0[0] + ux * len * t + ox * 0.17, Math.min(2.3, h - 0.8) - 0.28, p0[1] + uz * len * t + oz * 0.17, 0.82, 0.56, 0.3, ry), C.white);
       }
     }
   });
   return { tanks };
+}
+
+// TV antenna, satellite dish and the calefón's chimney with its "sombrero" on a flat roof.
+function roofGear(props, cx, cz, h, rng, dishBias) {
+  const j = () => (rng() - 0.5) * 2.4;
+  if (rng() < 0.22) {
+    const x = cx + j(), z = cz + j(), mh = 2.4 + rng() * 1.6, ry = rng() * 3;
+    props.add(TPL.pipe, place(x, h, z, 0.05, mh, 0.05), C.alu);
+    for (let k = 0; k < 3; k++) props.add(TPL.cube, place(x, h + mh - 0.15 - k * 0.32, z, 1.3 - k * 0.3, 0.025, 0.025, ry), C.alu);
+  }
+  if (rng() < 0.2 * dishBias) props.add(TPL.dish, place(cx + j(), h, cz + j(), 1, 1, 1, -0.8 + rng() * 0.6), C.white, 0.1);
+  if (rng() < 0.35) {
+    const x = cx + j(), z = cz + j();
+    props.add(TPL.pipe, place(x, h, z, 0.12, 1.1, 0.12), C.metal);
+    props.add(TPL.hat, place(x, h + 1.1, z, 0.42, 0.5, 0.42), C.metal);
+  }
 }
 
 function flatRoof(buf, pts, h, tint, layer, scale = 1 / 6) {
@@ -293,6 +322,7 @@ function villaHouse(pts, h, levels, rng, chunk, L, tanks) {
       if (t < 0.35) tankOnStilts(chunk.props, cx + (rng() - 0.5), cz + (rng() - 0.5), h, rng);
       else if (t < 0.6) tanks.push([cx, cz, h, 0.9]);
     }
+    if (pointInPolygon(cx, cz, pts)) roofGear(chunk.props, cx + 1, cz - 1, h, rng, 1.3);
     // stuff kept on the slab
     if (rng() < 0.4) chunk.props.add(TPL.cube, place(cx + (rng() - 0.5) * 2, h, cz + (rng() - 0.5) * 2, 0.9, 0.25 + rng() * 0.3, 0.6, rng() * 3), C.brick, 0.3);
   }
