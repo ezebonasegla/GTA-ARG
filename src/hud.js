@@ -30,8 +30,11 @@ export class Hud {
     const w = Math.ceil((b.maxX - b.minX + pad * 2) * this.scale);
     const h = Math.ceil((b.maxZ - b.minZ + pad * 2) * this.scale);
     const c = document.createElement('canvas');
-    c.width = Math.min(w, 6000);
-    c.height = Math.min(h, 6000);
+    // phones: iOS Safari refuses canvases over ~16.7 M pixels and each pixel is 4 bytes
+    const maxPx = document.body.classList.contains('touch') || matchMedia('(pointer: coarse)').matches ? 9e6 : 36e6;
+    const fit = Math.min(1, Math.sqrt(maxPx / (w * h)));
+    c.width = Math.floor(w * fit);
+    c.height = Math.floor(h * fit);
     this.scale = Math.min(c.width / (w / this.scale), c.height / (h / this.scale));
     const ctx = c.getContext('2d');
     const P = ([x, z]) => [(x - this.ox) * this.scale, (z - this.oz) * this.scale];
