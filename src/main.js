@@ -1,3 +1,4 @@
+import { streaming } from './world/geobuf.js';
 import * as THREE from 'three';
 import { generateQuilmes } from './world/procedural.js';
 import { buildWorld } from './world/builder.js';
@@ -38,15 +39,41 @@ async function loadCityData() {
   return generateQuilmes();
 }
 
+// Light mode (?liviano, or automatic after a session that ended abruptly, i.e. the
+// browser killed the tab): no antialiasing or shadows, lower resolution, shorter
+// streaming of the buildings.
+function lightMode() {
+  let crashed = false;
+  try {
+    const t = +localStorage.getItem('gq-alive');
+    crashed = t > 0 && Date.now() - t < 86400e3;
+    localStorage.setItem('gq-alive', Date.now());
+    setInterval(() => localStorage.setItem('gq-alive', Date.now()), 3000);
+    addEventListener('pagehide', () => localStorage.removeItem('gq-alive'));
+    if (crashed) localStorage.setItem('gq-light', Date.now());
+    const sticky = Date.now() - (+localStorage.getItem('gq-light') || 0) < 7 * 86400e3;
+    if (/[?&]normal\b/.test(location.search)) localStorage.removeItem('gq-light');
+    else if (sticky) return { on: true, crashed };
+  } catch {
+    // no storage (private window): only the URL flag
+  }
+  return { on: /[?&]liviano\b/.test(location.search), crashed };
+}
+
 async function main() {
+  const light = lightMode();
+  if (light.on) {
+    document.body.classList.add('light');
+    streaming.range = 0.6;
+  }
   // stencil: the pasos bajo nivel cut the ground (see world/corridors.js)
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', stencil: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: !light.on, powerPreference: 'high-performance', stencil: true });
   const mobile = isTouchDevice();
-  renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1 : 1.5));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, mobile || light.on ? (light.on ? 0.85 : 1) : 1.5));
   const perf = { frames: 0, t: 0, low: 0, high: 0, n: 0, maxRatio: renderer.getPixelRatio() };
   const fpsEl = document.getElementById('fps');
   renderer.setSize(innerWidth, innerHeight);
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !light.on;
   // the sun barely moves: redraw the shadow map every other frame
   renderer.shadowMap.autoUpdate = false;
   renderer.shadowMap.needsUpdate = true; // the first frame must have one, or shaders compile against a missing map (white city)
@@ -56,7 +83,7 @@ async function main() {
   document.getElementById('app').appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.3, 1200);
+  const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.3, light.on ? 900 : 1200);
   addEventListener('resize', () => {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
@@ -71,8 +98,25 @@ async function main() {
   await nextFrame();
   const t0 = performance.now();
   const world = buildWorld(data, renderer, scene);
+  // The static city (ground, roads, buildings around, props, trees...) never changes
+  // after it's built: once the GPU has a buffer, drop the CPU copy (~140 MB). Meshes
+  // streamed in later (facades, props, street signs) handle their own.
+  {
+    const drop = function () {
+      this.array = null;
+    };
+    world.root.traverse((o) => {
+      if (!o.geometry || o.userData.dynamic) return;
+      for (const a of [...Object.values(o.geometry.attributes), o.geometry.index]) a?.onUpload(drop);
+      if (o.isInstancedMesh) {
+        o.instanceMatrix.onUpload(drop);
+        o.instanceColor?.onUpload(drop);
+      }
+    });
+  }
   console.info(`Ciudad construida en ${Math.round(performance.now() - t0)} ms`);
   const env = new Environment(scene, renderer);
+  if (light.on) scene.fog.far = Math.min(scene.fog.far, 850);
   world.waterMaterial.envMap = env.bakeEnvMap(12);
   world.waterMaterial.envMapIntensity = 0.9;
   const input = new Input(renderer.domElement);
@@ -80,6 +124,8 @@ async function main() {
   if (mobile) env.sun.shadow.mapSize.set(1024, 1024); // lighter on phones
   const hud = new Hud(data);
   setupFullscreenButton((msg) => hud.toast(msg, 7));
+  if (light.crashed) hud.toast('La sesión anterior se cerró de golpe: activé el modo liviano (menos detalle). Para volver al normal, abrí la página con ?normal al final.', 12);
+  else if (light.on) hud.toast('Modo liviano activo. Para el modo normal, abrí la página con ?normal al final.', 6);
   const gps = new Gps(data, world.graph, hud);
   const audio = new Audio();
   const rng = mulberry32(Date.now() & 0xffff);
@@ -289,6 +335,30 @@ async function main() {
     player.mesh.visible = true;
     v.driver = null;
     player.sync();
+  }
+
+  // Canvas and data textures keep their pixels in memory after the GPU has a copy
+  // (~170 MB for the whole city): drop them once uploaded. Nothing here re-uploads a
+  // texture; the ones made later (vehicles, street signs) are freed with their owner.
+  function releaseTexturePixels() {
+    const drop = (t) => {
+      const im = t.image;
+      if (typeof HTMLCanvasElement !== 'undefined' && im instanceof HTMLCanvasElement) im.width = im.height = 1;
+      else if (im?.data && im.data.length > 64) t.image = { width: im.width, height: im.height, depth: im.depth, data: null };
+    };
+    const seen = new Set();
+    const visit = (o) => {
+      for (const m of [].concat(o.material || [])) {
+        for (const v of Object.values(m)) {
+          if (!v?.isTexture || seen.has(v) || v.userData.keep || v.isRenderTargetTexture) continue;
+          seen.add(v);
+          if (renderer.properties.get(v).__webglInit) drop(v);
+          else v.onUpdate = () => drop(v);
+        }
+      }
+    };
+    scene.traverse(visit);
+    for (const s of world.chunks.streamed) visit(s.mesh);
   }
 
   function frame() {
@@ -673,10 +743,11 @@ async function main() {
     }
     if ((perf.n = (perf.n + 1) % 2) === 0) renderer.shadowMap.needsUpdate = true;
     renderer.render(scene, camera);
+    if (!perf.released && perf.frames > 2) releaseTexturePixels(), (perf.released = true);
     input.endFrame();
     requestAnimationFrame(frame);
   }
-  window.__game = { buses, trains, hud, scene, camera, renderer, player, traffic, peds, world, data, get hours() { return hours; }, set hours(h) { hours = h; } };
+  window.__game = { ghost, buses, trains, hud, scene, camera, renderer, player, traffic, peds, world, data, get hours() { return hours; }, set hours(h) { hours = h; } };
   requestAnimationFrame(frame);
 }
 

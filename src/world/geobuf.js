@@ -3,7 +3,9 @@ import * as THREE from 'three';
 
 // Growable typed array: the city has millions of vertices, and plain JS number arrays
 // (8 bytes per value, plus a full copy when the geometry is made) blew past what a
-// phone allows. Normals and colors are stored as normalized bytes.
+// phone allows. Normals and colors are stored as normalized bytes, in groups of 4:
+// Direct3D (Chrome / Edge on Windows) has no 3-byte vertex formats, and converting
+// them on every upload of a streamed chunk ate the GPU process's memory.
 class List {
   constructor(Type, n = 768) {
     this.Type = Type;
@@ -48,7 +50,7 @@ export class GeoBuf {
     this.nor = new List(Int8Array);
     this.uv = new List(Float32Array);
     this.col = new List(Uint8Array);
-    this.lay = new List(Uint8Array);
+    this.lay = new List(Float32Array);
   }
   tri(a, b, c, ua, ub, uc, color, want, layer = 0) {
     const e1x = b[0] - a[0], e1y = b[1] - a[1], e1z = b[2] - a[2];
@@ -67,8 +69,10 @@ export class GeoBuf {
     for (const [p, u] of [[a, ua], [b, ub], [c, uc]]) {
       this.pos.push(p[0], p[1], p[2]);
       this.nor.push(nx, ny, nz);
+      this.nor.push(0);
       this.uv.push(u[0], u[1]);
       this.col.push(r, g, bl);
+      this.col.push(255);
       if (this.layered) this.lay.push(layer);
     }
   }
@@ -92,9 +96,9 @@ export class GeoBuf {
   geometry() {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(this.pos.take(), 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(this.nor.take(), 3, true));
+    g.setAttribute('normal', new THREE.BufferAttribute(this.nor.take(), 4, true));
     g.setAttribute('uv', new THREE.BufferAttribute(this.uv.take(), 2));
-    g.setAttribute('color', new THREE.BufferAttribute(this.col.take(), 3, true));
+    g.setAttribute('color', new THREE.BufferAttribute(this.col.take(), 4, true));
     if (this.layered) g.setAttribute('layer', new THREE.BufferAttribute(this.lay.take(), 1));
     g.computeBoundingSphere();
     g.computeBoundingBox();
@@ -133,27 +137,27 @@ export class PropBuf {
   geometry() {
     let verts = 0;
     for (let k = 0; k < this.tpl.length; k++) verts += this.tpls[this.tpl.a[k]].attributes.position.count;
-    const pos = new Float32Array(verts * 3), nor = new Int8Array(verts * 3), col = new Uint8Array(verts * 3);
-    let o = 0;
+    const pos = new Float32Array(verts * 3), nor = new Int8Array(verts * 4), col = new Uint8Array(verts * 4).fill(255);
+    let o = 0, o4 = 0;
     for (let k = 0; k < this.tpl.length; k++) {
       const tp = this.tpls[this.tpl.a[k]];
       const p = tp.attributes.position.array, n = tp.attributes.normal.array;
       _m4.fromArray(this.mat.a, k * 16);
       _nm.getNormalMatrix(_m4);
       const r = this.col.a[k * 4], g = this.col.a[k * 4 + 1], b = this.col.a[k * 4 + 2], shade = this.col.a[k * 4 + 3];
-      for (let i = 0; i < p.length; i += 3, o += 3) {
+      for (let i = 0; i < p.length; i += 3, o += 3, o4 += 4) {
         _v.set(p[i], p[i + 1], p[i + 2]).applyMatrix4(_m4);
         _n.set(n[i], n[i + 1], n[i + 2]).applyMatrix3(_nm).normalize();
         pos[o] = _v.x; pos[o + 1] = _v.y; pos[o + 2] = _v.z;
-        nor[o] = n8(_n.x); nor[o + 1] = n8(_n.y); nor[o + 2] = n8(_n.z);
+        nor[o4] = n8(_n.x); nor[o4 + 1] = n8(_n.y); nor[o4 + 2] = n8(_n.z);
         const k2 = shade ? 1 - shade * ((i * 7919) % 13) / 13 : 1;
-        col[o] = c8(r * k2); col[o + 1] = c8(g * k2); col[o + 2] = c8(b * k2);
+        col[o4] = c8(r * k2); col[o4 + 1] = c8(g * k2); col[o4 + 2] = c8(b * k2);
       }
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3, true));
-    geo.setAttribute('color', new THREE.BufferAttribute(col, 3, true));
+    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 4, true));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 4, true));
     geo.computeBoundingSphere();
     return geo;
   }
@@ -173,6 +177,9 @@ export function template(geo) {
   for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
   return g;
 }
+
+// How far facades and cut-outs stream in (light mode shortens it).
+export const streaming = { range: 1 };
 
 // Per-chunk accumulators: facade (texture array), props, alpha cut-outs and cables.
 export class ChunkSet {
@@ -201,7 +208,7 @@ export class ChunkSet {
       if (!c.facade.empty) {
         const m = new THREE.Mesh(c.facade.geometry(), mats.facade);
         m.castShadow = m.receiveShadow = true;
-        this.streamed.push({ mesh: m, cx, cz, range: 1300 + this.size * 0.7, on: false });
+        this.streamed.push({ mesh: m, cx, cz, range: 1300 * streaming.range + this.size * 0.7, on: false });
       }
       if (!c.props.empty) {
         // baked on demand near the camera (see updateDetail)
@@ -211,7 +218,7 @@ export class ChunkSet {
       if (!c.alpha.empty) {
         const m = new THREE.Mesh(c.alpha.geometry(), mats.alpha);
         m.receiveShadow = true;
-        this.streamed.push({ mesh: m, cx, cz, range: 320 + this.size * 0.7, on: false });
+        this.streamed.push({ mesh: m, cx, cz, range: 320 * streaming.range + this.size * 0.7, on: false });
       }
       if (c.lines.length) {
         const g = new THREE.BufferGeometry();
@@ -230,9 +237,10 @@ export class ChunkSet {
   // frame so driving doesn't stutter) and free the far ones.
   updateDetail(p, fast = false) {
     for (const d of this.detail) d.mesh.visible = (d.cx - p.x) ** 2 + (d.cz - p.z) ** 2 < d.range * d.range;
+    let uploads = 3; // spread the uploads when flying in fast
     for (const s of this.streamed) {
       const d2 = (s.cx - p.x) ** 2 + (s.cz - p.z) ** 2;
-      if (!s.on && d2 < s.range * s.range) {
+      if (!s.on && d2 < s.range * s.range && uploads-- > 0) {
         this.root.add(s.mesh);
         s.on = true;
       } else if (s.on && d2 > (s.range * 1.15) ** 2) {

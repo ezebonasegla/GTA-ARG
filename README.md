@@ -76,6 +76,12 @@ Para probarlo desde el celular en la misma red Wi-Fi: `npm run dev -- --host` y 
 - **Trenes de la línea Roca** que circulan por las vías reales y paran en las estaciones Quilmes y Bernal
   (cuidado: atropellan).
 
+### Modo liviano
+
+Si el navegador cierra la pestaña (poca memoria o placa de video), la próxima vez el juego arranca solo en
+**modo liviano**: sin antialiasing ni sombras, menos resolución y los edificios cargan más cerca. También se
+fuerza agregando `?liviano` a la dirección, y se vuelve al normal con `?normal`.
+
 ### Colectivos reales
 
 Los colectivos recorren los **recorridos reales** de las líneas que pasan por Quilmes y paran en sus **paradas

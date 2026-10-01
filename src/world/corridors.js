@@ -279,7 +279,7 @@ export function buildCorridors(data, plan, { root, chunks, collision, tex, flatM
     // marks the trenches in the stencil buffer so the ground and flat layers skip them
     const m = new THREE.Mesh(mask.geometry(), new THREE.MeshBasicMaterial({
       colorWrite: false, depthWrite: false, depthTest: false,
-      stencilWrite: true, stencilRef: 1, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilFunc,
+      stencilWrite: true, stencilRef: 1, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp,
     }));
     m.renderOrder = -11;
     root.add(m);
@@ -537,6 +537,7 @@ export function buildCorridors(data, plan, { root, chunks, collision, tex, flatM
     })();
     gateMesh = new THREE.InstancedMesh(arm, new THREE.MeshStandardMaterial({ map, roughness: 0.6 }), gates.length);
     gateMesh.castShadow = true;
+    gateMesh.userData.dynamic = true; // its matrices change: keep the CPU copy
     root.add(gateMesh);
     const postG = [], crossG = [];
     for (const g of gates) {

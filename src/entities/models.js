@@ -59,7 +59,8 @@ const templates = {};
 const real = [];
 
 export async function loadVehicleModels(base) {
-  const gltf = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath(`${base}draco/`));
+  const draco = new DRACOLoader().setDecoderPath(`${base}draco/`);
+  const gltf = new GLTFLoader().setDRACOLoader(draco);
   const jobs = Object.entries(CAR_FILES).map(([type, file]) =>
     gltf.loadAsync(`${base}models/cars/${file}.glb`).then(({ scene }) => { templates[type] = prepCar(scene); }));
   for (const car of REAL_CARS) {
@@ -70,6 +71,7 @@ export async function loadVehicleModels(base) {
   }
   jobs.push(new OBJLoader().loadAsync(`${base}models/bus/Bus.obj`).then((o) => { templates.bus = prepBus(o); }));
   const res = await Promise.allSettled(jobs);
+  draco.dispose(); // its workers keep their WebAssembly heaps (tens of MB each) alive
   for (const t of Object.values(templates)) {
     keep(t.scene);
     keep(t.material);

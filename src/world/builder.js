@@ -506,6 +506,7 @@ export function buildWorld(data, renderer, scene) {
     collision,
     graph,
     corridors,
+    chunks, // for the memory probes
     tex,
     waterMaterial: areaMats.water,
     updateDetail: (p, fast) => {
