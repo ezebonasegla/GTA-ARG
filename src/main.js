@@ -209,6 +209,15 @@ async function main() {
     peds.update(0, { px: sx, pz: sz, vehicles: [], initial: true });
   }
 
+  // facades and props around the spawn, before the first frame
+  for (let i = 0; i < 8; i++) world.updateDetail(new THREE.Vector3(sx, 2, sz), false, true);
+  // compile the shaders now (in parallel where the GPU allows) instead of stalling the first frames
+  setLoading('Preparando shaders…');
+  camera.position.set(sx, 4, sz + 6);
+  camera.lookAt(sx, 1, sz);
+  camera.updateMatrixWorld();
+  try { await renderer.compileAsync(scene, camera); } catch (e) { console.warn('compileAsync', e); }
+
   document.getElementById('loading').classList.add('hidden');
   const startOverlay = document.getElementById('start');
   startOverlay.classList.remove('hidden');

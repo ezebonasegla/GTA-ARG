@@ -306,7 +306,7 @@ export function buildWorld(data, renderer, scene) {
     const legs = new THREE.BoxGeometry(1, 0.6, 1);
     legs.translate(0, 0.3, 0);
     const tankMatrix = (m, [x, z, y, s]) => m.makeScale(s, s, s).setPosition(x, y, z);
-    instancedChunks(root, g, new THREE.MeshStandardMaterial({ color: 0x2d3033, roughness: 0.6 }), tanks, tankMatrix, { cast: true, range: 650 });
+    instancedChunks(root, g, new THREE.MeshStandardMaterial({ color: 0x2d3033, roughness: 0.6 }), tanks, tankMatrix, { cast: true, range: 500 });
     instancedChunks(root, legs, new THREE.MeshStandardMaterial({ color: 0x9a968f }), tanks, tankMatrix, { cast: true, range: 450 });
   }
 
@@ -315,7 +315,14 @@ export function buildWorld(data, renderer, scene) {
 
   // ---------------------------------------------------------------- landmarks
   const landmarks = buildLandmarks(data, { root, collision, graph, tex });
-  const outside = (x, z) => !landmarks.keepOut.some(([kx, kz, r]) => (x - kx) ** 2 + (z - kz) ** 2 < r * r);
+  const keepHash = new SpatialHash(32);
+  for (const k of landmarks.keepOut) keepHash.insert(k, { minX: k[0] - k[2], minZ: k[1] - k[2], maxX: k[0] + k[2], maxZ: k[1] + k[2] });
+  const keepNear = new Set();
+  const outside = (x, z) => {
+    keepNear.clear();
+    for (const [kx, kz, r] of keepHash.query(x, z, x, z, keepNear)) if ((x - kx) ** 2 + (z - kz) ** 2 < r * r) return false;
+    return true;
+  };
 
   // ---------------------------------------------------------------- conurbano
   // keep the pasillos of the villas walkable: no poles or trees on them
@@ -420,7 +427,7 @@ export function buildWorld(data, renderer, scene) {
   instancedChunks(root, trunkG, trunkMat, trees, treeMatrix, { cast: true, range: 600 });
   crowns.forEach((g, k) => {
     const list = trees.filter((t) => t[4] === k);
-    if (list.length) instancedChunks(root, g, crownMat, list, treeMatrix, { cast: true, range: 950, receive: true, color: ([, , , r]) => leaf[k](r) });
+    if (list.length) instancedChunks(root, g, crownMat, list, treeMatrix, { cast: true, range: 750, receive: true, color: ([, , , r]) => leaf[k](r) });
   });
   // street trees painted with cal at the base
   const calG = new THREE.CylinderGeometry(0.3, 0.33, 1.1, 6).translate(0, 0.55, 0);
@@ -495,7 +502,7 @@ export function buildWorld(data, renderer, scene) {
     const curbMat = new THREE.MeshStandardMaterial({ color: 0xe6bf1e, roughness: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
     for (const m of instancedChunks(root, strip, curbMat, curbs, lampMatrix, { receive: true, range: 260 })) m.renderOrder = -5;
   }
-  instancedChunks(root, head, lampMat, lights, lampMatrix, { range: 700 });
+  instancedChunks(root, head, lampMat, lights, lampMatrix, { range: 500 });
   // Fake light pools on the pavement (cheaper than hundreds of real lights).
   const poolG = new THREE.PlaneGeometry(14, 14);
   poolG.rotateX(-Math.PI / 2);
@@ -503,6 +510,12 @@ export function buildWorld(data, renderer, scene) {
   const poolMat = new THREE.MeshBasicMaterial({ map: radialTexture(), color: 0xffb860, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: true });
   const pools = instancedChunks(root, poolG, poolMat, lights, lampMatrix, { range: 450 });
   for (const p of pools) p.renderOrder = -5;
+
+  freezeTransforms(root);
+  // The scene itself never moves either. With matrixAutoUpdate on, its updateMatrix()
+  // flags it dirty every frame, which forces every matrixWorld below to be recomputed.
+  scene.matrixAutoUpdate = false;
+  scene.updateMatrix();
 
   return {
     root,
@@ -512,8 +525,8 @@ export function buildWorld(data, renderer, scene) {
     chunks, // for the memory probes
     tex,
     waterMaterial: areaMats.water,
-    updateDetail: (p, fast) => {
-      chunks.updateDetail(p, fast);
+    updateDetail: (p, fast, initial) => {
+      chunks.updateDetail(p, fast, initial);
       updateCulling(p);
     },
     setNight(n) {
@@ -571,6 +584,39 @@ function dropBuildingsOnRoads(data, graph) {
   console.info(`edificios sobre la calzada quitados: ${before - data.buildings.length}`);
 }
 
+// The city never moves, yet three.js recomputes the matrix of every object in the
+// scene each frame (~6 ms with ~15k chunk meshes). Compute the city's matrices once;
+// objects added under it later (streamed chunks, signs, props) get theirs on add.
+const baseAdd = THREE.Object3D.prototype.add;
+THREE.Object3D.prototype.add = function (...objects) {
+  baseAdd.apply(this, objects);
+  for (let p = this; p; p = p.parent) {
+    if (!p.userData?.frozen) continue;
+    for (const o of objects) {
+      if (o.parent !== this) continue;
+      o.updateMatrixWorld(true);
+      o.traverse(staticMatrix);
+    }
+    break;
+  }
+  return this;
+};
+
+const staticMatrix = (o) => {
+  o.matrixAutoUpdate = false;
+};
+
+export function freezeTransforms(group) {
+  group.updateMatrixWorld(true);
+  group.traverse(staticMatrix);
+  group.userData.frozen = true;
+  // don't even walk the ~15k static children every frame (only a forced update does)
+  const update = group.updateMatrixWorld;
+  group.updateMatrixWorld = function (force) {
+    if (force) update.call(this, force);
+  };
+}
+
 export function updateCulling(p) {
   for (const c of culled) c.mesh.visible = (c.x - p.x) ** 2 + (c.z - p.z) ** 2 < c.r2;
 }
@@ -584,6 +630,12 @@ export function instancedChunks(root, geometry, material, items, setMatrix, opts
   }
   const m = new THREE.Matrix4();
   const meshes = [];
+  // Small props (bulbs, tables, planters...) can't be seen hundreds of metres away and
+  // their shadows are a few texels: draw them only nearby and skip the shadow pass.
+  if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+  const size = geometry.boundingSphere.radius;
+  const range = opts.range ?? Math.min(450, Math.max(140, size * 220));
+  const cast = !!opts.cast && size >= 0.4;
   for (const list of groups.values()) {
     const mesh = new THREE.InstancedMesh(geometry, material, list.length);
     list.forEach((it, i) => {
@@ -591,12 +643,12 @@ export function instancedChunks(root, geometry, material, items, setMatrix, opts
       mesh.setMatrixAt(i, m);
       if (opts.color) mesh.setColorAt(i, opts.color(it));
     });
-    mesh.castShadow = !!opts.cast;
+    mesh.castShadow = cast;
     mesh.receiveShadow = !!opts.receive;
     mesh.computeBoundingSphere();
     root.add(mesh);
     meshes.push(mesh);
-    const r = (opts.range ?? 450) + mesh.boundingSphere.radius;
+    const r = range + mesh.boundingSphere.radius;
     culled.push({ mesh, x: mesh.boundingSphere.center.x, z: mesh.boundingSphere.center.z, r2: r * r });
   }
   return meshes;

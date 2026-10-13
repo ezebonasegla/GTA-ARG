@@ -235,9 +235,11 @@ export class ChunkSet {
   }
   // Show the small details only around the camera; bake nearby props (a couple per
   // frame so driving doesn't stutter) and free the far ones.
-  updateDetail(p, fast = false) {
+  updateDetail(p, fast = false, initial = false) {
     for (const d of this.detail) d.mesh.visible = (d.cx - p.x) ** 2 + (d.cz - p.z) ** 2 < d.range * d.range;
-    let uploads = 3; // spread the uploads when flying in fast
+    // spread the uploads when flying in fast; at load time bring everything in range at once
+    // (otherwise the first seconds show balconies and roofs floating without their walls)
+    let uploads = initial ? Infinity : 3;
     for (const s of this.streamed) {
       const d2 = (s.cx - p.x) ** 2 + (s.cz - p.z) ** 2;
       if (!s.on && d2 < s.range * s.range && uploads-- > 0) {
@@ -249,7 +251,7 @@ export class ChunkSet {
         s.on = false;
       }
     }
-    let budget = fast ? 0 : 2; // flying over: no baking, it'd be garbage a second later
+    let budget = initial ? Infinity : fast ? 0 : 2; // flying over: no baking, it'd be garbage a second later
     for (const l of this.lazy) {
       const d2 = (l.cx - p.x) ** 2 + (l.cz - p.z) ** 2;
       if (d2 < l.range * l.range) {

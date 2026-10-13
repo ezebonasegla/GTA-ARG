@@ -13,7 +13,7 @@ export function canvas(w = S, h = S) {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
-  return [c, c.getContext('2d')];
+  return [c, c.getContext('2d', { willReadFrequently: true })];
 }
 
 function noise(ctx, w, h, amount, rng, alpha = 0.08, x0 = 0, y0 = 0) {

@@ -108,35 +108,41 @@ function prepCar(scene) {
   return { scene, cell, material, size: new THREE.Box3().setFromObject(scene).getSize(new THREE.Vector3()), variants: new Map() };
 }
 
+// Recolors the template's paint swatch (one cell of its 8x4 palette texture) in the
+// shader, keeping the swatch's shading gradient, instead of a repainted texture per color.
 function paintMaterial(t, color) {
   const key = t.cell.join() + color;
   if (t.variants.has(key)) return t.variants.get(key);
-  const img = t.material.map.image;
-  const c = document.createElement('canvas');
-  c.width = img.width;
-  c.height = img.height;
-  const ctx = c.getContext('2d');
-  ctx.drawImage(img, 0, 0);
-  const w = img.width / 8, h = img.height / 4, x0 = t.cell[0] * w, y0 = t.cell[1] * h;
-  const px = ctx.getImageData(x0, y0, w, h);
-  const d = px.data;
-  let mean = 0;
-  for (let i = 0; i < d.length; i += 4) mean += d[i] + d[i + 1] + d[i + 2];
-  mean /= d.length * 0.75;
-  const target = new THREE.Color(color);
-  for (let i = 0; i < d.length; i += 4) {
-    const k = (d[i] + d[i + 1] + d[i + 2]) / 3 / mean; // keep the swatch's shading gradient
-    d[i] = Math.min(255, target.r * 255 * k);
-    d[i + 1] = Math.min(255, target.g * 255 * k);
-    d[i + 2] = Math.min(255, target.b * 255 * k);
+  const map = t.material.map;
+  if (t.mean === undefined) {
+    const img = map.image;
+    const c = document.createElement('canvas');
+    c.width = 8;
+    c.height = 4;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, 8, 4);
+    const d = ctx.getImageData(t.cell[0], t.cell[1], 1, 1).data;
+    t.mean = Math.max(1, (d[0] + d[1] + d[2]) / 3) / 255;
+    map.magFilter = map.minFilter = THREE.NearestFilter;
+    map.needsUpdate = true;
   }
-  ctx.putImageData(px, x0, y0);
-  const map = new THREE.CanvasTexture(c);
-  map.colorSpace = THREE.SRGBColorSpace;
-  map.flipY = t.material.map.flipY;
-  map.magFilter = map.minFilter = THREE.NearestFilter;
+  const v0 = map.flipY ? 1 - (t.cell[1] + 1) / 4 : t.cell[1] / 4;
+  const cell = new THREE.Vector4(t.cell[0] / 8, v0, (t.cell[0] + 1) / 8, v0 + 0.25);
+  const paint = new THREE.Color(color), mean = t.mean;
   const m = t.material.clone();
-  m.map = map;
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.paintCell = { value: cell };
+    sh.uniforms.paintColor = { value: paint };
+    sh.uniforms.paintMean = { value: mean };
+    sh.fragmentShader = 'uniform vec4 paintCell;\nuniform vec3 paintColor;\nuniform float paintMean;\n' + sh.fragmentShader.replace('#include <map_fragment>', `
+      vec4 sampledDiffuseColor = texture2D(map, vMapUv);
+      if (all(greaterThanEqual(vMapUv, paintCell.xy)) && all(lessThan(vMapUv, paintCell.zw))) {
+        float k = dot(pow(sampledDiffuseColor.rgb, vec3(1.0 / 2.2)), vec3(1.0 / 3.0)) / paintMean;
+        sampledDiffuseColor.rgb = pow(min(vec3(1.0), paintColor * k), vec3(2.2));
+      }
+      diffuseColor *= sampledDiffuseColor;`);
+  };
+  m.customProgramCacheKey = () => 'paintCell';
   keep(m);
   t.variants.set(key, m);
   return m;
@@ -338,25 +344,27 @@ function repaint(car, mat, color) {
   const m = mat.clone();
   m.color = new THREE.Color(color);
   if (mat.map) {
+    // grey the texture in the shader (a pixel loop over a 2k texture cost seconds at load)
     if (!greyMaps.has(mat.map)) {
       const img = mat.map.image;
       const c = document.createElement('canvas');
-      c.width = img.width;
-      c.height = img.height;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      const px = ctx.getImageData(0, 0, c.width, c.height), d = px.data;
+      c.width = c.height = 16;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, 16, 16);
+      const d = ctx.getImageData(0, 0, 16, 16).data;
       let mean = 0;
       for (let i = 0; i < d.length; i += 4) mean += (d[i] + d[i + 1] + d[i + 2]) / 3;
-      mean /= d.length / 4;
-      for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = Math.min(255, ((d[i] + d[i + 1] + d[i + 2]) / 3 / mean) * 235);
-      ctx.putImageData(px, 0, 0);
-      const t = new THREE.CanvasTexture(c);
-      t.colorSpace = THREE.SRGBColorSpace;
-      t.flipY = mat.map.flipY;
-      greyMaps.set(mat.map, t);
+      greyMaps.set(mat.map, 235 / Math.max(1, mean / (d.length / 4)));
     }
-    m.map = greyMaps.get(mat.map);
+    const scale = greyMaps.get(mat.map);
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.greyScale = { value: scale };
+      sh.fragmentShader = 'uniform float greyScale;\n' + sh.fragmentShader.replace('#include <map_fragment>', `
+        vec4 sampledDiffuseColor = texture2D(map, vMapUv);
+        float greyPaint = min(1.0, dot(pow(sampledDiffuseColor.rgb, vec3(1.0 / 2.2)), vec3(1.0 / 3.0)) * greyScale);
+        diffuseColor *= vec4(vec3(pow(greyPaint, 2.2)), sampledDiffuseColor.a);`);
+    };
+    m.customProgramCacheKey = () => 'greyPaint';
   }
   keep(m);
   car.paints.set(key, m);
