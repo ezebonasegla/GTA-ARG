@@ -10,6 +10,7 @@ import { buildBuildings } from './buildings.js';
 import { buildConurbano } from './conurbano.js';
 import { buildShops } from './shops.js';
 import { buildStreets } from './streets.js';
+import { markZones, buildZones } from './zones.js';
 import { CollisionWorld } from './collision.js';
 import { RoadGraph } from './roadGraph.js';
 import { GeoBuf, ChunkSet } from './geobuf.js';
@@ -24,6 +25,7 @@ export function buildWorld(data, renderer, scene) {
   const tex = makeTextures(renderer);
   const collision = new CollisionWorld();
   markMetro(data.roads);
+  markZones(data);
   const plan = planCorridors(data); // cuts the streets that can't cross the autopista / tracks
   const graph = new RoadGraph(data.roads);
   dropBuildingsOnRoads(data, graph);
@@ -326,6 +328,8 @@ export function buildWorld(data, renderer, scene) {
 
   // ---------------------------------------------------------------- landmarks
   const landmarks = buildLandmarks(data, { root, collision, graph, tex });
+  // hand-made places of the centre (peatonal, estación, plaza)
+  const zones = buildZones(data, { root, graph, collision, ribbon, flatMat, keepOut: landmarks.keepOut, GeoBuf });
   const keepHash = new SpatialHash(32);
   for (const k of landmarks.keepOut) keepHash.insert(k, { minX: k[0] - k[2], minZ: k[1] - k[2], maxX: k[0] + k[2], maxZ: k[1] + k[2] });
   const keepNear = new Set();
@@ -521,6 +525,7 @@ export function buildWorld(data, renderer, scene) {
       poolMat.opacity = n * 0.55;
       poolMat.visible = n > 0.05;
       landmarks.setNight(n);
+      zones.setNight(n);
       streetSigns.setNight(n);
       shops.setNight(n);
     },

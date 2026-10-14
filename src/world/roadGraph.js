@@ -8,7 +8,7 @@ export class RoadGraph {
     this.byKey = new Map();
     this.segIndex = new SpatialHash(40);
     for (const road of roads) {
-      const drivable = road.kind !== 'footway';
+      const drivable = road.kind !== 'footway' && !road.noCars;
       for (let i = 0; i < road.pts.length - 1; i++) {
         const a = this.node(road.pts[i]);
         const b = this.node(road.pts[i + 1]);

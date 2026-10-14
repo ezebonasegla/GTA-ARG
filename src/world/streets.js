@@ -31,7 +31,7 @@ class Cells {
 }
 
 // Arc-length parametrised polyline.
-class Line {
+export class Line {
   constructor(pts) {
     this.pts = pts;
     this.d = [0];

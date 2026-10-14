@@ -17,7 +17,7 @@ export const HITOS = {
 };
 
 // ------------------------------------------------------------------ helpers
-class Kit {
+export class Kit {
   constructor() {
     this.parts = new Map();
   }
@@ -86,7 +86,7 @@ function gablePrism(L, W, H) {
   return g;
 }
 
-function canvasTexture(w, h, draw) {
+export function canvasTexture(w, h, draw) {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
@@ -97,7 +97,7 @@ function canvasTexture(w, h, draw) {
   return t;
 }
 
-function signTexture(text, bg, fg, w = 1024, h = 160, font = 'bold 96px Arial, sans-serif') {
+export function signTexture(text, bg, fg, w = 1024, h = 160, font = 'bold 96px Arial, sans-serif') {
   return canvasTexture(w, h, (ctx) => {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, w, h);
@@ -112,7 +112,7 @@ function signTexture(text, bg, fg, w = 1024, h = 160, font = 'bold 96px Arial, s
   });
 }
 
-function flagTexture() {
+export function flagTexture() {
   return canvasTexture(300, 200, (ctx) => {
     ctx.fillStyle = '#74acdf';
     ctx.fillRect(0, 0, 300, 200);
