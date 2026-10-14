@@ -1,3 +1,4 @@
+import { CarLOD } from './entities/carLod.js';
 import { Combat, GUN_SHOPS } from './combat.js';
 import { streaming } from './world/geobuf.js';
 import * as THREE from 'three';
@@ -71,7 +72,7 @@ async function main() {
   const renderer = new THREE.WebGLRenderer({ antialias: !light.on, powerPreference: 'high-performance', stencil: true });
   const mobile = isTouchDevice();
   renderer.setPixelRatio(Math.min(devicePixelRatio, mobile || light.on ? (light.on ? 0.85 : 1) : 1.5));
-  const perf = { frames: 0, t: 0, low: 0, high: 0, n: 0, maxRatio: renderer.getPixelRatio() };
+  const perf = { frames: 0, t: 0, low: 0, high: 0, n: 0, shadowEvery: 1, maxRatio: renderer.getPixelRatio() };
   const fpsEl = document.getElementById('fps');
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = !light.on;
@@ -193,6 +194,7 @@ async function main() {
     hud.toast(`★ ${what}`);
   };
 
+  const carLod = new CarLOD(scene); // far traffic drawn as simple shapes
   const cam = { yaw: spawnHeading, pitch: 0.28, dist: 5.5, idle: 0, mode: 0 };
   const combat = new Combat({ scene, world, player, peds, traffic, hud, audio, onCrime, getWanted: () => wanted });
   const NO_INPUT = { down: () => false, hit: () => false, mouseDX: 0, mouseDY: 0 };
@@ -754,6 +756,9 @@ async function main() {
     audio.update({ inCar, speed: inCar ? player.vehicle.speed : 0, throttle, horn, sirenDist: nearestCop, time: totalTime });
 
     world.updateDetail(camera.position, fast);
+    carLod.update(traffic.vehicles, camera.position, player.vehicle);
+    // pedestrians past 110 m are a few pixels: not worth their draw call and shadow
+    for (const p of peds.list) if (!p.dead) p.mesh.visible = (p.x - camera.position.x) ** 2 + (p.z - camera.position.z) ** 2 < 110 * 110;
     // fps counter + dynamic resolution: drop the pixel ratio when the frame rate sags,
     // bring it back when there is headroom
     perf.frames++;
@@ -767,9 +772,18 @@ async function main() {
       perf.low = fps < 50 ? perf.low + 1 : 0;
       perf.high = fps > 58 ? perf.high + 1 : 0;
       const pr = renderer.getPixelRatio();
-      if (perf.low >= 3 && pr > 0.7) {
-        perf.maxRatio = Math.min(perf.maxRatio, pr - 0.05);
-        renderer.setPixelRatio(Math.max(0.7, pr - 0.15));
+      if (perf.low >= 3) {
+        // one step down at a time: shadows every other frame, then resolution, then
+        // shadows every third frame, then resolution again
+        if (perf.shadowEvery < 2) perf.shadowEvery = 2;
+        else if (pr > 1) {
+          perf.maxRatio = Math.min(perf.maxRatio, pr - 0.05);
+          renderer.setPixelRatio(Math.max(1, pr - 0.15));
+        } else if (perf.shadowEvery < 3) perf.shadowEvery = 3;
+        else if (pr > 0.7) {
+          perf.maxRatio = Math.min(perf.maxRatio, pr - 0.05);
+          renderer.setPixelRatio(Math.max(0.7, pr - 0.15));
+        }
         perf.low = 0;
       } else if (perf.high >= 12 && pr + 0.1 <= perf.maxRatio) {
         renderer.setPixelRatio(pr + 0.1);
@@ -778,15 +792,15 @@ async function main() {
       perf.frames = 0;
       perf.t = 0;
     }
-    // shadows every frame: the same cost in each one paces better than a heavy frame every
-    // other one (which showed as judder whenever that one went past 16 ms)
-    renderer.shadowMap.needsUpdate = true;
+    // shadows every frame while the GPU keeps up (an even cost per frame paces better);
+    // every 2nd / 3rd frame on a slower one (perf.shadowEvery, set above)
+    if ((perf.n = (perf.n + 1) % perf.shadowEvery) === 0) renderer.shadowMap.needsUpdate = true;
     renderer.render(scene, camera);
     if (!perf.released && perf.frames > 2) releaseTexturePixels(), (perf.released = true);
     input.endFrame();
     requestAnimationFrame(frame);
   }
-  window.__game = { input, combat, ghost, buses, trains, hud, scene, camera, renderer, player, traffic, peds, world, data, get hours() { return hours; }, set hours(h) { hours = h; }, get wanted() { return wanted; }, set wanted(w) { wanted = w; } };
+  window.__game = { input, combat, ghost, buses, trains, hud, scene, camera, renderer, player, traffic, peds, world, data, carLod, get hours() { return hours; }, set hours(h) { hours = h; }, get wanted() { return wanted; }, set wanted(w) { wanted = w; } };
   requestAnimationFrame(frame);
 }
 

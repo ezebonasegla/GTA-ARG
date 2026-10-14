@@ -13,6 +13,7 @@ export class Vehicle {
     this.spec = VEHICLE_TYPES[type];
     color ??= this.spec.colors[Math.floor(Math.random() * this.spec.colors.length)];
     this.mesh = createVehicleMesh(type, color);
+    this.lodColor = typeof color === 'object' ? color[1] : color; // far-away stand-in (carLod.js)
     this.spec = this.mesh.userData.spec || this.spec;
     this.x = x;
     this.z = z;
