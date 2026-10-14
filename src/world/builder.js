@@ -11,6 +11,7 @@ import { buildConurbano } from './conurbano.js';
 import { buildShops } from './shops.js';
 import { buildStreets } from './streets.js';
 import { markZones, buildZones } from './zones.js';
+import { buildSignals } from './signals.js';
 import { CollisionWorld } from './collision.js';
 import { RoadGraph } from './roadGraph.js';
 import { GeoBuf, ChunkSet } from './geobuf.js';
@@ -330,6 +331,16 @@ export function buildWorld(data, renderer, scene) {
   const landmarks = buildLandmarks(data, { root, collision, graph, tex });
   // hand-made places of the centre (peatonal, estación, plaza)
   const zones = buildZones(data, { root, graph, collision, ribbon, flatMat, keepOut: landmarks.keepOut, GeoBuf });
+  const signals = buildSignals({
+    graph, arms: streets.arms, root, collision, keepOut: landmarks.keepOut,
+    centres: (data.specials || []).filter((s) => s.type === 'station' && /quilmes|bernal/i.test(s.name || '')).map((s) => [s.cx, s.cz]),
+    addCulled: (mesh, range) => {
+      mesh.geometry.computeBoundingSphere();
+      const s = mesh.boundingSphere || mesh.geometry.boundingSphere, r = range + s.radius;
+      culled.push({ mesh, x: s.center.x, z: s.center.z, r2: r * r });
+    },
+  });
+  console.info('semáforos:', signals.count);
   const keepHash = new SpatialHash(32);
   for (const k of landmarks.keepOut) keepHash.insert(k, { minX: k[0] - k[2], minZ: k[1] - k[2], maxX: k[0] + k[2], maxZ: k[1] + k[2] });
   const keepNear = new Set();
@@ -530,6 +541,7 @@ export function buildWorld(data, renderer, scene) {
       shops.setNight(n);
     },
     streetSigns,
+    signals,
     shops: shops.count,
     shopList: shops.placed,
     // Per-frame work that depends on where the player is.

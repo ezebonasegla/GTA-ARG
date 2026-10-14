@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { GeoBuf } from './geobuf.js';
 import { offsetLine } from './metrobus.js';
-import { hashString } from './geo.js';
+import { hashString, SpatialHash } from './geo.js';
 
 const CELL = 220;
 const CURB_H = 0.15, CURB_W = 0.18, CORNER_R = 3;
@@ -12,6 +12,7 @@ const UP = [0, 1, 0];
 const WHITE = new THREE.Color(0.92, 0.92, 0.88), YELLOW = new THREE.Color(0.93, 0.72, 0.08);
 const CONCRETE = new THREE.Color(0.74, 0.73, 0.7), CURB_YELLOW = new THREE.Color(0.9, 0.7, 0.1), GRATE = new THREE.Color(0.1, 0.1, 0.1);
 const NO_UV = [0, 0];
+const RAMP = new THREE.Color(0.8, 0.79, 0.76);
 
 const vehicular = (r) => r.kind !== 'footway' && r.kind !== 'pedestrian';
 const curbed = (r) => vehicular(r) && !r.pasillo && !r.dirt && !r.ramp && (r.kind !== 'service' || r.w >= 5);
@@ -126,21 +127,63 @@ export function buildStreets({ data, graph, plan, root, deckClip, addCulled, fla
 
   // ------------------------------------------------------------ curbs
   // a bevelled concrete kerb along a polyline: top plus both faces
-  function curb(pts, color) {
+  // Curbs are drawn last, once every crosswalk is known: each senda gets a rampa on
+  // both sides and the curb is cut there.
+  const pendingCurbs = [];
+  const ramps = new SpatialHash(8);
+  const curb = (pts, color) => pendingCurbs.push([pts, color]);
+  function curbPiece(ax, az, bx, bz, color) {
+    const l = Math.hypot(bx - ax, bz - az);
+    if (l < 0.01) return;
+    const nx = (-(bz - az) / l) * CURB_W / 2, nz = ((bx - ax) / l) * CURB_W / 2;
+    const buf = curbCells.at((ax + bx) / 2, (az + bz) / 2);
+    const top = (s, y) => [[ax + nx * s, y, az + nz * s], [bx + nx * s, y, bz + nz * s]];
+    const [a1, b1] = top(1, CURB_H), [a0, b0] = top(-1, CURB_H), [a1d, b1d] = top(1.25, 0.04), [a0d, b0d] = top(-1.25, 0.04);
+    const v = l / 2;
+    buf.quad(a0, a1, b1, b0, [0, 0], [1, 0], [1, v], [0, v], color, UP);
+    buf.quad(a1d, a1, b1, b1d, [0, 0], [1, 0], [1, v], [0, v], color, [nx, 0.3, nz]);
+    buf.quad(a0d, a0, b0, b0d, [0, 0], [1, 0], [1, v], [0, v], color, [-nx, 0.3, -nz]);
+  }
+  function drawCurb(pts, color) {
     for (let i = 0; i < pts.length - 1; i++) {
       const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
       const l = Math.hypot(bx - ax, bz - az);
       if (l < 0.01) continue;
-      const nx = (-(bz - az) / l) * CURB_W / 2, nz = ((bx - ax) / l) * CURB_W / 2;
-      const buf = curbCells.at((ax + bx) / 2, (az + bz) / 2);
-      const top = (s, y) => [[ax + nx * s, y, az + nz * s], [bx + nx * s, y, bz + nz * s]];
-      const [a1, b1] = top(1, CURB_H), [a0, b0] = top(-1, CURB_H), [a1d, b1d] = top(1.25, 0.04), [a0d, b0d] = top(-1.25, 0.04);
-      const v = l / 2;
-      buf.quad(a0, a1, b1, b0, [0, 0], [1, 0], [1, v], [0, v], color, UP);
-      buf.quad(a1d, a1, b1, b1d, [0, 0], [1, 0], [1, v], [0, v], color, [nx, 0.3, nz]);
-      buf.quad(a0d, a0, b0, b0d, [0, 0], [1, 0], [1, v], [0, v], color, [-nx, 0.3, -nz]);
+      const dx = (bx - ax) / l, dz = (bz - az) / l;
+      // gaps where a rampa meets this piece of curb
+      const gaps = [];
+      for (const r of ramps.query(Math.min(ax, bx) - 1, Math.min(az, bz) - 1, Math.max(ax, bx) + 1, Math.max(az, bz) + 1)) {
+        const t = (r.x - ax) * dx + (r.z - az) * dz;
+        if (t < -0.8 || t > l + 0.8 || Math.abs((r.x - ax) * -dz + (r.z - az) * dx) > 0.7) continue;
+        gaps.push([t - 0.8, t + 0.8]);
+      }
+      gaps.sort((p, q) => p[0] - q[0]);
+      let t0 = 0;
+      for (const [g0, g1] of [...gaps, [l, l]]) {
+        if (g0 > t0) curbPiece(ax + dx * t0, az + dz * t0, ax + dx * Math.min(l, g0), az + dz * Math.min(l, g0), color);
+        t0 = Math.max(t0, g1);
+      }
     }
   }
+  // rampa at (x, z) on the road edge: from the asphalt up to the sidewalk, `m` pointing
+  // out of the road, (dx, dz) along it; a yellow podotáctil strip at the top
+  function ramp(x, z, dx, dz, mx, mz) {
+    const buf = curbCells.at(x, z);
+    const P = (s, o, y) => [x + dx * s + mx * o, y, z + dz * s + mz * o];
+    buf.quad(P(-0.8, 0, 0.075), P(0.8, 0, 0.075), P(0.8, 1.1, 0.15), P(-0.8, 1.1, 0.15), [0, 0], [1, 0], [1, 1], [0, 1], RAMP, UP);
+    buf.quad(P(-0.7, 0.7, 0.127), P(0.7, 0.7, 0.127), P(0.7, 1.05, 0.152), P(-0.7, 1.05, 0.152), [0, 0], [1, 0], [1, 1], [0, 1], CURB_YELLOW, UP);
+    // the curb's cut ends, sloping down to the ramp
+    for (const e of [-1, 1]) buf.quad(P(e * 0.8, 0, 0.075), P(e * 0.8, 1.1, 0.15), P(e * 0.98, 1.1, CURB_H), P(e * 0.98, 0, CURB_H), [0, 0], [1, 0], [1, 1], [0, 1], CONCRETE, UP);
+  }
+  const rampAt = (line, s, hw, curbed) => {
+    if (!curbed) return;
+    const [x, z, dx, dz] = line.at(s);
+    for (const side of [1, -1]) {
+      const mx = -dz * side, mz = dx * side;
+      const r = { x: x + mx * hw, z: z + mz * hw, dx, dz, mx, mz };
+      ramps.insert(r, { minX: r.x, minZ: r.z, maxX: r.x, maxZ: r.z });
+    }
+  };
   const YELLOW_LEN = 5;
   function curbRun(pts, yellowStart, yellowEnd) {
     const line = new Line(pts);
@@ -181,8 +224,14 @@ export function buildStreets({ data, graph, plan, root, deckClip, addCulled, fla
     const sendas = marked(road) || road.kind === 'tertiary' || (road.kind === 'residential' && hashString(`${line.pts[0]}`) % 3 === 0);
     const c0 = start ? start.clear + 5.5 : 0, c1 = end ? end.clear + 5.5 : 0;
     if (len - c0 - c1 < 4) return;
-    if (start && sendas) zebra(line, start.clear + 2, hw);
-    if (end && sendas) zebra(line, len - end.clear - 2, hw);
+    if (start && sendas) {
+      zebra(line, start.clear + 2, hw);
+      rampAt(line, start.clear + 2, hw, curbed(road));
+    }
+    if (end && sendas) {
+      zebra(line, len - end.clear - 2, hw);
+      rampAt(line, len - end.clear - 2, hw, curbed(road));
+    }
     if (!marked(road)) return;
     const s0 = c0, s1 = len - c1;
     if (road.oneway) {
@@ -240,6 +289,9 @@ export function buildStreets({ data, graph, plan, root, deckClip, addCulled, fla
     buf.quad(p(-0.5, -0.22), p(-0.5, 0.22), p(0.5, 0.22), p(0.5, -0.22), NO_UV, NO_UV, NO_UV, NO_UV, GRATE, UP);
   }
 
+  for (const [pts, color] of pendingCurbs) drawCurb(pts, color);
+  for (const r of ramps.map.values()) for (const it of r) ramp(it.x, it.z, it.dx, it.dz, it.mx, it.mz);
+
   // ------------------------------------------------------------ meshes
   const curbMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, ...flatProps.stencil });
   for (const buf of curbCells.map.values()) {
@@ -256,5 +308,5 @@ export function buildStreets({ data, graph, plan, root, deckClip, addCulled, fla
     root.add(mesh);
     addCulled(mesh, 380);
   }
-  return { patch, junctions };
+  return { patch, junctions, arms };
 }

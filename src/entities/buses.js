@@ -514,8 +514,13 @@ export class Buses {
     if (obst < Infinity) target = Math.min(target, Math.max(0, (obst - v.spec.length / 2 - 3) * 0.6));
     const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
     if (this.traffic.closedAt?.(v.x + fx * 16, v.z + fz * 16) && !this.traffic.closedAt(v.x, v.z)) target = 0;
+    // semáforo: stop at the line, and a queue at a light is not something to go around
+    const signals = this.traffic.signals;
+    const red = signals?.stopAhead(v.x, v.z, fx, fz, 45 + speed * 2, speed) ?? Infinity;
+    if (red < Infinity) target = Math.min(target, Math.max(0, (red - v.spec.length / 2 - 0.3) * 0.5));
+    const queued = red < Infinity || (signals?.stopAhead(v.x, v.z, fx, fz, 80) ?? Infinity) < Infinity;
     // stuck behind something (not at a stop): honk-wait, then go around it
-    if (b.wait <= 0 && speed < 0.5 && target < 1) b.stuck += dt;
+    if (b.wait <= 0 && speed < 0.5 && target < 1 && !queued) b.stuck += dt;
     else b.stuck = Math.max(0, b.stuck - dt);
     if (b.stuck > 6) {
       b.stuck = 0;

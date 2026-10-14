@@ -234,6 +234,13 @@ export class Traffic {
     return nearest;
   }
 
+  // waiting at a red light, or in the queue behind a car that is (up to ~60 m back)
+  queuedAtLight(v, c) {
+    if (c.waiting > 0) return true;
+    if (!this.signals) return false;
+    return this.signals.stopAhead(v.x, v.z, Math.sin(v.heading), Math.cos(v.heading), 70) < Infinity;
+  }
+
   driveNpc(v, c, dt, ctx) {
     if (v.health <= 0 || !v.driver) {
       v.update(dt, { throttle: 0, brake: 1, steer: 0 }, this.collision);
@@ -294,6 +301,12 @@ export class Traffic {
     // barrera down ahead (and not already on the crossing): wait for the train
     const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
     if (this.closedAt?.(v.x + fx * 14, v.z + fz * 14) && !this.closedAt(v.x, v.z)) target = 0;
+    // semáforo in amber or red: stop with the nose at the stop line
+    const red = this.signals?.stopAhead(v.x, v.z, fx, fz, 45 + speed * 2, speed) ?? Infinity;
+    if (red < Infinity) {
+      target = Math.min(target, Math.max(0, (red - v.spec.length / 2 - 0.3) * 0.6));
+      c.waiting = 1;
+    } else if (c.waiting > 0) c.waiting -= dt;
     const err = target - speed;
     const input = {
       throttle: err > 0.3 ? Math.min(1, err * 0.35) : 0,
@@ -333,7 +346,7 @@ export class Traffic {
     }
     // jammed behind something that never moves (a deadlock on a narrow street, a car
     // left in the lane): lose patience, back up and take another way
-    if (obst < Infinity && speed < 0.4 && c.reverse <= 0) c.blocked = (c.blocked || 0) + dt;
+    if (obst < Infinity && speed < 0.4 && c.reverse <= 0 && !this.queuedAtLight(v, c)) c.blocked = (c.blocked || 0) + dt;
     else c.blocked = 0;
     if (c.blocked > 5 && !(c.nudge > 0) && !this.closedAt?.(v.x + Math.sin(v.heading) * 14, v.z + Math.cos(v.heading) * 14)) {
       c.nudge = 4;
@@ -354,7 +367,7 @@ export class Traffic {
     if (!c.anchor || Math.hypot(v.x - c.anchor[0], v.z - c.anchor[1]) > 3) {
       c.anchor = [v.x, v.z];
       c.idle = 0;
-    } else if ((c.idle += dt) > 20) {
+    } else if ((c.idle += dt) > 20 && !this.queuedAtLight(v, c)) {
       c.idle = 0;
       if (Math.hypot(ctx.px - v.x, ctx.pz - v.z) > 60) {
         this.remove(v);

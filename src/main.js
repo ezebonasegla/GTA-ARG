@@ -134,6 +134,7 @@ async function main() {
   await models;
   const traffic = new Traffic(scene, world.graph, world.collision, rng);
   traffic.closedAt = (x, z) => world.corridors.closedAt(x, z); // barreras down
+  traffic.signals = world.signals; // semáforos
   const peds = new Peds(scene, world.graph, world.collision, rng);
   const trains = new Trains(scene, data);
   // real colectivo lines (only for the real map: same coordinates)
@@ -635,6 +636,7 @@ async function main() {
     perf.vs = (perf.vs || 0) + (Math.min(vs, 400) - (perf.vs || 0)) * Math.min(1, dt * 2);
     const fast = perf.vs > 32;
     const ctx = { px, pz, riding, playerVehicle: player.vehicle, peds: peds.list, wanted, time: totalTime, horn, onCrime, trainBoxes, fast };
+    world.signals.update(dt);
     const carHit = traffic.update(dt, ctx);
     buses?.update(dt, ctx, rng);
     if (!ghost.on && carHit > 3) audio.thump(carHit);
