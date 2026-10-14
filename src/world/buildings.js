@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { mulberry32, hashString, polygonArea, pointInPolygon, bbox } from './geo.js';
 import { template } from './geobuf.js';
 import { ATLAS } from './conurbanoTextures.js';
-import { frontLayout, frontWall, HouseDetail } from './houseFronts.js';
+import { frontLayout, blockLayout, frontWall, HouseDetail } from './houseFronts.js';
 
 // Tint palettes (sRGB hex) per facade style.
 const PALETTES = {
@@ -109,6 +109,7 @@ export function buildBuildings(data, { chunks, collision, tex, graph }) {
     const topHueco = unfinished ? Math.max(0, h - 2.9) : h;
     const uOff = Math.floor(rng() * 4) * 1.5;
 
+    const blockFronts = new Set();
     // the longest street front gets the door (and the garage)
     let mainEdge = -1, mainLen = 0;
     for (let e = 0; e < n; e++) {
@@ -147,6 +148,25 @@ export function buildBuildings(data, { chunks, collision, tex, graph }) {
           if (topHueco - y > 0.05) buf.wall(p0, p1, y, topHueco, u0, 6, 6, tint, styleLayer);
         } else if (topHueco > 0.05) buf.wall(p0, p1, 0, topHueco, u0, 6, 6, medTint, medLayer);
         if (unfinished && h - topHueco > 0.05) buf.wall(p0, p1, topHueco, h, u0, 6, 5.8, white, front ? L.hueco : L.medianeraLadrillo, 0.5);
+      } else if (front && !bld.shop && !bld.special && (style === 'apartments' || style === 'brick') && (bld.levels || 0) >= 3 && h < 80 && len >= 3) {
+        // apartment block: real windows floor by floor, balconies, the glass portal
+        const seed = hashString(`${idx}:${e}`);
+        const main = e === mainEdge;
+        const items = blockLayout(len, h, bld.levels, seed, main);
+        frontWall(buf, L, p0, p1, h, h, tint, style === 'brick' ? L.medianeraLadrillo : L.revoque, u0, items);
+        blockFronts.add(e);
+        const ux = (p1[0] - p0[0]) / len, uz = (p1[1] - p0[1]) / len, ox = uz, oz = -ux, ry = Math.atan2(-uz, ux);
+        const at = (s, d) => [p0[0] + ux * s + ox * d, p0[1] + uz * s + oz * d];
+        for (const it of items) {
+          if (it.kind !== 'balcony') continue;
+          const [x, z] = at(it.a + it.w / 2, 0.45);
+          chunk.props.add(TPL.cube, place(x, it.y0 - 0.17, z, it.w + 0.8, 0.17, 0.9, ry), C.white, 0.1);
+          const A = at(it.a - 0.35, 0.85), B = at(it.a + it.w + 0.35, 0.85);
+          railing(chunk.alpha, A, B, it.y0, 1, ATLAS.baranda, 1.2);
+          railing(chunk.alpha, at(it.a - 0.35, 0), A, it.y0, 1, ATLAS.baranda, 1);
+          railing(chunk.alpha, B, at(it.a + it.w + 0.35, 0), it.y0, 1, ATLAS.baranda, 1);
+        }
+        detail.add(p0, p1, h, h, bld.levels, tint, seed, main, main ? setbackOf(graph, p0, p1, len) : 0, 'block');
       } else {
         let y = 0;
         if (shopH && front) {
@@ -161,8 +181,11 @@ export function buildBuildings(data, { chunks, collision, tex, graph }) {
     // Roofs
     const shade = 0.85 + rng() * 0.3;
     const roofTint = new THREE.Color(shade, shade, shade);
-    const chalet = low && !bld.shop && !unfinished && n === 4 && h < 7 && area > 50 && area < 260 && rng() < 0.14;
-    if ((bld.roof === 'gable' || chalet) && n === 4) {
+    // chalets: tiled roofs, a gable (dos aguas) or hipped (cuatro aguas) with eaves
+    const chalet = low && !bld.shop && !unfinished && n === 4 && h < 7.5 && area > 45 && area < 320 && rng() < 0.3;
+    if (chalet && bld.roof !== 'gable' && rng() < 0.55) {
+      addHip(pts, h, buf, roofTint, L.roofTile);
+    } else if ((bld.roof === 'gable' || chalet) && n === 4) {
       addGable(pts, h, buf, tint, roofTint, L.roofTile, style === 'brick' ? L.brick : L.medianera);
     } else if (bld.roof === 'spire') {
       const apex = [cx, h + Math.max(8, h * 0.35), cz];
@@ -205,7 +228,7 @@ export function buildBuildings(data, { chunks, collision, tex, graph }) {
       const ry = Math.atan2(-uz, ux); // box local x along the wall
       const mx = (p0[0] + p1[0]) / 2, mz = (p0[1] + p1[1]) / 2;
       if (flat && style !== 'church') chunk.props.add(TPL.cube, place(mx + ox * 0.1, h - 0.34, mz + oz * 0.1, len + 0.2, 0.54, 0.24, ry), cornice);
-      if (apt) {
+      if (apt && !blockFronts.has(e)) {
         const k = Math.floor((len - 0.6) / 3.4);
         for (let b = 0; b < k; b++) {
           if (rng() < 0.2) continue;
@@ -402,6 +425,35 @@ function chapaRoof(chunk, pts, h, rng, wallTint, L) {
     else if (kind < 0.8) chunk.props.add(TPL.stone, place(x, y + 0.08, z, 1 + rng(), 1, 1 + rng(), rng() * 3), C.stone, 0.4);
     else chunk.props.add(TPL.cube, place(x, y, z, 0.18, 0.12, 0.33, rng() * 3), C.brick);
   }
+}
+
+// Hipped tile roof over a (roughly) rectangular footprint, 40 cm eaves all round.
+function addHip(pts, h, buf, roofTint, roofLayer) {
+  const d01 = Math.hypot(pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]);
+  const d12 = Math.hypot(pts[2][0] - pts[1][0], pts[2][1] - pts[1][1]);
+  const p = d01 >= d12 ? pts : [pts[1], pts[2], pts[3], pts[0]];
+  const cx = (p[0][0] + p[1][0] + p[2][0] + p[3][0]) / 4, cz = (p[0][1] + p[1][1] + p[2][1] + p[3][1]) / 4;
+  const L = Math.max(d01, d12), S = Math.min(d01, d12);
+  const ux = (p[1][0] - p[0][0]) / L, uz = (p[1][1] - p[0][1]) / L;
+  const vx = -uz, vz = ux;
+  const E = 0.4, eave = h - 0.12, rise = S * 0.3;
+  // corners in the roof's frame, pushed out by the eave
+  const C = p.map(([x, z]) => {
+    const s = (x - cx) * ux + (z - cz) * uz, t = (x - cx) * vx + (z - cz) * vz;
+    const s2 = s + Math.sign(s) * E, t2 = t + Math.sign(t) * E;
+    return [cx + ux * s2 + vx * t2, eave, cz + uz * s2 + vz * t2];
+  });
+  const half = Math.max(0, (L - S) / 2);
+  const R0 = [cx - ux * half, h + rise, cz - uz * half], R1 = [cx + ux * half, h + rise, cz + uz * half];
+  const out = (a, b) => [(a[0] + b[0]) / 2 - cx, 1.2, (a[2] + b[2]) / 2 - cz];
+  const uvq = [[0, 0], [L / 4, 0], [L / 4 - S / 8, S / 4], [S / 8, S / 4]];
+  buf.quad(C[0], C[1], R1, R0, ...uvq, roofTint, out(C[0], C[1]), roofLayer);
+  buf.quad(C[2], C[3], R0, R1, ...uvq, roofTint, out(C[2], C[3]), roofLayer);
+  buf.tri(C[1], C[2], R1, [0, 0], [S / 4, 0], [S / 8, S / 4], roofTint, out(C[1], C[2]), roofLayer);
+  buf.tri(C[3], C[0], R0, [0, 0], [S / 4, 0], [S / 8, S / 4], roofTint, out(C[3], C[0]), roofLayer);
+  // soffit under the eaves
+  const dark = new THREE.Color(0.55, 0.52, 0.48);
+  buf.quad(C[0], C[1], C[2], C[3], [0, 0], [1, 0], [1, 1], [0, 1], dark, [0, -1, 0], roofLayer);
 }
 
 function addGable(pts, h, buf, wallTint, roofTint, roofLayer, wallLayer) {

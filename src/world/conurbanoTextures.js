@@ -504,6 +504,34 @@ export const painters = {
     for (let i = 0; i < 4; i++) blotch(ctx, rng, rng() * S, S - rng() * 30, 10 + rng() * 14, 'rgba(110,70,30,0.3)');
     frame(ctx, '#2a2a2a');
   },
+  // Entrance of an apartment block: two glass leaves in a bronze aluminium frame, the
+  // lobby lit behind them at night.
+  portal(ctx, ectx, rng) {
+    ctx.fillStyle = '#4a3a28';
+    ctx.fillRect(0, 0, S, S);
+    ectx.fillStyle = '#000';
+    ectx.fillRect(0, 0, S, S);
+    for (const x of [14, S / 2 + 4]) {
+      const g = ctx.createLinearGradient(x, 14, x + 60, S);
+      g.addColorStop(0, '#7f93a3');
+      g.addColorStop(0.5, '#3a4752');
+      g.addColorStop(1, '#232b31');
+      ctx.fillStyle = g;
+      ctx.fillRect(x, 14, S / 2 - 18, S - 40);
+      ectx.fillStyle = '#e8d2a0';
+      ectx.fillRect(x, 14, S / 2 - 18, S - 40);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(x + 10, 14, 18, S - 40);
+      // the lobby: a plant and the mailboxes seen through the glass
+      ctx.fillStyle = 'rgba(30,25,20,0.5)';
+      ctx.fillRect(x + 20, S - 90, 40, 64);
+    }
+    ctx.fillStyle = '#c9a646';
+    ctx.fillRect(S / 2 - 16, S / 2, 6, 40);
+    ctx.fillRect(S / 2 + 10, S / 2, 6, 40);
+    ctx.fillStyle = '#3a2c1e';
+    ctx.fillRect(0, S - 26, S, 26);
+  },
   // Sheet metal gate (3 m x 2.2 m), tinted per gate.
   porton(ctx, ectx, rng) {
     ctx.fillStyle = '#9a9a98';

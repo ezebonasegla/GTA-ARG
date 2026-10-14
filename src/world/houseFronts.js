@@ -96,6 +96,47 @@ export function frontLayout(len, h, levels, seed, main) {
   return items;
 }
 
+// Front of an apartment block: a glass portal on the main front, windows on the ground
+// floor, and bays every ~3.3 m up the floors, either balconies (every other bay) or
+// windows. Floor height follows the building's real height.
+export function blockLayout(len, h, levels, seed, main) {
+  const rng = mulberry32(seed);
+  const items = [];
+  if (len < 3 || levels < 3) return items;
+  const fh = Math.min(3.3, Math.max(2.7, (h - 0.6) / levels));
+  const balconies = rng() < 0.55;
+  const bays = Math.max(1, Math.floor((len - 0.6) / 3.3)), bw = (len - 0.6) / bays;
+  const tex = rng() < 0.5 ? 'ventanaPersiana' : rng() < 0.5 ? 'ventana' : 'ventanaCortina';
+  const pick = () => (rng() < 0.6 ? tex : rng() < 0.5 ? 'ventanaCortina' : 'ventanaPersiana');
+  let portalBay = -1;
+  if (main) {
+    portalBay = Math.floor(rng() * bays);
+    const pw = Math.min(2, bw - 0.6);
+    if (pw >= 1.2) items.push({ kind: 'portal', a: 0.3 + portalBay * bw + (bw - pw) / 2, w: pw, y0: 0, y1: Math.min(2.6, fh - 0.25) });
+    else portalBay = -1;
+  }
+  for (let b = 0; b < bays; b++) {
+    if (b === portalBay) continue;
+    const ww = Math.min(1.6, bw - 0.9);
+    if (ww > 0.7) items.push({ kind: 'window', a: 0.3 + b * bw + (bw - ww) / 2, w: ww, y0: 0.95, y1: Math.min(2.25, fh - 0.4), tex: pick(), reja: rng() < 0.6 });
+  }
+  for (let f = 1; f < levels; f++) {
+    const base = f * fh;
+    if (base + 2.3 > h - 0.3) break;
+    for (let b = 0; b < bays; b++) {
+      if (balconies && (b % 2 === 0 || bays <= 2)) {
+        const w = Math.min(1.8, bw - 0.7);
+        if (w > 0.9) items.push({ kind: 'balcony', a: 0.3 + b * bw + (bw - w) / 2, w, y0: base + 0.05, y1: base + 2.15, tex: 'ventanaCortina', block: true });
+      } else {
+        const w = Math.min(1.5, bw - 0.9);
+        if (w > 0.7) items.push({ kind: 'window', a: 0.3 + b * bw + (bw - w) / 2, w, y0: base + 0.9, y1: base + 2.15, tex: pick(), reja: false, ac: rng() < 0.15 });
+      }
+    }
+  }
+  items.fh = fh;
+  return items;
+}
+
 // ------------------------------------------------------------ far: wall + flat openings
 export function frontWall(buf, L, p0, p1, h, top, tint, wallLayer, uOff, items) {
   const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
@@ -105,7 +146,7 @@ export function frontWall(buf, L, p0, p1, h, top, tint, wallLayer, uOff, items) 
   const n = [ox, 0, oz];
   for (const it of items) {
     if (it.y1 > top + 0.01) continue;
-    const layer = it.kind === 'door' ? L[`puerta${it.v}`] : it.kind === 'garage' ? L.porton : L[it.tex];
+    const layer = it.kind === 'door' ? L[`puerta${it.v}`] : it.kind === 'garage' ? L.porton : it.kind === 'portal' ? L.portal : L[it.tex];
     const color = it.kind === 'garage' || (it.kind === 'door' && it.v === 1) ? it.tint : WHITE;
     buf.quad(P(it.a, it.y0), P(it.a + it.w, it.y0), P(it.a + it.w, it.y1), P(it.a, it.y1), [1, 0], [0, 0], [0, 1], [1, 1], color, n, layer);
   }
@@ -195,8 +236,9 @@ function relief(solid, alpha, f) {
       alpha.quad(P(sa, y0, d), P(sb, y0, d), P(sb, y1, d), P(sa, y1, d), [a0, b0], [a1, b0], [a1, b1], [a0, b1], WHITE, [ox, 0, oz]);
     }
   };
-  const items = frontLayout(len, h, f.levels, f.seed, f.main);
-  const holes = items.filter((i) => i.kind === 'door' || i.kind === 'garage').map((i) => [i.a - 0.12, i.a + i.w + 0.12]);
+  const block = f.kind === 'block';
+  const items = block ? blockLayout(len, h, f.levels, f.seed, f.main) : frontLayout(len, h, f.levels, f.seed, f.main);
+  const holes = items.filter((i) => i.kind === 'door' || i.kind === 'garage' || i.kind === 'portal').map((i) => [i.a - 0.12, i.a + i.w + 0.12]);
 
   // zócalo along the foot of the wall, interrupted by the door and the garage
   const zh = 0.45 + rng() * 0.4, zc = ZOCALO[Math.floor(rng() * ZOCALO.length)];
@@ -205,8 +247,9 @@ function relief(solid, alpha, f) {
     if (a - s > 0.1) box(s, Math.min(a, len), 0, zh, 0, 0.035, zc);
     s = Math.max(s, b);
   }
-  // a moulded band between the floors
-  if (f.levels >= 2 && top > FLOOR + 0.5) box(0, len, FLOOR - 0.1, FLOOR + 0.12, 0, 0.06, light);
+  // a moulded band between the floors (every floor on the blocks)
+  const fh = items.fh || FLOOR;
+  for (let k = 1; k < (block ? f.levels : 2); k++) if (f.levels > k && top > k * fh + 0.5) box(0, len, k * fh - 0.1, k * fh + 0.08, 0, block ? 0.04 : 0.06, light);
 
   for (const it of items) {
     if (it.y1 > top + 0.01) continue;
@@ -217,6 +260,7 @@ function relief(solid, alpha, f) {
       box(a + w, a + w + 0.12, y0, y1, 0, 0.07, light);
       box(a - 0.17, a + w + 0.17, y0 - 0.07, y0, 0, 0.15, new THREE.Color(0.86, 0.84, 0.8)); // alféizar
       if (it.reja) panel(a - 0.05, a + w + 0.05, y0 - 0.02, y1 + 0.05, 0.13, ATLAS.reja, 1.3);
+      if (it.ac) box(a + w + 0.2, a + w + 1.0, y0 + 0.2, y0 + 0.75, 0, 0.32, new THREE.Color(0.93, 0.93, 0.91));
     } else if (it.kind === 'door') {
       const fc = it.v === 0 ? new THREE.Color(0.25, 0.16, 0.09) : new THREE.Color(0.18, 0.18, 0.18);
       box(a - 0.1, a, 0, y1 + 0.1, 0, 0.06, fc);
@@ -233,10 +277,22 @@ function relief(solid, alpha, f) {
         const gx = side > 0 ? Math.min(len - 0.4, a + w + 0.9) : Math.max(0.4, a - 0.9);
         box(gx - 0.3, gx + 0.3, 0.3, 0.95, 0, 0.12, new THREE.Color(0.62, 0.64, 0.64));
       }
+    } else if (it.kind === 'portal') {
+      const fc = new THREE.Color(0.3, 0.24, 0.17);
+      box(a - 0.12, a, 0, y1 + 0.12, 0, 0.08, fc);
+      box(a + w, a + w + 0.12, 0, y1 + 0.12, 0, 0.08, fc);
+      box(a - 0.12, a + w + 0.12, y1, y1 + 0.12, 0, 0.08, fc);
+      box(a - 0.6, a + w + 0.6, y1 + 0.3, y1 + 0.42, 0, 1.3, light); // marquesina
+      box(a - 0.5, a + w + 0.5, 0, 0.12, 0, 0.6, new THREE.Color(0.7, 0.68, 0.64)); // escalón
+      const sx = a + w + 0.35;
+      box(sx - 0.12, sx + 0.12, 1.2, 1.6, 0, 0.04, new THREE.Color(0.75, 0.75, 0.73)); // portero eléctrico
+      box(a + w / 2 - 0.25, a + w / 2 + 0.25, y1 + 0.5, y1 + 0.75, 0, 0.03, new THREE.Color(0.95, 0.95, 0.95)); // número
     } else if (it.kind === 'garage') {
       box(a - 0.15, a + w + 0.15, y1, y1 + 0.28, 0, 0.1, light); // dintel
       box(a - 0.15, a, 0, y1, 0, 0.1, light);
       box(a + w, a + w + 0.15, 0, y1, 0, 0.1, light);
+    } else if (it.kind === 'balcony' && it.block) {
+      box(a - 0.12, a + w + 0.12, y1, y1 + 0.12, 0, 0.07, light); // slab and railing: far props
     } else if (it.kind === 'balcony') {
       box(a - 0.12, a + w + 0.12, y1, y1 + 0.12, 0, 0.07, light);
       box(a - 0.4, a + w + 0.4, y0 - 0.17, y0, 0, 0.9, new THREE.Color(0.82, 0.8, 0.76)); // losa
@@ -263,7 +319,7 @@ function relief(solid, alpha, f) {
     const yard = rng() < 0.55 ? new THREE.Color(0.36, 0.5, 0.25) : new THREE.Color(0.66, 0.6, 0.55);
     solid.quad(P(0, 0.15, 0.05), P(len, 0.15, 0.05), P(len, 0.15, d - 0.15), P(0, 0.15, d - 0.15), [0, 0], [1, 0], [1, 1], [0, 1], yard, UP);
     const wallC = tint.clone().lerp(WHITE, 0.2), wallH = 0.5 + rng() * 0.3, total = wallH + 1.2;
-    const gate = items.find((i) => i.kind === 'garage') || items.find((i) => i.kind === 'door');
+    const gate = items.find((i) => i.kind === 'garage') || items.find((i) => i.kind === 'door') || items.find((i) => i.kind === 'portal');
     const ga = gate ? gate.a - 0.1 : -1, gb = gate ? gate.a + gate.w + 0.1 : -1;
     const pillar = (x) => box(x - 0.17, x + 0.17, 0, total + 0.1, d - 0.17, d + 0.17, wallC);
     // fence segments either side of the gate
