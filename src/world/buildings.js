@@ -103,8 +103,25 @@ export function buildBuildings(data, { chunks, collision, tex, graph }) {
     const styleLayer = L[style];
     const groundLayer = L[`ground${Math.floor(rng() * 4)}`];
     // buildings with no street front (back of the lot) keep their windows all around
-    const medLayer = hasFront && bld.front === 0 ? styleLayer : style === 'brick' || rng() < 0.25 ? L.medianeraLadrillo : L.medianera;
-    const medTint = medLayer === L.medianeraLadrillo ? new THREE.Color().setScalar(0.92 + rng() * 0.1) : tint;
+    const mr = rng();
+    const medLayer = hasFront && bld.front === 0 ? styleLayer : style === 'brick' || mr < 0.25 ? L.medianeraLadrillo : mr < 0.4 ? L.hueco : L.medianera;
+    const medTint = medLayer === L.medianeraLadrillo || medLayer === L.hueco ? new THREE.Color().setScalar(0.92 + rng() * 0.1) : tint;
+    // a blank side wall: sometimes a painted ad or the ghost of the demolished house next
+    // door on it (tall ones), and its coping and pipes near the camera
+    const sideWall = (p0, p1, len, top, u0, e) => {
+      buf.wall(p0, p1, 0, top, u0, 6, 6, medTint, medLayer);
+      if (top >= 4.5) detail.addMed(p0, p1, top, hashString(`m${idx}:${e}`));
+      if (top < 6 || len < 5) return;
+      const r = rng();
+      if (r > 0.22) return;
+      const ux = (p1[0] - p0[0]) / len, uz = (p1[1] - p0[1]) / len, ox = uz, oz = -ux;
+      const huella = r < 0.13;
+      const w = Math.min(len - 1, huella ? 8 : 9), hh = huella ? Math.min(top - 0.5, 6) : Math.min(top * 0.45, 4.5);
+      const s0 = (len - w) / 2, y0 = huella ? 0.2 : top - hh - 0.8;
+      const P = (s, y) => [p0[0] + ux * s + ox * 0.02, y, p0[1] + uz * s + oz * 0.02];
+      const layer = huella ? L.huella : L[`pub${Math.floor(rng() * 3)}`];
+      buf.quad(P(s0, y0), P(s0 + w, y0), P(s0 + w, y0 + hh), P(s0, y0 + hh), [1, 0], [0, 0], [0, 1], [1, 1], white, [ox, 0, oz], layer);
+    };
     const unfinished = low && !bld.shop && (bld.levels >= 2 ? rng() < 0.16 : rng() < 0.05);
     const topHueco = unfinished ? Math.max(0, h - 2.9) : h;
     const uOff = Math.floor(rng() * 4) * 1.5;
@@ -146,7 +163,7 @@ export function buildBuildings(data, { chunks, collision, tex, graph }) {
             y = gh;
           }
           if (topHueco - y > 0.05) buf.wall(p0, p1, y, topHueco, u0, 6, 6, tint, styleLayer);
-        } else if (topHueco > 0.05) buf.wall(p0, p1, 0, topHueco, u0, 6, 6, medTint, medLayer);
+        } else if (topHueco > 0.05) sideWall(p0, p1, len, topHueco, u0, e);
         if (unfinished && h - topHueco > 0.05) buf.wall(p0, p1, topHueco, h, u0, 6, 5.8, white, front ? L.hueco : L.medianeraLadrillo, 0.5);
       } else if (front && !bld.shop && !bld.special && (style === 'apartments' || style === 'brick') && (bld.levels || 0) >= 3 && h < 80 && len >= 3) {
         // apartment block: real windows floor by floor, balconies, the glass portal
@@ -173,7 +190,9 @@ export function buildBuildings(data, { chunks, collision, tex, graph }) {
           buf.wall(p0, p1, 0, shopH, -dist / 4, 4, shopH, white, shopLayer, 0);
           y = shopH;
         }
-        if (h - y > 0.1) buf.wall(p0, p1, y, h, u0, 6, 6, tint, styleLayer);
+        // between-party walls of a block are blank medianeras; towers keep windows all round
+        if (!front && hasFront && bld.front !== 0 && (bld.levels || 0) < 10 && style !== 'office' && style !== 'church') sideWall(p0, p1, len, h, u0, e);
+        else if (h - y > 0.1) buf.wall(p0, p1, y, h, u0, 6, 6, tint, styleLayer);
       }
       dist += len;
     }

@@ -166,6 +166,13 @@ export class HouseDetail {
     if (!c) this.cells.set(k, (c = { fronts: [], mesh: null, alpha: null }));
     c.fronts.push({ p0, p1, h, top, levels, tint: tint.getHex(), seed, main, setback, kind });
   }
+  // a side wall (medianera) taller than its neighbours: coping and pipes
+  addMed(p0, p1, h, seed) {
+    const k = `${Math.floor(((p0[0] + p1[0]) / 2) / CELL)},${Math.floor(((p0[1] + p1[1]) / 2) / CELL)}`;
+    let c = this.cells.get(k);
+    if (!c) this.cells.set(k, (c = { fronts: [], mesh: null, alpha: null }));
+    (c.meds ||= []).push(p0[0], p0[1], p1[0], p1[1], h, seed);
+  }
   build(root, mats) {
     this.root = root;
     this.mats = mats;
@@ -196,6 +203,8 @@ export class HouseDetail {
   bake(c) {
     const solid = new GeoBuf(), alpha = new GeoBuf();
     for (const f of c.fronts) relief(solid, alpha, f);
+    const m = c.meds || [];
+    for (let i = 0; i < m.length; i += 6) medRelief(solid, [m[i], m[i + 1]], [m[i + 2], m[i + 3]], m[i + 4], m[i + 5]);
     if (!solid.empty) {
       c.mesh = new THREE.Mesh(solid.geometry(), this.mats.props);
       c.mesh.castShadow = c.mesh.receiveShadow = true;
@@ -344,5 +353,31 @@ function relief(solid, alpha, f) {
       box(ga, gb, 0.05, 0.13, d - 0.03, d + 0.03, gc);
       box(ga, gb, total * 0.5, total * 0.5 + 0.06, d - 0.03, d + 0.03, gc);
     }
+  }
+}
+
+// Coping along the top of a medianera, a rain pipe down it, sometimes the yellow gas pipe.
+const PVC = new THREE.Color(0.62, 0.62, 0.6), GAS = new THREE.Color(0.93, 0.74, 0.12), COPING = new THREE.Color(0.7, 0.68, 0.64);
+function medRelief(solid, p0, p1, h, seed) {
+  const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+  if (len < 1) return;
+  const ux = (p1[0] - p0[0]) / len, uz = (p1[1] - p0[1]) / len, ox = uz, oz = -ux;
+  const rng = mulberry32(seed);
+  const P = (s, y, d) => [p0[0] + ux * s + ox * d, y, p0[1] + uz * s + oz * d];
+  const box = (s0, s1, y0, y1, d0, d1, color) => {
+    solid.quad(P(s0, y0, d1), P(s1, y0, d1), P(s1, y1, d1), P(s0, y1, d1), [0, 0], [1, 0], [1, 1], [0, 1], color, [ox, 0, oz]);
+    solid.quad(P(s0, y1, d0), P(s1, y1, d0), P(s1, y1, d1), P(s0, y1, d1), [0, 0], [1, 0], [1, 1], [0, 1], color, UP);
+    solid.quad(P(s0, y0, d0), P(s0, y0, d1), P(s0, y1, d1), P(s0, y1, d0), [0, 0], [1, 0], [1, 1], [0, 1], color, [-ux, 0, -uz]);
+    solid.quad(P(s1, y0, d0), P(s1, y0, d1), P(s1, y1, d1), P(s1, y1, d0), [0, 0], [1, 0], [1, 1], [0, 1], color, [ux, 0, uz]);
+  };
+  box(0, len, h, h + 0.12, -0.2, 0.06, COPING);
+  if (rng() < 0.4) {
+    const s = 0.3 + rng() * (len - 0.6);
+    box(s - 0.05, s + 0.05, 0, h + 0.05, 0.02, 0.12, PVC);
+  }
+  if (rng() < 0.2 && h > 5) {
+    const s = 0.5 + rng() * (len - 1), y = 1.2 + rng() * (h - 3);
+    box(Math.max(0, s - 2.5), Math.min(len, s + 2.5), y, y + 0.05, 0.02, 0.08, GAS);
+    box(s - 0.025, s + 0.025, 0.4, y, 0.02, 0.08, GAS);
   }
 }

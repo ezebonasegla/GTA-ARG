@@ -229,6 +229,53 @@ export function buildShops(data, { root, graph, collision, nightMaterials }) {
     }
   }
 
+  // ------------------------------------------------ cajón, guías and persiana metálica
+  // The shutter box over the opening and its two rails; the shutter rolls down at night
+  // on the businesses that close (open ones: food, kioscos, farmacias, boliches, hotels).
+  const metal = new THREE.MeshStandardMaterial({ color: 0x8d9093, roughness: 0.55, metalness: 0.45 });
+  const boxes = [], shutters = [], lightboxes = [];
+  const srng = mulberry32(31);
+  for (const p of placed) {
+    if (p.big) continue;
+    const top = p.h - 1.0, yaw = Math.atan2(p.ox, p.oz);
+    const P = (along, out, y) => [p.x + p.ux * along + p.ox * out, p.z + p.uz * along + p.oz * out, y, yaw];
+    boxes.push([...P(0, 0.11, top), p.w - 0.1, 0.26, 0.22]);
+    for (const sd of [-1, 1]) boxes.push([...P(sd * (p.w / 2 - 0.08), 0.05, 0), 0.07, top, 0.08]);
+    boxes.push([...P(0, 0.02, 0), p.w, 0.35, 0.06]); // zócalo de la vidriera
+    const opens = /comida|kiosco|farmacia|boliche|hotel|super/.test(p.rubro);
+    // some never open (a closed-down local), some only half at night
+    const closed = srng() < 0.06 ? 1 : 0;
+    shutters.push({ at: P(0, 0.14, top), w: p.w - 0.2, top, close: opens ? (srng() < 0.2 ? 0.55 : 0) : 1, always: closed });
+    // the sign is a lit box, not a sticker
+    const hh = Math.min(0.62, (p.w - 0.2) / 5.5);
+    lightboxes.push([...P(0, 0.02, p.h - 0.42 - hh / 2 - 0.05), p.w - 0.1, hh + 0.1, 0.15, p.signColor]);
+  }
+  const unit = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+  const sized = (m, [x, z, y, yaw, sx, sy, sz]) => m.compose(new THREE.Vector3(x, y, z), q.setFromAxisAngle(yAxis, yaw), new THREE.Vector3(sx, sy, sz));
+  instancedChunks(root, unit, metal, boxes, sized, { cast: true, range: 300 });
+  instancedChunks(root, unit, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }), lightboxes, sized, {
+    cast: true, range: 400, color: (it) => new THREE.Color(it[7]).multiplyScalar(0.6),
+  });
+  const shutterMat = new THREE.MeshStandardMaterial({ map: shutterTexture(), roughness: 0.5, metalness: 0.4, side: THREE.DoubleSide });
+  const shutterMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).translate(0, -0.5, 0), shutterMat, shutters.length);
+  shutterMesh.userData.dynamic = true; // matrices change with the time of day
+  shutterMesh.frustumCulled = false;
+  root.add(shutterMesh);
+  const m4 = new THREE.Matrix4();
+  let lastNight = -1;
+  const setShutters = (n) => {
+    if (Math.abs(n - lastNight) < 0.03) return;
+    lastNight = n;
+    shutters.forEach((sh, i) => {
+      const f = Math.max(sh.always, Math.min(1, n * 1.4) * sh.close);
+      const drop = Math.max(0.02, f * sh.top);
+      m4.compose(new THREE.Vector3(sh.at[0], sh.top, sh.at[1]), q.setFromAxisAngle(yAxis, sh.at[3]), new THREE.Vector3(sh.w, drop, 1));
+      shutterMesh.setMatrixAt(i, m4);
+    });
+    shutterMesh.instanceMatrix.needsUpdate = true;
+  };
+  setShutters(0);
+
   const kit = buildShopKit(root, placed.filter((p) => !p.big), { graph, collision, nightMaterials });
   const bigStores = buildBigStores(root, placed.filter((p) => p.big), { collision, nightMaterials });
 
@@ -249,6 +296,7 @@ export function buildShops(data, { root, graph, collision, nightMaterials }) {
     count: placed.length,
     placed,
     setNight(n) {
+      setShutters(n);
       kit.setNight(n);
       bigStores.setNight(n);
       crossMat.emissiveIntensity = 0.4 + n * 2.5;
@@ -550,6 +598,40 @@ const DRAW = {
     door(ctx, ectx, x + 186, 70, 60, 186);
   },
 };
+
+// persiana metálica: galvanised slats, some rust, now and then a tag
+function shutterTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 256;
+  const ctx = c.getContext('2d');
+  const rng = mulberry32(55);
+  ctx.fillStyle = '#a3a6a8';
+  ctx.fillRect(0, 0, 128, 256);
+  for (let y = 0; y < 256; y += 8) {
+    const g = ctx.createLinearGradient(0, y, 0, y + 8);
+    g.addColorStop(0, 'rgba(255,255,255,0.35)');
+    g.addColorStop(0.6, 'rgba(0,0,0,0.05)');
+    g.addColorStop(1, 'rgba(0,0,0,0.35)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, y, 128, 8);
+  }
+  for (let i = 0; i < 10; i++) {
+    ctx.fillStyle = `rgba(120,70,30,${0.1 + rng() * 0.2})`;
+    ctx.fillRect(rng() * 128, 200 + rng() * 56, 4 + rng() * 14, 2 + rng() * 6);
+  }
+  ctx.strokeStyle = 'rgba(30,30,120,0.55)';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(20, 150);
+  for (let k = 0; k < 6; k++) ctx.quadraticCurveTo(28 + k * 15, 120 + rng() * 30, 34 + k * 15, 150 + rng() * 20);
+  ctx.stroke();
+  ctx.fillStyle = '#3b3b3b';
+  ctx.fillRect(0, 248, 128, 8);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
 
 function crossTexture() {
   const c = document.createElement('canvas');

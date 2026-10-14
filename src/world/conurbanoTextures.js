@@ -298,6 +298,31 @@ function windowPane(ctx, ectx, rng, kind) {
   ctx.strokeRect(2, 2, S - 4, S - 4);
 }
 
+// A painted wall ad: faded colour block, big letters, a second line, the edge flaking.
+function paintedAd(ctx, rng, bg, fg, title, line) {
+  ctx.fillStyle = '#ddd5c6';
+  ctx.fillRect(0, 0, S, S);
+  ctx.fillStyle = bg;
+  ctx.fillRect(8, 30, S - 16, S - 60);
+  ctx.fillStyle = fg;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 54px Impact, Arial Black, sans-serif';
+  ctx.fillText(title, S / 2, 105, S - 30);
+  ctx.font = 'bold 22px Arial, sans-serif';
+  ctx.fillText(line, S / 2, 165, S - 30);
+  // sun and rain: washed out, flaking at the edges
+  ctx.fillStyle = 'rgba(235,228,214,0.35)';
+  ctx.fillRect(0, 0, S, S);
+  for (let i = 0; i < 40; i++) {
+    ctx.fillStyle = `rgba(221,213,198,${0.5 + rng() * 0.5})`;
+    const x = rng() < 0.5 ? rng() * 30 : S - rng() * 30;
+    ctx.fillRect(x, 30 + rng() * (S - 60), 4 + rng() * 12, 3 + rng() * 10);
+  }
+  noise(ctx, S, S, 3000, rng, 0.08);
+  stains(ctx, rng, S, S, 3);
+}
+
 // ------------------------------------------------------------ facade layers
 // Each painter gets (ctx, ectx, rng) on a 256x256 canvas.
 export const painters = {
@@ -531,6 +556,48 @@ export const painters = {
     ctx.fillRect(S / 2 + 10, S / 2, 6, 40);
     ctx.fillStyle = '#3a2c1e';
     ctx.fillRect(0, S - 26, S, 26);
+  },
+  // Ads painted straight on a tall medianera (the quad spans the ad), sun-faded.
+  pub0: (ctx, ectx, rng) => paintedAd(ctx, rng, '#c62828', '#fff4d6', 'MUDANZAS', 'Y FLETES · 4253-1180'),
+  pub1: (ctx, ectx, rng) => paintedAd(ctx, rng, '#1f4e8c', '#ffffff', 'PINTURERÍA', 'EL PINCEL · DESDE 1978'),
+  pub2: (ctx, ectx, rng) => paintedAd(ctx, rng, '#f2c200', '#1b1b1b', 'GOMERÍA', '24 HS · AUXILIO'),
+  // Ghost of the house next door, demolished: its roof line, stair and kitchen tiles
+  // left on the side wall (the quad spans the stain, ground at the bottom).
+  huella(ctx, ectx, rng) {
+    ctx.fillStyle = '#e2dacb';
+    ctx.fillRect(0, 0, S, S);
+    noise(ctx, S, S, 5000, rng, 0.07);
+    // old rooms: patches of the paint each one had
+    const cols = ['#c9d6c2', '#e8c9a8', '#b9c9d8', '#e6d79a', '#d8b4b4'];
+    ctx.fillStyle = cols[Math.floor(rng() * cols.length)];
+    ctx.globalAlpha = 0.7;
+    ctx.fillRect(10, 120, 110, 136);
+    ctx.fillStyle = cols[Math.floor(rng() * cols.length)];
+    ctx.fillRect(130, 140, 116, 116);
+    ctx.globalAlpha = 1;
+    // azulejos of the old kitchen
+    for (let y = 170; y < 236; y += 9) for (let x = 140; x < 230; x += 9) {
+      ctx.fillStyle = (x + y) % 18 ? '#f4f6f6' : '#9cc7d8';
+      ctx.fillRect(x, y, 8, 8);
+    }
+    // the gable of its roof and the stair going up
+    ctx.strokeStyle = 'rgba(70,60,50,0.5)';
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.moveTo(4, 120);
+    ctx.lineTo(128, 60);
+    ctx.lineTo(252, 120);
+    ctx.stroke();
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(20, 256);
+    for (let k = 0; k < 8; k++) {
+      ctx.lineTo(20 + k * 12, 256 - k * 14);
+      ctx.lineTo(32 + k * 12, 256 - k * 14);
+    }
+    ctx.stroke();
+    stains(ctx, rng, S, S, 4);
+    cracks(ctx, rng, S, S, 3);
   },
   // Sheet metal gate (3 m x 2.2 m), tinted per gate.
   porton(ctx, ectx, rng) {
