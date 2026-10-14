@@ -9,6 +9,7 @@ import { buildStreetSigns } from './streetSigns.js';
 import { buildBuildings } from './buildings.js';
 import { buildConurbano } from './conurbano.js';
 import { buildShops } from './shops.js';
+import { buildStreets } from './streets.js';
 import { CollisionWorld } from './collision.js';
 import { RoadGraph } from './roadGraph.js';
 import { GeoBuf, ChunkSet } from './geobuf.js';
@@ -178,8 +179,8 @@ export function buildWorld(data, renderer, scene) {
       continue;
     }
     // service streets (pasajes, accesos) get a narrow one
-    if (road.kind !== 'service') ribbon(sidewalkBuf, road.pts, road.w + SIDEWALK * 2, 0.04, 1 / 6);
-    else if (road.w >= 5 && !road.ramp) ribbon(sidewalkBuf, road.pts, road.w + 3, 0.04, 1 / 6);
+    if (road.kind !== 'service') ribbon(sidewalkBuf, road.pts, road.w + SIDEWALK * 2, 0.13, 1 / 6);
+    else if (road.w >= 5 && !road.ramp) ribbon(sidewalkBuf, road.pts, road.w + 3, 0.13, 1 / 6);
     // many residential streets of the conurbano are concrete slabs
     const concrete = road.kind === 'residential' && (hashString(`${road.pts[0][0]},${road.pts[0][1]}`) % 100) < 45;
     ribbon(concrete ? roadBufs.concrete : road.oneway || road.w < 8 ? roadBufs.road1 : roadBufs.road2, road.pts, road.w, 0.06, 1 / 12);
@@ -187,7 +188,7 @@ export function buildWorld(data, renderer, scene) {
     const [x0, z0] = road.pts[0];
     if (road.kind === 'residential' && x0 * x0 + z0 * z0 > 900 * 900) {
       const h = hashString(`v${x0},${z0}`);
-      if (h % 100 < 55) for (const o of [-1, 1]) ribbon(vergeBuf, offsetLine(road.pts, o * (road.w / 2 + 1.0)), 1.1, 0.042, 1 / 6);
+      if (h % 100 < 55) for (const o of [-1, 1]) ribbon(vergeBuf, offsetLine(road.pts, o * (road.w / 2 + 1.0)), 1.1, 0.132, 1 / 6);
       for (let i = 0; i < road.pts.length - 1; i++) {
         const [ax, az] = road.pts[i], [bx, bz] = road.pts[i + 1];
         const len = Math.hypot(bx - ax, bz - az);
@@ -195,6 +196,15 @@ export function buildWorld(data, renderer, scene) {
       }
     }
   }
+  // curbs, junction asphalt and road markings
+  const streets = buildStreets({
+    data, graph, plan, root, deckClip, flatProps: { stencil: noTrench },
+    addCulled: (mesh, range) => {
+      mesh.geometry.computeBoundingSphere();
+      const s = mesh.geometry.boundingSphere, r = range + s.radius;
+      culled.push({ mesh, x: s.center.x, z: s.center.z, r2: r * r });
+    },
+  });
   const patchBuf = new GeoBuf();
   const walkPatchBuf = new GeoBuf();
   for (const node of graph.nodes) {
@@ -208,8 +218,8 @@ export function buildWorld(data, renderer, scene) {
       if (r.kind !== 'pedestrian' && r.kind !== 'footway') vehicular = true;
     }
     if (vehicular) {
-      disc(walkPatchBuf, node.x, node.z, maxW / 2 + SIDEWALK, 0.045, 1 / 6);
-      disc(patchBuf, node.x, node.z, maxW / 2 * 1.08, 0.07, 1 / 12);
+      disc(walkPatchBuf, node.x, node.z, maxW / 2 + SIDEWALK, 0.135, 1 / 6);
+      if (!streets.junctions.has(node.id)) disc(patchBuf, node.x, node.z, maxW / 2 * 1.08, 0.07, 1 / 12);
     }
   }
   const sidewalkMat = flatMat(tex.sidewalk);
@@ -251,6 +261,7 @@ export function buildWorld(data, renderer, scene) {
   addFlat(metroBufs.yellow, flatMat(null, 0xf2c200), -6.5);
   addFlat(metroBufs.white, flatMat(null, 0xf4f4f4), -6.5);
   addFlat(patchBuf, flatMat(tex.asphalt), -6);
+  addFlat(streets.patch, flatMat(tex.asphalt), -6);
 
   // ---------------------------------------------------------------- rails
   if (data.rails?.length) {
@@ -477,31 +488,6 @@ export function buildWorld(data, renderer, scene) {
     instancedChunks(root, cesto, new THREE.MeshStandardMaterial({ color: 0x2a2d2e, map: grid, alphaTest: 0.5, side: THREE.DoubleSide }), cestos, at, { range: 220 });
   }
 
-  // cordones pintados de amarillo en las esquinas
-  {
-    const curbs = [];
-    for (const node of graph.nodes) {
-      if (node.degree < 3) continue;
-      let maxW = 0;
-      for (const r of node.roads) maxW = Math.max(maxW, r.w);
-      const s0 = maxW / 2 + SIDEWALK + 2.5;
-      for (const [nb, road] of node.links) {
-        if (road.kind === 'footway' || road.kind === 'pedestrian' || road.kind === 'service' || road.pasillo || road.dirt) continue;
-        const len = Math.hypot(nb.x - node.x, nb.z - node.z);
-        if (len < s0 + 6) continue;
-        const ux = (nb.x - node.x) / len, uz = (nb.z - node.z) / len;
-        for (const side of [-1, 1]) {
-          const o = side * (road.w / 2 + 0.12);
-          curbs.push([node.x + ux * s0 - uz * o, node.z + uz * s0 + ux * o, Math.atan2(ux, uz)]);
-        }
-      }
-    }
-    const strip = new THREE.PlaneGeometry(0.3, 5);
-    strip.rotateX(-Math.PI / 2);
-    strip.translate(0, 0.085, 0);
-    const curbMat = new THREE.MeshStandardMaterial({ color: 0xe6bf1e, roughness: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
-    for (const m of instancedChunks(root, strip, curbMat, curbs, lampMatrix, { receive: true, range: 260 })) m.renderOrder = -5;
-  }
   instancedChunks(root, head, lampMat, lights, lampMatrix, { range: 500 });
   // Fake light pools on the pavement (cheaper than hundreds of real lights).
   const poolG = new THREE.PlaneGeometry(14, 14);

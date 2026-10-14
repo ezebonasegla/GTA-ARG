@@ -241,9 +241,11 @@ export function makeTextures(renderer) {
     tex.roofTileCanvas = c;
   }
 
-  // Calle: asfalto con línea central discontinua (doble mano) o sin línea (mano única).
-  const asphalt = (ctx, rng) => {
-    ctx.fillStyle = '#3b3c3e';
+  // Calle: asfalto gastado (huellas de las ruedas, grietas, bacheos). La demarcación es
+  // geometría aparte (streets.js); `cuneta` agrega el cordón cuneta de hormigón (u = 0 y 1
+  // son los bordes de la calzada).
+  const asphalt = (ctx, rng, { cuneta = false, tracks = 0, patches = 2 } = {}) => {
+    ctx.fillStyle = '#3d3e40';
     ctx.fillRect(0, 0, S, S);
     noise(ctx, S, S, 9000, rng, 0.1);
     for (let i = 0; i < 5; i++) {
@@ -252,31 +254,70 @@ export function makeTextures(renderer) {
       ctx.ellipse(rng() * S, rng() * S, 10 + rng() * 30, 6 + rng() * 20, rng() * 3, 0, Math.PI * 2);
       ctx.fill();
     }
+    // lighter, polished wheel paths and the darker oil strip between them
+    for (let k = 0; k < tracks; k++) {
+      const c = ((k + 0.5) / tracks) * S;
+      for (const o of [-0.17, 0.17]) {
+        const g = ctx.createLinearGradient(c + o * (S / tracks) - 14, 0, c + o * (S / tracks) + 14, 0);
+        g.addColorStop(0, 'rgba(150,150,150,0)');
+        g.addColorStop(0.5, 'rgba(150,150,150,0.13)');
+        g.addColorStop(1, 'rgba(150,150,150,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(c + o * (S / tracks) - 14, 0, 28, S);
+      }
+      ctx.fillStyle = 'rgba(15,12,10,0.16)';
+      for (let y = 0; y < S; y += 4) ctx.fillRect(c - 5 + (rng() - 0.5) * 3, y, 10, 4);
+    }
+    // bacheos: rectangular patches of newer (darker) or older (greyer) asphalt
+    for (let i = 0; i < patches; i++) {
+      const w = 30 + rng() * 60, h = 30 + rng() * 80, x = 20 + rng() * (S - 40 - w), y = rng() * (S - h);
+      ctx.fillStyle = rng() < 0.6 ? 'rgba(18,18,20,0.22)' : 'rgba(120,118,112,0.16)';
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = 'rgba(10,10,10,0.3)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, w, h);
+    }
+    // cracks
+    ctx.strokeStyle = 'rgba(12,12,12,0.55)';
+    for (let i = 0; i < 7; i++) {
+      let x = rng() * S, y = rng() * S;
+      ctx.lineWidth = 0.6 + rng() * 1.2;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      for (let k = 0; k < 8; k++) {
+        x += (rng() - 0.5) * 22;
+        y += (rng() - 0.3) * 18;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    if (cuneta) {
+      for (const x of [0, S - 9]) {
+        ctx.fillStyle = '#8f8b84';
+        ctx.fillRect(x, 0, 9, S);
+        ctx.fillStyle = 'rgba(40,36,30,0.35)';
+        ctx.fillRect(x === 0 ? 8 : x, 0, 1, S);
+        for (let y = 0; y < S; y += 32) ctx.fillRect(x, y, 9, 1);
+      }
+      noise(ctx, S, S, 800, rng, 0.08);
+    }
   };
   {
     const rng = mulberry32(9);
     const [c, ctx] = canvas();
-    asphalt(ctx, rng);
-    ctx.fillStyle = '#e8e2c8';
-    ctx.fillRect(S / 2 - 3, 0, 6, S * 0.5);
-    ctx.fillStyle = 'rgba(230,230,220,0.8)';
-    ctx.fillRect(6, 0, 3, S);
-    ctx.fillRect(S - 9, 0, 3, S);
+    asphalt(ctx, rng, { cuneta: true, tracks: 2 });
     tex.road2 = toTexture(c, renderer);
   }
   {
     const rng = mulberry32(10);
     const [c, ctx] = canvas();
-    asphalt(ctx, rng);
-    // adoquines insinuados en calles de mano única
-    ctx.fillStyle = 'rgba(0,0,0,0.12)';
-    for (let y = 0; y < S; y += 12) ctx.fillRect(0, y, S, 1);
+    asphalt(ctx, rng, { cuneta: true, tracks: 1 });
     tex.road1 = toTexture(c, renderer);
   }
   {
     const rng = mulberry32(11);
     const [c, ctx] = canvas();
-    asphalt(ctx, rng);
+    asphalt(ctx, rng, { patches: 0 });
     tex.asphalt = toTexture(c, renderer);
   }
   // Vereda: baldosas vainilla.
