@@ -153,7 +153,8 @@ export function frontWall(buf, L, p0, p1, h, top, tint, wallLayer, uOff, items) 
 }
 
 // ------------------------------------------------------------ near: 3D relief
-const CELL = 150;
+const CELL = 75;
+const BUDGET = 2; // ms of baking per frame: spread over frames instead of a hitch
 
 export class HouseDetail {
   constructor() {
@@ -182,29 +183,55 @@ export class HouseDetail {
       c.cz = (iz + 0.5) * CELL;
     }
   }
-  // bake the cells around the camera (one per frame), drop the far ones
+  // bake the cells around the camera, nearest first, a couple of milliseconds a frame;
+  // drop the far ones
   update(p, initial = false) {
     const R = 150 + CELL * 0.7;
-    let budget = initial ? Infinity : 1;
+    let next = null, nd = Infinity;
     for (const c of this.cells.values()) {
       const d2 = (c.cx - p.x) ** 2 + (c.cz - p.z) ** 2;
       if (d2 < R * R) {
-        if (!c.mesh && budget-- > 0) this.bake(c);
+        if (!c.mesh && d2 < nd) {
+          nd = d2;
+          next = c;
+        }
       } else if (c.mesh && d2 > (R * 1.3) ** 2) {
         for (const m of [c.mesh, c.alpha]) {
           if (!m) continue;
           this.root.remove(m);
-          m.geometry.dispose();
+          m.geometry?.dispose();
         }
         c.mesh = c.alpha = null;
+      } else if (c.job && d2 > (R * 1.3) ** 2) c.job = null;
+    }
+    if (initial) {
+      for (const c of this.cells.values()) {
+        if (!c.mesh && (c.cx - p.x) ** 2 + (c.cz - p.z) ** 2 < R * R) this.bake(c, Infinity);
       }
+      return;
+    }
+    // keep working on the cell already started if it is still wanted
+    const busy = this.busy?.job && !this.busy.mesh ? this.busy : next;
+    if (busy) {
+      this.busy = busy;
+      this.bake(busy, BUDGET);
     }
   }
-  bake(c) {
-    const solid = new GeoBuf(), alpha = new GeoBuf();
-    for (const f of c.fronts) relief(solid, alpha, f);
+  bake(c, budget) {
+    const t0 = performance.now();
+    const job = (c.job ||= { solid: new GeoBuf(), alpha: new GeoBuf(), i: 0, j: 0 });
     const m = c.meds || [];
-    for (let i = 0; i < m.length; i += 6) medRelief(solid, [m[i], m[i + 1]], [m[i + 2], m[i + 3]], m[i + 4], m[i + 5]);
+    while (job.i < c.fronts.length) {
+      relief(job.solid, job.alpha, c.fronts[job.i++]);
+      if (performance.now() - t0 > budget) return;
+    }
+    while (job.j < m.length) {
+      medRelief(job.solid, [m[job.j], m[job.j + 1]], [m[job.j + 2], m[job.j + 3]], m[job.j + 4], m[job.j + 5]);
+      job.j += 6;
+      if (performance.now() - t0 > budget) return;
+    }
+    const { solid, alpha } = job;
+    c.job = null;
     if (!solid.empty) {
       c.mesh = new THREE.Mesh(solid.geometry(), this.mats.props);
       c.mesh.castShadow = c.mesh.receiveShadow = true;
@@ -226,16 +253,8 @@ function relief(solid, alpha, f) {
   const rng = mulberry32(f.seed ^ 0x5bd1e995);
   const tint = new THREE.Color(f.tint);
   const light = tint.clone().lerp(WHITE, 0.45);
-  // box on the wall: along s0..s1, height y0..y1, sticking out d0..d1
   const P = (s, y, d) => [p0[0] + ux * s + ox * d, y, p0[1] + uz * s + oz * d];
-  const box = (s0, s1, y0, y1, d0, d1, color) => {
-    const n0 = [ox, 0, oz], nu = [ux, 0, uz];
-    solid.quad(P(s0, y0, d1), P(s1, y0, d1), P(s1, y1, d1), P(s0, y1, d1), [0, 0], [1, 0], [1, 1], [0, 1], color, n0);
-    solid.quad(P(s0, y1, d0), P(s1, y1, d0), P(s1, y1, d1), P(s0, y1, d1), [0, 0], [1, 0], [1, 1], [0, 1], color, UP);
-    solid.quad(P(s0, y0, d0), P(s1, y0, d0), P(s1, y0, d1), P(s0, y0, d1), [0, 0], [1, 0], [1, 1], [0, 1], color, [0, -1, 0]);
-    solid.quad(P(s0, y0, d0), P(s0, y0, d1), P(s0, y1, d1), P(s0, y1, d0), [0, 0], [1, 0], [1, 1], [0, 1], color, [-nu[0], 0, -nu[2]]);
-    solid.quad(P(s1, y0, d0), P(s1, y0, d1), P(s1, y1, d1), P(s1, y1, d0), [0, 0], [1, 0], [1, 1], [0, 1], color, nu);
-  };
+  const box = makeBox(solid, p0, ux, uz);
   // alpha-tested panel (rejas, barandas) parallel to the wall, `d` out
   const panel = (s0, s1, y0, y1, d, rect, tile = 1.2) => {
     const [a0, b0, a1, b1] = rect;
@@ -361,15 +380,9 @@ const PVC = new THREE.Color(0.62, 0.62, 0.6), GAS = new THREE.Color(0.93, 0.74, 
 function medRelief(solid, p0, p1, h, seed) {
   const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
   if (len < 1) return;
-  const ux = (p1[0] - p0[0]) / len, uz = (p1[1] - p0[1]) / len, ox = uz, oz = -ux;
+  const ux = (p1[0] - p0[0]) / len, uz = (p1[1] - p0[1]) / len;
   const rng = mulberry32(seed);
-  const P = (s, y, d) => [p0[0] + ux * s + ox * d, y, p0[1] + uz * s + oz * d];
-  const box = (s0, s1, y0, y1, d0, d1, color) => {
-    solid.quad(P(s0, y0, d1), P(s1, y0, d1), P(s1, y1, d1), P(s0, y1, d1), [0, 0], [1, 0], [1, 1], [0, 1], color, [ox, 0, oz]);
-    solid.quad(P(s0, y1, d0), P(s1, y1, d0), P(s1, y1, d1), P(s0, y1, d1), [0, 0], [1, 0], [1, 1], [0, 1], color, UP);
-    solid.quad(P(s0, y0, d0), P(s0, y0, d1), P(s0, y1, d1), P(s0, y1, d0), [0, 0], [1, 0], [1, 1], [0, 1], color, [-ux, 0, -uz]);
-    solid.quad(P(s1, y0, d0), P(s1, y0, d1), P(s1, y1, d1), P(s1, y1, d0), [0, 0], [1, 0], [1, 1], [0, 1], color, [ux, 0, uz]);
-  };
+  const box = makeBox(solid, p0, ux, uz);
   box(0, len, h, h + 0.12, -0.2, 0.06, COPING);
   if (rng() < 0.4) {
     const s = 0.3 + rng() * (len - 0.6);
@@ -380,4 +393,31 @@ function medRelief(solid, p0, p1, h, seed) {
     box(Math.max(0, s - 2.5), Math.min(len, s + 2.5), y, y + 0.05, 0.02, 0.08, GAS);
     box(s - 0.025, s + 0.025, 0.4, y, 0.02, 0.08, GAS);
   }
+}
+
+// Box on a wall (along s0..s1, height y0..y1, out d0..d1): front, top, bottom and ends,
+// written straight into the buffer (relief is thousands of these per cell; allocating
+// corner arrays for each made the garbage collector stall the frame).
+const V = new Float64Array(12);
+function makeBox(buf, p0, ux, uz) {
+  const ox = uz, oz = -ux, bx = p0[0], bz = p0[1];
+  const put = (i, s, y, d) => {
+    V[i] = bx + ux * s + ox * d;
+    V[i + 1] = y;
+    V[i + 2] = bz + uz * s + oz * d;
+  };
+  const face = (s0, y0, d0, s1, y1, d1, s2, y2, d2, s3, y3, d3, color, wx, wy, wz) => {
+    put(0, s0, y0, d0);
+    put(3, s1, y1, d1);
+    put(6, s2, y2, d2);
+    put(9, s3, y3, d3);
+    buf.quadRaw(V, color, wx, wy, wz);
+  };
+  return (s0, s1, y0, y1, d0, d1, color) => {
+    face(s0, y0, d1, s1, y0, d1, s1, y1, d1, s0, y1, d1, color, ox, 0, oz);
+    face(s0, y1, d0, s1, y1, d0, s1, y1, d1, s0, y1, d1, color, 0, 1, 0);
+    face(s0, y0, d0, s1, y0, d0, s1, y0, d1, s0, y0, d1, color, 0, -1, 0);
+    face(s0, y0, d0, s0, y0, d1, s0, y1, d1, s0, y1, d0, color, -ux, 0, -uz);
+    face(s1, y0, d0, s1, y0, d1, s1, y1, d1, s1, y1, d0, color, ux, 0, uz);
+  };
 }

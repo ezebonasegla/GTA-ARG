@@ -21,8 +21,8 @@ export class Environment {
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     const sc = this.sun.shadow.camera;
-    sc.left = sc.bottom = -110;
-    sc.right = sc.top = 110;
+    sc.left = sc.bottom = -85;
+    sc.right = sc.top = 85;
     sc.near = 10;
     sc.far = 700;
     this.sun.shadow.bias = -0.0004;

@@ -75,7 +75,7 @@ async function main() {
   const fpsEl = document.getElementById('fps');
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = !light.on;
-  // the sun barely moves: redraw the shadow map every other frame
+  // shadows are redrawn by hand (needsUpdate in the frame loop), not by three.js
   renderer.shadowMap.autoUpdate = false;
   renderer.shadowMap.needsUpdate = true; // the first frame must have one, or shaders compile against a missing map (white city)
   renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -761,15 +761,26 @@ async function main() {
     if (perf.t >= 1) {
       const fps = perf.frames / perf.t;
       fpsEl.textContent = `${Math.round(fps)} FPS`;
-      perf.low = fps < 48 ? perf.low + 1 : 0;
+      // every change of resolution reallocates the framebuffers (a hitch of its own):
+      // step down only after 3 s below 50, and never climb back to a ratio that was
+      // already too much for this GPU
+      perf.low = fps < 50 ? perf.low + 1 : 0;
       perf.high = fps > 58 ? perf.high + 1 : 0;
       const pr = renderer.getPixelRatio();
-      if (perf.low >= 2 && pr > 0.7) renderer.setPixelRatio(Math.max(0.7, pr - 0.15)), (perf.low = 0);
-      else if (perf.high >= 4 && pr < perf.maxRatio) renderer.setPixelRatio(Math.min(perf.maxRatio, pr + 0.1)), (perf.high = 0);
+      if (perf.low >= 3 && pr > 0.7) {
+        perf.maxRatio = Math.min(perf.maxRatio, pr - 0.05);
+        renderer.setPixelRatio(Math.max(0.7, pr - 0.15));
+        perf.low = 0;
+      } else if (perf.high >= 12 && pr + 0.1 <= perf.maxRatio) {
+        renderer.setPixelRatio(pr + 0.1);
+        perf.high = 0;
+      }
       perf.frames = 0;
       perf.t = 0;
     }
-    if ((perf.n = (perf.n + 1) % 2) === 0) renderer.shadowMap.needsUpdate = true;
+    // shadows every frame: the same cost in each one paces better than a heavy frame every
+    // other one (which showed as judder whenever that one went past 16 ms)
+    renderer.shadowMap.needsUpdate = true;
     renderer.render(scene, camera);
     if (!perf.released && perf.frames > 2) releaseTexturePixels(), (perf.released = true);
     input.endFrame();

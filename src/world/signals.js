@@ -151,6 +151,7 @@ export function buildSignals({ graph, arms, centres, root, collision, addCulled,
   }
 
   let t = 0, refresh = 0;
+  const hits = new Set();
   return {
     count: crossings.length,
     approaches,
@@ -172,7 +173,8 @@ export function buildSignals({ graph, arms, centres, root, collision, addCulled,
     // (Infinity if none within range). Amber only stops a car that still can at `speed`.
     stopAhead(x, z, fx, fz, range, speed = 0) {
       let best = Infinity;
-      for (const ap of index.query(x - range, z - range, x + range, z + range)) {
+      hits.clear(); // reused: called for every car every frame
+      for (const ap of index.query(x - range, z - range, x + range, z + range, hits)) {
         // heading into the crossing along this arm
         if (fx * -ap.A.ux + fz * -ap.A.uz < 0.75) continue;
         const rx = ap.x - x, rz = ap.z - z;

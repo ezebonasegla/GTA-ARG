@@ -34,6 +34,7 @@ class List {
     return out;
   }
 }
+const QUAD = [0, 1, 2, 0, 2, 3], QUAD_FLIP = [0, 2, 1, 0, 3, 2];
 const n8 = (v) => Math.max(-127, Math.min(127, Math.round(v * 127)));
 const c8 = (v) => Math.max(0, Math.min(255, Math.round(v * 255)));
 // Drop the CPU copy once the GPU has it (nothing reads these meshes back).
@@ -74,6 +75,28 @@ export class GeoBuf {
       this.col.push(r, g, bl);
       this.col.push(255);
       if (this.layered) this.lay.push(layer);
+    }
+  }
+  // Allocation-free quad for bulk relief geometry: corners in v[0..11] (a, b, c, d as
+  // x,y,z), facing (wx, wy, wz); no uv, no layer.
+  quadRaw(v, color, wx, wy, wz) {
+    const e1x = v[3] - v[0], e1y = v[4] - v[1], e1z = v[5] - v[2];
+    const e2x = v[6] - v[0], e2y = v[7] - v[1], e2z = v[8] - v[2];
+    let nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+    const flip = nx * wx + ny * wy + nz * wz < 0;
+    if (flip) { nx = -nx; ny = -ny; nz = -nz; }
+    const l = Math.hypot(nx, ny, nz) || 1;
+    const qx = n8(nx / l), qy = n8(ny / l), qz = n8(nz / l);
+    const r = c8(color.r), g = c8(color.g), b = c8(color.b);
+    const order = flip ? QUAD_FLIP : QUAD;
+    for (let k = 0; k < 6; k++) {
+      const o = order[k] * 3;
+      this.pos.push(v[o], v[o + 1], v[o + 2]);
+      this.nor.push(qx, qy, qz);
+      this.nor.push(0);
+      this.uv.push(0, 0);
+      this.col.push(r, g, b);
+      this.col.push(255);
     }
   }
   quad(a, b, c, d, ua, ub, uc, ud, color, want, layer = 0) {
@@ -132,6 +155,42 @@ export class PropBuf {
   }
   get empty() {
     return this.tpl.length === 0;
+  }
+  // Bake in slices of `budget` ms: returns the geometry when done, null meanwhile.
+  bakeStep(budget) {
+    const t0 = performance.now();
+    let j = this.job;
+    if (!j) {
+      let verts = 0;
+      for (let k = 0; k < this.tpl.length; k++) verts += this.tpls[this.tpl.a[k]].attributes.position.count;
+      j = this.job = { k: 0, o: 0, o4: 0, pos: new Float32Array(verts * 3), nor: new Int8Array(verts * 4), col: new Uint8Array(verts * 4).fill(255) };
+    }
+    const { pos, nor, col } = j;
+    for (; j.k < this.tpl.length; j.k++) {
+      if ((j.k & 63) === 0 && performance.now() - t0 > budget) return null;
+      const k = j.k;
+      const tp = this.tpls[this.tpl.a[k]];
+      const p = tp.attributes.position.array, n = tp.attributes.normal.array;
+      _m4.fromArray(this.mat.a, k * 16);
+      _nm.getNormalMatrix(_m4);
+      const r = this.col.a[k * 4], g = this.col.a[k * 4 + 1], b = this.col.a[k * 4 + 2], shade = this.col.a[k * 4 + 3];
+      for (let i = 0; i < p.length; i += 3, j.o += 3, j.o4 += 4) {
+        const o = j.o, o4 = j.o4;
+        _v.set(p[i], p[i + 1], p[i + 2]).applyMatrix4(_m4);
+        _n.set(n[i], n[i + 1], n[i + 2]).applyMatrix3(_nm).normalize();
+        pos[o] = _v.x; pos[o + 1] = _v.y; pos[o + 2] = _v.z;
+        nor[o4] = n8(_n.x); nor[o4 + 1] = n8(_n.y); nor[o4 + 2] = n8(_n.z);
+        const k2 = shade ? 1 - shade * ((i * 7919) % 13) / 13 : 1;
+        col[o4] = c8(r * k2); col[o4 + 1] = c8(g * k2); col[o4 + 2] = c8(b * k2);
+      }
+    }
+    this.job = null;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 4, true));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 4, true));
+    geo.computeBoundingSphere();
+    return geo;
   }
   // Baked geometry; the list is kept so the mesh can be rebuilt after a dispose.
   geometry() {
@@ -239,7 +298,7 @@ export class ChunkSet {
     for (const d of this.detail) d.mesh.visible = (d.cx - p.x) ** 2 + (d.cz - p.z) ** 2 < d.range * d.range;
     // spread the uploads when flying in fast; at load time bring everything in range at once
     // (otherwise the first seconds show balconies and roofs floating without their walls)
-    let uploads = initial ? Infinity : 3;
+    let uploads = initial ? Infinity : 1;
     for (const s of this.streamed) {
       const d2 = (s.cx - p.x) ** 2 + (s.cz - p.z) ** 2;
       if (!s.on && d2 < s.range * s.range && uploads-- > 0) {
@@ -251,20 +310,31 @@ export class ChunkSet {
         s.on = false;
       }
     }
-    let budget = initial ? Infinity : fast ? 0 : 2; // flying over: no baking, it'd be garbage a second later
+    // bake one chunk's props at a time, ~2 ms a frame (nearest first); flying over: no
+    // baking, it'd be garbage a second later; at load time everything in range at once
+    let next = null, nd = Infinity;
     for (const l of this.lazy) {
       const d2 = (l.cx - p.x) ** 2 + (l.cz - p.z) ** 2;
       if (d2 < l.range * l.range) {
-        if (!l.mesh && budget-- > 0) {
-          l.mesh = new THREE.Mesh(freeAfterUpload(l.props.geometry()), this.mats.props);
-          l.mesh.castShadow = l.mesh.receiveShadow = true;
-          this.root.add(l.mesh);
+        if (!l.mesh && initial) this.finishBake(l, l.props.bakeStep(Infinity));
+        else if (!l.mesh && (l.props.job ? -1 : d2) < nd) {
+          nd = l.props.job ? -1 : d2;
+          next = l;
         }
       } else if (l.mesh && d2 > (l.range * 1.4) ** 2) {
         this.root.remove(l.mesh);
         l.mesh.geometry.dispose();
         l.mesh = null;
-      }
+      } else if (!l.mesh && l.props.job && d2 > (l.range * 1.4) ** 2) l.props.job = null;
     }
+    if (next && !fast) {
+      const geo = next.props.bakeStep(2);
+      if (geo) this.finishBake(next, geo);
+    }
+  }
+  finishBake(l, geo) {
+    l.mesh = new THREE.Mesh(freeAfterUpload(geo), this.mats.props);
+    l.mesh.castShadow = l.mesh.receiveShadow = true;
+    this.root.add(l.mesh);
   }
 }
