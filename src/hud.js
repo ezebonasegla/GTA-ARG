@@ -80,6 +80,10 @@ export class Hud {
   }
 
   drawMinimap(px, pz, heading, camYaw, blips, gps) {
+    // redrawing every road around the player each frame cost ~1 ms: 20 times a second
+    const now = performance.now();
+    if (now - (this.miniAt || 0) < 50) return;
+    this.miniAt = now;
     const ctx = this.miniCtx;
     const W = this.mini.width, H = this.mini.height;
     const zoom = 2.1; // minimap px per map px
@@ -95,7 +99,11 @@ export class Hud {
     ctx.rotate(Math.PI + camYaw);
     ctx.scale(zoom, zoom);
     const mx = (px - this.ox) * this.scale, mz = (pz - this.oz) * this.scale;
-    ctx.drawImage(this.map, -mx, -mz);
+    // just the square around the player (the whole city image, rotated, was most of the cost)
+    const r = Math.ceil(W / zoom) + 2;
+    const sx0 = Math.max(0, Math.floor(mx - r)), sz0 = Math.max(0, Math.floor(mz - r));
+    const sx1 = Math.min(this.map.width, Math.ceil(mx + r)), sz1 = Math.min(this.map.height, Math.ceil(mz + r));
+    if (sx1 > sx0 && sz1 > sz0) ctx.drawImage(this.map, sx0, sz0, sx1 - sx0, sz1 - sz0, sx0 - mx, sz0 - mz, sx1 - sx0, sz1 - sz0);
     const M = (x, z) => [(x - this.ox) * this.scale - mx, (z - this.oz) * this.scale - mz];
     if (gps?.route) {
       ctx.strokeStyle = '#b44bff';
@@ -229,33 +237,48 @@ export class Hud {
     this.street.classList.add('flash');
   }
 
+  // HUD setters run every frame: touch the DOM only when what they show changes (each
+  // write is a style and layout pass for the browser)
+  changed(key, value) {
+    this.shown ??= {};
+    if (this.shown[key] === value) return false;
+    this.shown[key] = value;
+    return true;
+  }
+
   setGps(label, distance) {
+    if (!this.changed('gps', `${label}|${distance}`)) return;
     this.gpsEl.style.display = label ? 'block' : 'none';
     if (label) this.gpsEl.innerHTML = `<b>${distance}</b> <span></span>`;
     if (label) this.gpsEl.querySelector('span').textContent = label;
   }
 
   setSpeed(kmh) {
+    if (!this.changed('speed', kmh === null ? null : Math.round(kmh))) return;
     this.speedEl.style.display = kmh === null ? 'none' : 'block';
     if (kmh !== null) this.speedEl.innerHTML = `${Math.round(kmh)}<small> km/h</small>`;
   }
 
   setWanted(level) {
+    if (!this.changed('wanted', level)) return;
     this.starsEl.innerHTML = [0, 1, 2, 3, 4].map((i) => `<span class="${i < level ? 'on' : ''}">★</span>`).join('');
   }
 
   setClock(hours) {
     const h = Math.floor(hours) % 24, m = Math.floor((hours % 1) * 60);
-    this.clockEl.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    const t = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    if (this.changed('clock', t)) this.clockEl.textContent = t;
   }
 
   setHealth(v) {
+    if (!this.changed('health', Math.round(Math.max(0, v)))) return;
     this.healthEl.style.width = `${Math.max(0, v)}%`;
   }
 
   hint(text) {
     // on phones there is no E key: "E: robar el auto" -> "Robar el auto"
     if (text && document.body.classList.contains('touch')) text = text.replace(/^E: (\w)/, (_, c) => c.toUpperCase());
+    if (!this.changed('hint', text || '')) return;
     this.hintEl.textContent = text || '';
     this.hintEl.style.display = text ? 'block' : 'none';
   }

@@ -267,7 +267,7 @@ export class ChunkSet {
       if (!c.facade.empty) {
         const m = new THREE.Mesh(c.facade.geometry(), mats.facade);
         m.castShadow = m.receiveShadow = true;
-        this.streamed.push({ mesh: m, cx, cz, range: 1300 * streaming.range + this.size * 0.7, on: false });
+        this.streamed.push({ mesh: m, cx, cz, range: 950 * streaming.range + this.size * 0.7, on: false });
       }
       if (!c.props.empty) {
         // baked on demand near the camera (see updateDetail)
@@ -294,16 +294,32 @@ export class ChunkSet {
   }
   // Show the small details only around the camera; bake nearby props (a couple per
   // frame so driving doesn't stutter) and free the far ones.
-  updateDetail(p, fast = false, initial = false) {
+  updateDetail(p, fast = false, initial = false, full = true) {
+    if (!full) {
+      // in between full checks: one queued upload and a slice of the current bake
+      const s = this.addQueue?.pop();
+      if (s && !s.on) {
+        this.root.add(s.mesh);
+        s.on = true;
+      }
+      if (this.pending && !this.pending.mesh && !fast) {
+        const geo = this.pending.props.bakeStep(2);
+        if (geo) this.finishBake(this.pending, geo);
+      }
+      return;
+    }
     for (const d of this.detail) d.mesh.visible = (d.cx - p.x) ** 2 + (d.cz - p.z) ** 2 < d.range * d.range;
     // spread the uploads when flying in fast; at load time bring everything in range at once
     // (otherwise the first seconds show balconies and roofs floating without their walls)
     let uploads = initial ? Infinity : 1;
+    this.addQueue = [];
     for (const s of this.streamed) {
       const d2 = (s.cx - p.x) ** 2 + (s.cz - p.z) ** 2;
-      if (!s.on && d2 < s.range * s.range && uploads-- > 0) {
-        this.root.add(s.mesh);
-        s.on = true;
+      if (!s.on && d2 < s.range * s.range) {
+        if (uploads-- > 0) {
+          this.root.add(s.mesh);
+          s.on = true;
+        } else this.addQueue.push(s);
       } else if (s.on && d2 > (s.range * 1.15) ** 2) {
         this.root.remove(s.mesh);
         s.mesh.geometry.dispose(); // frees the GPU buffers; re-uploaded when it comes back
@@ -327,6 +343,7 @@ export class ChunkSet {
         l.mesh = null;
       } else if (!l.mesh && l.props.job && d2 > (l.range * 1.4) ** 2) l.props.job = null;
     }
+    this.pending = next;
     if (next && !fast) {
       const geo = next.props.bakeStep(2);
       if (geo) this.finishBake(next, geo);

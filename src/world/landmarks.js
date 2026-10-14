@@ -30,6 +30,32 @@ export class Kit {
     this.parts.get(mat).push(g);
   }
   build(root, { cast = true, receive = true, order } = {}) {
+    // Plain-coloured opaque materials (no texture, no glow, not see-through) are merged
+    // into one mesh with the colour per vertex: one draw instead of one per material.
+    const plain = (m) => m.isMeshStandardMaterial && !m.map && !m.transparent && m.depthWrite !== false && m.side === THREE.FrontSide &&
+      !m.emissive?.getHex() && !m.vertexColors && m.onBeforeCompile === THREE.Material.prototype.onBeforeCompile;
+    const merged = [];
+    for (const [mat, geos] of this.parts) {
+      if (!plain(mat) || mat.flatShading) continue;
+      for (const g of geos) {
+        g.deleteAttribute('uv');
+        const c = new Float32Array(g.attributes.position.count * 3);
+        for (let i = 0; i < c.length; i += 3) {
+          c[i] = mat.color.r;
+          c[i + 1] = mat.color.g;
+          c[i + 2] = mat.color.b;
+        }
+        g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+        merged.push(g);
+      }
+      this.parts.delete(mat);
+    }
+    if (merged.length) {
+      const mesh = new THREE.Mesh(mergeGeometries(merged), Kit.plainMaterial ||= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: 0.1 }));
+      mesh.castShadow = cast;
+      mesh.receiveShadow = receive;
+      root.add(mesh);
+    }
     for (const [mat, geos] of this.parts) {
       const mesh = new THREE.Mesh(mergeGeometries(geos), mat);
       mesh.castShadow = cast && !mat.transparent && mat.depthWrite !== false;

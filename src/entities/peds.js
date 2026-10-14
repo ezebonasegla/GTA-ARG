@@ -127,44 +127,56 @@ export class Peds {
       if (Math.hypot(p.x - px, p.z - pz) > DESPAWN || (p.dead && (p.timer -= dt) < 0)) this.remove(p);
     }
     let alive = this.list.filter((p) => !p.dead).length;
-    if (!ctx.fast) for (let k = 0; k < 4 && alive < MAX_PEDS; k++) if (this.spawn(px, pz, ctx.initial ? 6 : SPAWN_MIN, SPAWN_MAX)) alive++;
+    this.spawnTimer = (this.spawnTimer || 0) - dt;
+    if (!ctx.fast && (ctx.initial || this.spawnTimer <= 0)) {
+      this.spawnTimer = 0.4;
+      for (let k = 0; k < 4 && alive < MAX_PEDS; k++) if (this.spawn(px, pz, ctx.initial ? 6 : SPAWN_MIN, SPAWN_MAX)) alive++;
+    }
 
     for (const p of this.list) {
+      // far pedestrians are stepped every ~50 ms of game time
+      let dtp = dt;
+      if ((p.x - px) ** 2 + (p.z - pz) ** 2 > 60 * 60) {
+        p.acc = (p.acc || 0) + dt;
+        if (p.acc < 0.05) continue;
+        dtp = p.acc;
+        p.acc = 0;
+      }
       if (p.state === 'down') {
         // simple ballistic tumble, then lie on the ground
-        p.vy -= 20 * dt;
-        p.y = Math.max(0, p.y + p.vy * dt);
-        p.x += p.vx * dt;
-        p.z += p.vz * dt;
+        p.vy -= 20 * dtp;
+        p.y = Math.max(0, p.y + p.vy * dtp);
+        p.x += p.vx * dtp;
+        p.z += p.vz * dtp;
         const drag = p.y > 0 ? 0.3 : 4;
-        p.vx -= p.vx * Math.min(1, drag * dt);
-        p.vz -= p.vz * Math.min(1, drag * dt);
+        p.vx -= p.vx * Math.min(1, drag * dtp);
+        p.vz -= p.vz * Math.min(1, drag * dtp);
         const r = this.collision.resolve(p.x, p.z, 0.3);
         p.x = r.x;
         p.z = r.z;
         // tumble while airborne, then settle flat on the back (or face down)
         const air = p.y > 0.02;
         const lie = p.back ? -Math.PI / 2 : Math.PI / 2;
-        if (air && p.vy > -2) p.spin += p.spinV * dt;
-        else p.spin += (lie - p.spin) * Math.min(1, dt * 8);
+        if (air && p.vy > -2) p.spin += p.spinV * dtp;
+        else p.spin += (lie - p.spin) * Math.min(1, dtp * 8);
         p.spin = Math.max(-Math.PI * 0.7, Math.min(Math.PI * 0.7, p.spin));
-        animatePerson(p.mesh, dt, { down: true, downAir: air });
+        animatePerson(p.mesh, dtp, { down: true, downAir: air });
         p.mesh.position.set(p.x, p.y + 0.13 * Math.abs(Math.sin(p.spin)), p.z);
         p.mesh.rotation.set(p.spin, p.heading, 0);
         continue;
       }
       if (p.state === 'idle') {
         // standing around (chatting, drinking mate...)
-        p.timer -= dt;
+        p.timer -= dtp;
         if (p.timer <= 0) p.state = 'walk';
-        animatePerson(p.mesh, dt, { speed: 0 });
+        animatePerson(p.mesh, dtp, { speed: 0 });
         p.mesh.position.set(p.x, p.lev || 0, p.z);
         p.mesh.rotation.y = p.heading;
         continue;
       }
       let tx, tz, speed = p.speed;
       if (p.state === 'flee') {
-        p.timer -= dt;
+        p.timer -= dtp;
         const dx = p.x - p.fx, dz = p.z - p.fz;
         const l = Math.hypot(dx, dz) || 1;
         tx = p.x + (dx / l) * 5;
@@ -197,7 +209,7 @@ export class Peds {
           this.legTarget(p);
         }
         // not getting anywhere (pressed against a wall): turn back, then give up
-        p.watch = (p.watch || 0) + dt;
+        p.watch = (p.watch || 0) + dtp;
         if (p.watch > 2) {
           const moved = Math.hypot(p.x - (p.wx ?? p.x + 9), p.z - (p.wz ?? p.z));
           p.watch = 0;
@@ -227,15 +239,15 @@ export class Peds {
       let dh = want - p.heading;
       while (dh > Math.PI) dh -= Math.PI * 2;
       while (dh < -Math.PI) dh += Math.PI * 2;
-      p.heading += dh * Math.min(1, dt * 6);
-      p.x += (dx / l) * speed * dt;
-      p.z += (dz / l) * speed * dt;
+      p.heading += dh * Math.min(1, dtp * 6);
+      p.x += (dx / l) * speed * dtp;
+      p.z += (dz / l) * speed * dtp;
       const r = this.collision.resolve(p.x, p.z, 0.3, Math.abs(p.lev || 0) > 1 ? GROUND_ONLY : undefined);
       p.x = r.x;
       p.z = r.z;
       // up on a footbridge / down in a paso bajo nivel
       p.lev = this.collision.levelAt?.(p.x, p.z, Math.sin(p.heading), Math.cos(p.heading), p.lev || 0) ?? 0;
-      animatePerson(p.mesh, dt, { speed, panic: p.state === 'flee' && p.panic });
+      animatePerson(p.mesh, dtp, { speed, panic: p.state === 'flee' && p.panic });
       p.mesh.position.set(p.x, p.lev, p.z);
       p.mesh.rotation.y = p.heading;
     }

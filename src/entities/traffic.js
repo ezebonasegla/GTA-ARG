@@ -163,8 +163,13 @@ export class Traffic {
       else if (v.parked || !v.driver) parked++;
       else moving++;
     }
-    if (!ctx.fast) for (let k = 0; k < 3 && moving < MAX_MOVING; k++) if (this.spawnMoving(px, pz, ctx.initial ? 25 : SPAWN_MIN, SPAWN_MAX)) moving++;
-    if (!ctx.fast) for (let k = 0; k < 3 && parked < MAX_PARKED; k++) if (this.spawnParked(px, pz, ctx.initial ? 10 : SPAWN_MIN, SPAWN_MAX)) parked++;
+    // spawning searches hundreds of street segments: a few times a second is plenty
+    this.spawnTimer = (this.spawnTimer || 0) - dt;
+    if (!ctx.fast && (ctx.initial || this.spawnTimer <= 0)) {
+      this.spawnTimer = 0.4;
+      for (let k = 0; k < 3 && moving < MAX_MOVING; k++) if (this.spawnMoving(px, pz, ctx.initial ? 25 : SPAWN_MIN, SPAWN_MAX)) moving++;
+      for (let k = 0; k < 3 && parked < MAX_PARKED; k++) if (this.spawnParked(px, pz, ctx.initial ? 10 : SPAWN_MIN, SPAWN_MAX)) parked++;
+    }
 
     this.policeTimer -= dt;
     const wantCops = Math.min(5, ctx.wanted);
@@ -185,8 +190,16 @@ export class Traffic {
 
     for (const [v, c] of this.npc) {
       if (v.driver === 'player') continue;
-      if (c.police) this.drivePolice(v, c, dt, ctx);
-      else this.driveNpc(v, c, dt, ctx);
+      // far from the player nobody sees the detail: think every ~50 ms of game time
+      let step = dt;
+      if (!c.police && (v.x - px) ** 2 + (v.z - pz) ** 2 > 140 * 140) {
+        c.acc = (c.acc || 0) + dt;
+        if (c.acc < 0.05) continue;
+        step = c.acc;
+        c.acc = 0;
+      }
+      if (c.police) this.drivePolice(v, c, step, ctx);
+      else this.driveNpc(v, c, step, ctx);
     }
 
     // vehicle-vehicle contacts (only near the player to save time)

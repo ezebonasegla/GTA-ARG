@@ -74,6 +74,7 @@ async function main() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, mobile || light.on ? (light.on ? 0.85 : 1) : 1.5));
   const perf = { frames: 0, t: 0, low: 0, high: 0, n: 0, shadowEvery: 1, maxRatio: renderer.getPixelRatio() };
   const fpsEl = document.getElementById('fps');
+  const perfHud = { on: /[?&]perf\b/.test(location.search), gap: 0, logic: 0, draw: 0, last: performance.now() };
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = !light.on;
   // shadows are redrawn by hand (needsUpdate in the frame loop), not by three.js
@@ -378,6 +379,10 @@ async function main() {
   }
 
   function frame() {
+    const tStart = performance.now();
+    perfHud.gap = Math.max(perfHud.gap, tStart - perfHud.last);
+    perfHud.last = tStart;
+    if (input.hit('F3')) perfHud.on = !perfHud.on;
     const dt = gps.open ? 0 : Math.min(0.05, clock.getDelta()); // the map pauses the game
     totalTime += dt;
     hours = (hours + dt * timeScale) % 24;
@@ -762,10 +767,15 @@ async function main() {
     // fps counter + dynamic resolution: drop the pixel ratio when the frame rate sags,
     // bring it back when there is headroom
     perf.frames++;
-    perf.t += dt || 1 / 60;
+    perf.t += (tStart - (perf.prev ?? tStart)) / 1000; // real time (dt is clamped)
+    perf.prev = tStart;
     if (perf.t >= 1) {
       const fps = perf.frames / perf.t;
-      fpsEl.textContent = `${Math.round(fps)} FPS`;
+      // ?perf or F3: what each frame costs, to tell a slow CPU from a slow GPU
+      fpsEl.textContent = perfHud.on
+        ? `${Math.round(fps)} FPS · peor ${Math.round(perfHud.gap)} ms · lógica ${(perfHud.logic / perf.frames).toFixed(1)} ms · dibujo ${(perfHud.draw / perf.frames).toFixed(1)} ms · ${renderer.info.render.calls} llamadas · sombras c/${perf.shadowEvery} · res ${renderer.getPixelRatio().toFixed(2)}`
+        : `${Math.round(fps)} FPS`;
+      perfHud.gap = perfHud.logic = perfHud.draw = 0;
       // every change of resolution reallocates the framebuffers (a hitch of its own):
       // step down only after 3 s below 50, and never climb back to a ratio that was
       // already too much for this GPU
@@ -795,7 +805,10 @@ async function main() {
     // shadows every frame while the GPU keeps up (an even cost per frame paces better);
     // every 2nd / 3rd frame on a slower one (perf.shadowEvery, set above)
     if ((perf.n = (perf.n + 1) % perf.shadowEvery) === 0) renderer.shadowMap.needsUpdate = true;
+    const tDraw = performance.now();
+    perfHud.logic += tDraw - tStart;
     renderer.render(scene, camera);
+    perfHud.draw += performance.now() - tDraw;
     if (!perf.released && perf.frames > 2) releaseTexturePixels(), (perf.released = true);
     input.endFrame();
     requestAnimationFrame(frame);

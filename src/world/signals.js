@@ -7,7 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { SpatialHash } from './geo.js';
 
 const CYCLE = 48, GREEN = 19, AMBER = 3; // seconds; the rest of each half is all-red
-const CELL = 220;
+const CELL = 440;
 const MAJOR = (r) => r.kind === 'primary' || r.kind === 'secondary' || r.kind === 'trunk';
 const LENS = [new THREE.Color(1, 0.12, 0.08), new THREE.Color(1, 0.62, 0.05), new THREE.Color(0.15, 1, 0.45)];
 const OFF = LENS.map((c) => c.clone().multiplyScalar(0.06));
@@ -76,10 +76,15 @@ export function buildSignals({ graph, arms, centres, root, collision, addCulled,
     return cells.get(k);
   };
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1);
+  // poles, housings and plates share one vertex-coloured material: one draw per cell
+  const shared = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.4 });
   const place = (cell, geo, material, x, y, z, a) => {
     const g = geo.clone().applyMatrix4(m4.compose(new THREE.Vector3(x, y, z), q.setFromAxisAngle(Y, a), one));
-    if (!cell.parts.has(material)) cell.parts.set(material, []);
-    cell.parts.get(material).push(g);
+    const c = new Float32Array(g.attributes.position.count * 3);
+    for (let i = 0; i < c.length; i += 3) [c[i], c[i + 1], c[i + 2]] = [material.color.r, material.color.g, material.color.b];
+    g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+    if (!cell.parts.has(shared)) cell.parts.set(shared, []);
+    cell.parts.get(shared).push(g);
   };
   const strip = (g) => {
     for (const n of Object.keys(g.attributes)) if (n !== 'position' && n !== 'normal') g.deleteAttribute(n);

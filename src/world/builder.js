@@ -20,6 +20,9 @@ export { GeoBuf };
 import { mulberry32, hashString, polygonArea, pointInPolygon, bbox, SpatialHash, closestOnSegment } from './geo.js';
 
 const CHUNK = 220;
+// instanced props group in bigger squares: one draw per prop type per square, and an
+// instance is cheap; a 220 m grid made hundreds of tiny draws (CPU bound in WebGL)
+const INST_CHUNK = 440;
 const SIDEWALK = 3;
 
 export function buildWorld(data, renderer, scene) {
@@ -454,7 +457,7 @@ export function buildWorld(data, renderer, scene) {
   instancedChunks(root, trunkG, trunkMat, trees, treeMatrix, { cast: true, range: 600 });
   crowns.forEach((g, k) => {
     const list = trees.filter((t) => t[4] === k);
-    if (list.length) instancedChunks(root, g, crownMat, list, treeMatrix, { cast: true, range: 750, receive: true, color: ([, , , r]) => leaf[k](r) });
+    if (list.length) instancedChunks(root, g, crownMat, list, treeMatrix, { cast: true, range: 650, receive: true, color: ([, , , r]) => leaf[k](r) });
   });
   // street trees painted with cal at the base
   const calG = new THREE.CylinderGeometry(0.3, 0.33, 1.1, 6).translate(0, 0.55, 0);
@@ -513,6 +516,7 @@ export function buildWorld(data, renderer, scene) {
   const pools = instancedChunks(root, poolG, poolMat, lights, lampMatrix, { range: 450 });
   for (const p of pools) p.renderOrder = -5;
 
+  let lastDetailAt = null;
   freezeTransforms(root);
   // The scene itself never moves either. With matrixAutoUpdate on, its updateMatrix()
   // flags it dirty every frame, which forces every matrixWorld below to be recomputed.
@@ -527,10 +531,15 @@ export function buildWorld(data, renderer, scene) {
     chunks, // for the memory probes
     tex,
     waterMaterial: areaMats.water,
+    // The full distance checks (thousands of chunks, cells and culled meshes) only when
+    // the camera has moved a few metres; in between, just keep the work already queued
+    // (an upload, a bake) going.
     updateDetail: (p, fast, initial) => {
-      chunks.updateDetail(p, fast, initial);
-      if (!fast) houseDetail.update(p, initial);
-      updateCulling(p);
+      const full = initial || !lastDetailAt || (p.x - lastDetailAt.x) ** 2 + (p.z - lastDetailAt.z) ** 2 > 9;
+      if (full) lastDetailAt = { x: p.x, z: p.z };
+      chunks.updateDetail(p, fast, initial, full);
+      if (!fast) houseDetail.update(p, initial, full);
+      if (full) updateCulling(p);
     },
     setNight(n) {
       for (const m of nightMaterials) m.emissiveIntensity = n * 0.85;
@@ -629,7 +638,7 @@ export function updateCulling(p) {
 export function instancedChunks(root, geometry, material, items, setMatrix, opts = {}) {
   const groups = new Map();
   for (const it of items) {
-    const key = `${Math.floor(it[0] / CHUNK)},${Math.floor(it[1] / CHUNK)}`;
+    const key = `${Math.floor(it[0] / INST_CHUNK)},${Math.floor(it[1] / INST_CHUNK)}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(it);
   }

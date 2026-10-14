@@ -814,7 +814,12 @@ export class Combat {
     this.updateBullets(dt);
     this.updateEffects(dt);
     this.updateCops(dt, ctx);
-    for (const m of this.markers) m.children[1].rotation.y += dt * 1.6;
+    // armería markers: only near the player (each is a handful of draws, city-wide)
+    const pl = this.player;
+    for (const m of this.markers) {
+      m.visible = (m.position.x - pl.x) ** 2 + (m.position.z - pl.z) ** 2 < 150 * 150;
+      if (m.visible) m.children[1].rotation.y += dt * 1.6;
+    }
     // the weapon in hand: hidden in vehicles, arms up while aiming
     if (this.held) this.held.visible = ctx.onFoot;
     if (ctx.onFoot && this.current) {

@@ -153,7 +153,7 @@ export function frontWall(buf, L, p0, p1, h, top, tint, wallLayer, uOff, items) 
 }
 
 // ------------------------------------------------------------ near: 3D relief
-const CELL = 75;
+const CELL = 120;
 const BUDGET = 2; // ms of baking per frame: spread over frames instead of a hitch
 
 export class HouseDetail {
@@ -185,7 +185,15 @@ export class HouseDetail {
   }
   // bake the cells around the camera, nearest first, a couple of milliseconds a frame;
   // drop the far ones
-  update(p, initial = false) {
+  update(p, initial = false, full = true) {
+    if (!full && !initial) {
+      if (this.busy?.job && !this.busy.mesh) this.bake(this.busy, BUDGET);
+      else if (this.next && !this.next.mesh) {
+        this.busy = this.next;
+        this.bake(this.next, BUDGET);
+      }
+      return;
+    }
     const R = 150 + CELL * 0.7;
     let next = null, nd = Infinity;
     for (const c of this.cells.values()) {
@@ -210,6 +218,7 @@ export class HouseDetail {
       }
       return;
     }
+    this.next = next;
     // keep working on the cell already started if it is still wanted
     const busy = this.busy?.job && !this.busy.mesh ? this.busy : next;
     if (busy) {

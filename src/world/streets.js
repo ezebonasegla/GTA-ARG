@@ -6,7 +6,7 @@ import { GeoBuf } from './geobuf.js';
 import { offsetLine } from './metrobus.js';
 import { hashString, SpatialHash } from './geo.js';
 
-const CELL = 220;
+const CELL = 440; // bigger cells: fewer draws (each one is CPU time in WebGL)
 const CURB_H = 0.15, CURB_W = 0.18, CORNER_R = 3;
 const UP = [0, 1, 0];
 const WHITE = new THREE.Color(0.92, 0.92, 0.88), YELLOW = new THREE.Color(0.93, 0.72, 0.08);
