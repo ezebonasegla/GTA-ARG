@@ -222,6 +222,82 @@ function muro(ctx, rng, graffiti) {
 
 const PINTADAS = ['QUILMES', 'CERVECERO', 'AGUANTE QAC', 'LA BANDA', 'TE AMO FLOR', 'BARRIO', 'NO TIRAR BASURA', 'VIVA EL BARRIO', 'MATE', 'ARGENTINO'];
 
+// edge of an opening: the frame's shadow line
+function frame(ctx, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 10;
+  ctx.strokeRect(5, 5, S - 10, S - 10);
+}
+
+// A whole window, used by the house fronts in buildings.js.
+function windowPane(ctx, ectx, rng, kind) {
+  const alu = rng() < 0.6 ? '#c7cacc' : '#f2f2ef';
+  ctx.fillStyle = alu;
+  ctx.fillRect(0, 0, S, S);
+  ectx.fillStyle = '#000';
+  ectx.fillRect(0, 0, S, S);
+  const panes = [[14, 14, S / 2 - 18, S - 28], [S / 2 + 4, 14, S / 2 - 18, S - 28]];
+  for (const [x, y, w, h] of panes) {
+    // the sky and the street reflected
+    const g = ctx.createLinearGradient(x, y, x + w * 0.4, y + h);
+    g.addColorStop(0, '#8fa6b8');
+    g.addColorStop(0.45, '#4b5c6a');
+    g.addColorStop(1, '#1f272e');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = 'rgba(255,255,255,0.14)';
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.2, y);
+    ctx.lineTo(x + w * 0.45, y);
+    ctx.lineTo(x + w * 0.05, y + h);
+    ctx.lineTo(x, y + h);
+    ctx.lineTo(x, y + h * 0.6);
+    ctx.fill();
+    // night: warm room light, brighter where the curtain glows
+    const lg = ectx.createLinearGradient(x, y, x, y + h);
+    lg.addColorStop(0, kind === 'closed' ? '#8a5a26' : '#d99a48');
+    lg.addColorStop(1, kind === 'closed' ? '#6a4018' : '#b0702c');
+    ectx.fillStyle = lg;
+    ectx.fillRect(x, y, w, h);
+  }
+  // curtains: one side gathered (open) or drawn across (closed)
+  const cur = ['#e9dfc8', '#c9b48a', '#b9c7d0', '#d8b8b0', '#f1ece2'][Math.floor(rng() * 5)];
+  const drawCurtain = (x, w) => {
+    for (let k = 0; k < w; k += 6) {
+      ctx.fillStyle = cur;
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(x + k, 14, 4, S - 28);
+      ctx.fillStyle = 'rgba(0,0,0,0.15)';
+      ctx.fillRect(x + k + 4, 14, 2, S - 28);
+    }
+    ctx.globalAlpha = 1;
+  };
+  if (kind === 'closed') drawCurtain(14, S - 28);
+  else drawCurtain(14, 40 + rng() * 30);
+  if (kind === 'persiana') {
+    const down = (S - 28) * (0.55 + rng() * 0.25);
+    ctx.fillStyle = rng() < 0.6 ? '#ece8df' : '#8a6e4e';
+    ctx.fillRect(10, 10, S - 20, down);
+    for (let y = 10; y < 10 + down; y += 7) {
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      ctx.fillRect(10, y, S - 20, 1.5);
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillRect(10, y + 2, S - 20, 1);
+    }
+    ectx.fillStyle = '#000';
+    ectx.fillRect(10, 10, S - 20, down);
+  }
+  // the sliding sashes overlap in the middle
+  ctx.fillStyle = alu;
+  ctx.fillRect(S / 2 - 6, 8, 12, S - 16);
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(S / 2 + 6, 8, 2, S - 16);
+  ctx.fillRect(12, S - 16, S - 24, 3);
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(2, 2, S - 4, S - 4);
+}
+
 // ------------------------------------------------------------ facade layers
 // Each painter gets (ctx, ectx, rng) on a 256x256 canvas.
 export const painters = {
@@ -350,6 +426,84 @@ export const painters = {
   muro0: (ctx, ectx, rng) => muro(ctx, rng, 2),
   muro1: (ctx, ectx, rng) => muro(ctx, rng, 1),
   muro2: (ctx, ectx, rng) => muro(ctx, rng, 0),
+  // Front wall of a house: smooth revoque (3 m x 3 m), a little grime at the foot.
+  revoque(ctx, ectx, rng) {
+    ctx.fillStyle = '#efe9de';
+    ctx.fillRect(0, 0, S, S);
+    for (let i = 0; i < 6; i++) blotch(ctx, rng, rng() * S, rng() * S, 30 + rng() * 60, `rgba(${rng() < 0.5 ? '255,255,255' : '180,170,150'},0.12)`);
+    noise(ctx, S, S, 7000, rng, 0.05);
+    for (let i = 0; i < 4; i++) {
+      const x = rng() * S, l = 20 + rng() * 50, g = ctx.createLinearGradient(0, S * 0.3, 0, S * 0.3 + l);
+      g.addColorStop(0, 'rgba(60,55,45,0.1)');
+      g.addColorStop(1, 'rgba(60,55,45,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x, S * 0.3, 2 + rng() * 3, l);
+    }
+    const g = ctx.createLinearGradient(0, S - 30, 0, S);
+    g.addColorStop(0, 'rgba(80,70,50,0)');
+    g.addColorStop(1, 'rgba(80,70,50,0.25)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, S - 30, S, 30);
+  },
+  // A whole window (the quad spans it): aluminium sliding frame, glass with the sky
+  // reflected, a curtain behind; lit at night.
+  ventana: (ctx, ectx, rng) => windowPane(ctx, ectx, rng, 'open'),
+  ventanaCortina: (ctx, ectx, rng) => windowPane(ctx, ectx, rng, 'closed'),
+  // persiana de enrollar two thirds down
+  ventanaPersiana: (ctx, ectx, rng) => windowPane(ctx, ectx, rng, 'persiana'),
+  // Front doors (the quad spans the door): wood with a small barred light, and the
+  // painted sheet-metal door with a reja over its glass.
+  puerta0(ctx, ectx, rng) {
+    ctx.fillStyle = '#5e3a22';
+    ctx.fillRect(0, 0, S, S);
+    for (let x = 0; x < S; x += 4) {
+      ctx.fillStyle = `rgba(${rng() < 0.5 ? '255,220,180' : '30,15,5'},${0.04 + rng() * 0.06})`;
+      ctx.fillRect(x, 0, 2 + rng() * 3, S);
+    }
+    ctx.strokeStyle = 'rgba(25,12,4,0.6)';
+    ctx.lineWidth = 3;
+    for (const [x, y, w, h] of [[30, 24, 196, 70], [30, 112, 90, 120], [136, 112, 90, 120]]) ctx.strokeRect(x, y, w, h);
+    glass(ctx, 44, 34, 168, 50, false, rng);
+    glass(ectx, 44, 34, 168, 50, true, rng);
+    bars(ctx, 44, 34, 168, 50, 14, '#20180f');
+    ctx.fillStyle = '#c9a646';
+    ctx.fillRect(196, 128, 18, 6);
+    ctx.fillRect(204, 140, 5, 10);
+    frame(ctx, '#3a2414');
+  },
+  puerta1(ctx, ectx, rng) {
+    ctx.fillStyle = '#e8e8e8';
+    ctx.fillRect(0, 0, S, S);
+    // stamped panels
+    for (const [x, y, w, h] of [[26, 140, 92, 96], [138, 140, 92, 96]]) {
+      const g = ctx.createLinearGradient(x, y, x + w, y + h);
+      g.addColorStop(0, 'rgba(255,255,255,0.5)');
+      g.addColorStop(1, 'rgba(0,0,0,0.25)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x, y, w, h);
+    }
+    glass(ctx, 30, 20, 196, 100, false, rng);
+    glass(ectx, 30, 20, 196, 100, true, rng);
+    // reja with curls over the glass
+    ctx.strokeStyle = '#1b1b1b';
+    ctx.lineWidth = 3;
+    for (let x = 40; x < 226; x += 16) {
+      ctx.beginPath();
+      ctx.moveTo(x, 20);
+      ctx.lineTo(x, 120);
+      ctx.stroke();
+    }
+    for (let x = 48; x < 220; x += 32) {
+      ctx.beginPath();
+      ctx.arc(x, 70, 9, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#777';
+    ctx.fillRect(200, 132, 16, 8);
+    noise(ctx, S, S, 1500, rng, 0.05);
+    for (let i = 0; i < 4; i++) blotch(ctx, rng, rng() * S, S - rng() * 30, 10 + rng() * 14, 'rgba(110,70,30,0.3)');
+    frame(ctx, '#2a2a2a');
+  },
   // Sheet metal gate (3 m x 2.2 m), tinted per gate.
   porton(ctx, ectx, rng) {
     ctx.fillStyle = '#9a9a98';
@@ -605,6 +759,10 @@ export function atlasTexture(renderer) {
   ctx.fillRect(0, 70, 256, 3);
   ctx.fillRect(0, 120, 256, 6);
   // alambrado romboidal (256,0)-(512,128)
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(256, 0, 256, 128); // keep the diagonals out of the reja next to it
+  ctx.clip();
   ctx.strokeStyle = 'rgba(150,155,158,0.95)';
   ctx.lineWidth = 1.2;
   for (let k = -128; k < 256; k += 9) {
@@ -615,7 +773,7 @@ export function atlasTexture(renderer) {
     ctx.lineTo(256 + k, 128);
     ctx.stroke();
   }
-  ctx.clearRect(0, 0, 256, 0);
+  ctx.restore();
   ctx.fillStyle = '#7d8286';
   ctx.fillRect(256, 4, 256, 3);
   // stray holes in the mesh

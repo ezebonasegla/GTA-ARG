@@ -311,7 +311,7 @@ export function buildWorld(data, renderer, scene) {
     alpha: new THREE.MeshStandardMaterial({ map: tex.atlas, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.9 }),
     cables: new THREE.LineBasicMaterial({ color: 0x1a1a1a }),
   };
-  const { tanks } = buildBuildings(data, { chunks, collision, tex });
+  const { tanks, detail: houseDetail } = buildBuildings(data, { chunks, collision, tex, graph });
 
   {
     // tanques de agua (items are [x, z, roofY, scale])
@@ -368,6 +368,7 @@ export function buildWorld(data, renderer, scene) {
   // villas, descampados, rejas and walls on the property line, poles and cables
   buildConurbano(data, { root, chunks, collision, tex, flatMat, graph, nearPasillo });
   chunks.build(root, chunkMats);
+  houseDetail.build(root, chunkMats);
 
   // ---------------------------------------------------------------- street corner signs
   const streetSigns = buildStreetSigns(data, { root, collision });
@@ -528,6 +529,7 @@ export function buildWorld(data, renderer, scene) {
     waterMaterial: areaMats.water,
     updateDetail: (p, fast, initial) => {
       chunks.updateDetail(p, fast, initial);
+      if (!fast) houseDetail.update(p, initial);
       updateCulling(p);
     },
     setNight(n) {

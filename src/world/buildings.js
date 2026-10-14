@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { mulberry32, hashString, polygonArea, pointInPolygon, bbox } from './geo.js';
 import { template } from './geobuf.js';
 import { ATLAS } from './conurbanoTextures.js';
+import { frontLayout, frontWall, HouseDetail } from './houseFronts.js';
 
 // Tint palettes (sRGB hex) per facade style.
 const PALETTES = {
@@ -49,9 +50,10 @@ const C = {
   metal: col('#6d6f70'), alu: col('#b8bcbf'), pilar: col('#c9c3b6'), meter: col('#8e9396'), rust: col('#7a4a2c'), black: col('#202020'), beige: col('#d6cba2'), blue: col('#2d5f9a'), white: col('#e8e8e4'),
 };
 
-export function buildBuildings(data, { chunks, collision, tex }) {
+export function buildBuildings(data, { chunks, collision, tex, graph }) {
   const L = tex.facades.layer;
   const tanks = [];
+  const detail = new HouseDetail();
   const white = new THREE.Color(1, 1, 1);
   // stadium stands (landmarks.js) replace whatever footprints the data has under them
   const stadiums = (data.specials || []).filter((s) => s.type === 'stadium').map((s) => [s.box, 3 + Math.max(s.depth || 0, 12)]);
@@ -107,6 +109,15 @@ export function buildBuildings(data, { chunks, collision, tex }) {
     const topHueco = unfinished ? Math.max(0, h - 2.9) : h;
     const uOff = Math.floor(rng() * 4) * 1.5;
 
+    // the longest street front gets the door (and the garage)
+    let mainEdge = -1, mainLen = 0;
+    for (let e = 0; e < n; e++) {
+      const l = Math.hypot(pts[(e + 1) % n][0] - pts[e][0], pts[(e + 1) % n][1] - pts[e][1]);
+      if (isFront(e) && l > mainLen) {
+        mainLen = l;
+        mainEdge = e;
+      }
+    }
     let dist = 0;
     for (let e = 0; e < n; e++) {
       const p0 = pts[e], p1 = pts[(e + 1) % n];
@@ -114,7 +125,15 @@ export function buildBuildings(data, { chunks, collision, tex }) {
       if (len < 0.01) continue;
       const u0 = -dist / 6 + uOff;
       const front = isFront(e);
-      if (low) {
+      if (low && front && !bld.shop && len >= 2.2) {
+        // a real house front: plain wall, openings laid out on its width, 3D relief near
+        const seed = hashString(`${idx}:${e}`);
+        const main = e === mainEdge;
+        const items = frontLayout(len, h, bld.levels || 1, seed, main);
+        frontWall(buf, L, p0, p1, h, topHueco, tint, style === 'brick' ? L.medianeraLadrillo : L.revoque, u0, items);
+        detail.add(p0, p1, h, topHueco, bld.levels || 1, tint, seed, main, main ? setbackOf(graph, p0, p1, len) : 0, style);
+        if (unfinished && h - topHueco > 0.05) buf.wall(p0, p1, topHueco, h, u0, 6, 5.8, white, L.hueco, 0.5);
+      } else if (low) {
         if (front) {
           let y = 0;
           if (shopH) {
@@ -216,7 +235,23 @@ export function buildBuildings(data, { chunks, collision, tex }) {
       }
     }
   });
-  return { tanks };
+  return { tanks, detail };
+}
+
+// How far a front stands back from the sidewalk (0 when it's on the line or unknown).
+function setbackOf(graph, p0, p1, len) {
+  if (!graph) return 0;
+  const ux = (p1[0] - p0[0]) / len, uz = (p1[1] - p0[1]) / len, ox = uz, oz = -ux;
+  const mx = (p0[0] + p1[0]) / 2, mz = (p0[1] + p1[1]) / 2;
+  const n = graph.nearest(mx + ox, mz + oz, 30);
+  if (!n) return 0;
+  const r = n.seg.road;
+  if (r.kind === 'footway' || r.kind === 'pedestrian' || r.pasillo || r.dirt || r.kind === 'service') return 0;
+  const dx = n.x - mx, dz = n.z - mz, d = Math.hypot(dx, dz) || 1;
+  if ((dx * ox + dz * oz) / d < 0.85) return 0; // the street is not in front of it
+  const sdx = n.seg.b.x - n.seg.a.x, sdz = n.seg.b.z - n.seg.a.z, sl = Math.hypot(sdx, sdz) || 1;
+  if (Math.abs((sdx * ux + sdz * uz) / sl) < 0.85) return 0; // not parallel
+  return Math.max(0, d - r.w / 2 - 3);
 }
 
 // TV antenna, satellite dish and the calefón's chimney with its "sombrero" on a flat roof.

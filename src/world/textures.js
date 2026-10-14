@@ -407,6 +407,10 @@ export function makeTextures(renderer) {
     ...['medianera', 'medianeraLadrillo', 'hueco', 'villa', 'muro0', 'muro1', 'muro2', 'porton', 'roofMembrana', 'roofBaldosa', 'chapa'].map((name, i) => ({
       name, ...layerCanvas(painters[name], 60 + i), rough: name === 'chapa' ? 0.55 : name === 'porton' ? 0.6 : 0.9, metal: name === 'chapa' ? 0.45 : name === 'porton' ? 0.3 : 0,
     })),
+    // house fronts (buildings.js / houseDetail.js): plain wall and real openings
+    ...['revoque', 'ventana', 'ventanaCortina', 'ventanaPersiana', 'puerta0', 'puerta1'].map((name, i) => ({
+      name, ...layerCanvas(painters[name], 80 + i), rough: name.startsWith('ventana') ? 0.15 : name === 'puerta1' ? 0.5 : 0.85, metal: name.startsWith('ventana') ? 0.35 : name === 'puerta1' ? 0.3 : 0,
+    })),
     { name: 'roofFlat', canvas: tex.roofFlatCanvas, rough: 1 },
     { name: 'roofTile', canvas: tex.roofTileCanvas, rough: 0.8 },
   ];
