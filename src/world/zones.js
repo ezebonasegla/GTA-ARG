@@ -1,7 +1,9 @@
-// Hand-made places of the centre, detailed beyond what the generic city builder does:
-// the Peatonal Rivadavia (paving, canteros with trees, benches, farolas, kioscos de
-// diarios, bolardos), the forecourt of Estación Quilmes (puestos, carrito de choripán,
-// parada de taxis) and extras for Plaza San Martín (palmeras, canteros de flores, mástil).
+// Hand-made places of the centres of Quilmes and Bernal, detailed beyond what the generic
+// city builder does: the Peatonal Rivadavia (paving, canteros with trees, benches, farolas,
+// kioscos de diarios, bolardos), the forecourts of the Quilmes and Bernal stations
+// (puestos, carrito de choripán, parada de taxis), Plaza San Martín (palmeras, canteros de
+// flores, mástil), Plaza Félix Bernal (canteros, juegos infantiles, mástil), mesas en la
+// vereda outside the bares and cafés, and contenedores at the corners.
 import * as THREE from 'three';
 import { Kit, canvasTexture, signTexture, flagTexture } from './landmarks.js';
 import { Line } from './streets.js';
@@ -115,6 +117,14 @@ export function buildZones(data, { root, graph, collision, ribbon, flatMat, keep
     tarpBlue: mat(0x2a6fb5, { side: THREE.DoubleSide }),
     tarpRed: mat(0xc0392b, { side: THREE.DoubleSide }),
     tarpGreen: mat(0x2e8b57, { side: THREE.DoubleSide }),
+    red: mat(0xc0392b, { roughness: 0.5, metalness: 0.3 }),
+    blue: mat(0x2a6fb5, { roughness: 0.5, metalness: 0.3 }),
+    sand: mat(0xd9c89a, { roughness: 1 }),
+    tableTop: mat(0xe8e2d4, { roughness: 0.5 }),
+    chair: mat(0x8a5a32),
+    bulb: mat(0xfff1c4, { emissive: 0xffc870, emissiveIntensity: 0 }),
+    dumpster: mat(0x2e6b3a, { roughness: 0.7 }),
+    dumpsterLid: mat(0x23502c, { roughness: 0.7 }),
     grill: mat(0x151515, { roughness: 0.6, metalness: 0.5 }),
     ember: mat(0xff5a1f, { emissive: 0xff3a00, emissiveIntensity: 0.6 }),
     smoke: new THREE.MeshBasicMaterial({ color: 0xdddddd, transparent: true, opacity: 0.25, depthWrite: false }),
@@ -314,9 +324,9 @@ export function buildZones(data, { root, graph, collision, ribbon, flatMat, keep
     }
   }
 
-  // ---------------------------------------------------------------- Estación Quilmes forecourt
-  const st = (data.specials || []).find((s) => s.type === 'station' && /quilmes/i.test(s.name || ''));
-  if (st) {
+  // ---------------------------------------------------------------- station forecourts
+  // between the station house and the first street: paving, puestos, choripán, taxis
+  function forecourt(st) {
     const toW = (u, v) => [st.cx + st.ux * u - st.uz * v, st.cz + st.uz * u + st.ux * v];
     const side = st.houseSide > 0 ? 1 : -1;
     const house = side > 0 ? st.hi + 1.7 + 6.5 + 5.5 : st.lo - 1.7 - 6.5 - 5.5;
@@ -330,72 +340,133 @@ export function buildZones(data, { root, graph, collision, ribbon, flatMat, keep
         break;
       }
     }
-    if (street) {
-      const a = Math.atan2(-st.uz, st.ux); // local +x along the tracks
-      const vStall = street.v - side * 1.8; // on the sidewalk, facing the street
-      const spots = [[-28, 'stall', Z.tarpBlue], [-22, 'stall', Z.tarpRed], [-16, 'chori'], [16, 'stall', Z.tarpGreen], [22, 'stall', Z.tarpBlue], [28, 'stall', Z.tarpRed]];
-      for (const [u, kind, tarp] of spots) {
-        const [x, z] = toW(u, vStall);
-        if (collision.isBlocked(x, z, 1.3)) continue;
-        if (kind === 'chori') choriCart(x, z, a);
-        else stall(x, z, a, tarp);
-        keepOut.push([x, z, 2.5]);
-      }
-      // parada de taxis: a sign post at the curb
-      const [tx, tz] = toW(-8, street.v - side * 0.6);
-      kit.add(cyl(0.04, 0.04, 2.6, 6), Z.iron, M(tx, 0, tz));
-      kit.add(new THREE.PlaneGeometry(1.3, 0.26), Z.taxi, M(tx, 2.45, tz, a));
-      kit.add(new THREE.PlaneGeometry(1.3, 0.26), Z.taxi, M(tx, 2.45, tz, a + Math.PI));
-      solid(tx, tz, 0.1);
-      // the forecourt between the house and the street, paved
-      const fc = new THREE.PlaneGeometry(60, Math.abs(street.v - house) - 5).rotateX(-Math.PI / 2);
+    if (!street) return;
+    const a = Math.atan2(-st.uz, st.ux); // local +x along the tracks
+    const vStall = street.v - side * 1.8; // on the sidewalk, facing the street
+    const spots = [[-28, 'stall', Z.tarpBlue], [-22, 'stall', Z.tarpRed], [-16, 'chori'], [16, 'stall', Z.tarpGreen], [22, 'stall', Z.tarpBlue], [28, 'stall', Z.tarpRed]];
+    for (const [u, kind, tarp] of spots) {
+      const [x, z] = toW(u, vStall);
+      if (collision.isBlocked(x, z, 1.3)) continue;
+      if (kind === 'chori') choriCart(x, z, a);
+      else stall(x, z, a, tarp);
+      keepOut.push([x, z, 2.5]);
+    }
+    // parada de taxis: a sign post at the curb
+    const [tx, tz] = toW(-8, street.v - side * 0.6);
+    kit.add(cyl(0.04, 0.04, 2.6, 6), Z.iron, M(tx, 0, tz));
+    kit.add(new THREE.PlaneGeometry(1.3, 0.26), Z.taxi, M(tx, 2.45, tz, a));
+    kit.add(new THREE.PlaneGeometry(1.3, 0.26), Z.taxi, M(tx, 2.45, tz, a + Math.PI));
+    solid(tx, tz, 0.1);
+    // the forecourt between the house and the street, paved
+    const depth = Math.abs(street.v - house) - 5;
+    if (depth > 2) {
+      const fc = new THREE.PlaneGeometry(60, depth).rotateX(-Math.PI / 2);
       const uv = fc.attributes.uv;
       for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 10, uv.getY(i) * 3);
       const [fx, fz] = toW(0, (house + side * 5 + street.v - side * 3.2) / 2);
       flats.add(fc, pave, M(fx, 0.14, fz, a));
-      for (const u of [-24, -8, 8, 24]) {
-        const [x, z] = toW(u, (house + street.v) / 2);
-        if (!collision.isBlocked(x, z, 1)) {
-          farola(x, z, a);
-          bench(x + Math.sin(a) * 1.5, z + Math.cos(a) * 1.5, a);
-        }
+    }
+    for (const u of [-24, -8, 8, 24]) {
+      const [x, z] = toW(u, (house + street.v) / 2);
+      if (!collision.isBlocked(x, z, 1)) {
+        farola(x, z, a);
+        bench(x + Math.sin(a) * 1.5, z + Math.cos(a) * 1.5, a);
       }
     }
   }
+  const stations = (data.specials || []).filter((s) => s.type === 'station' && /quilmes|bernal/i.test(s.name || ''));
+  for (const st of stations) forecourt(st);
 
-  // ---------------------------------------------------------------- Plaza San Martín extras
-  const pz = (data.specials || []).find((s) => s.type === 'plaza' && /san mart/i.test(s.name || ''));
-  if (pz) {
+  // ---------------------------------------------------------------- plazas
+  const bedMats = [0, 1, 2].map((k) => new THREE.MeshStandardMaterial({ map: flowerTexture(k), roughness: 1 }));
+  // hamacas, tobogán, sube y baja and an arenero, centred on (x, z)
+  function playground(x, z, a) {
+    const c = Math.cos(a), s = Math.sin(a);
+    const P = (u, v) => [x + c * u + s * v, z - s * u + c * v];
+    const sand = new THREE.PlaneGeometry(9, 7).rotateX(-Math.PI / 2);
+    kit.add(sand, Z.sand, M(x, 0.16, z, a));
+    for (const [u, v, w, d] of [[0, -3.5, 9, 0.2], [0, 3.5, 9, 0.2], [-4.5, 0, 0.2, 7], [4.5, 0, 0.2, 7]]) {
+      const [px, pz] = P(u, v);
+      kit.add(box(w, 0.3, d), Z.concrete, M(px, 0, pz, a));
+    }
+    // hamacas: A-frames and a top bar, two seats on chains
+    {
+      const [hx, hz] = P(-2, -1.5);
+      for (const e of [-1.7, 1.7]) for (const lean of [-0.25, 0.25]) {
+        const leg = new THREE.CylinderGeometry(0.05, 0.05, 2.6, 6).translate(0, 1.3, 0).rotateX(lean);
+        kit.add(leg, Z.red, M(hx + c * e, 0, hz - s * e, a));
+      }
+      kit.add(new THREE.CylinderGeometry(0.06, 0.06, 3.5, 6).rotateZ(Math.PI / 2).translate(0, 2.5, 0), Z.red, M(hx, 0, hz, a));
+      for (const e of [-0.8, 0.8]) {
+        for (const k of [-0.22, 0.22]) kit.add(new THREE.CylinderGeometry(0.01, 0.01, 2, 4).translate(0, 1.5, 0), Z.iron, M(hx + c * (e + k), 0, hz - s * (e + k), a));
+        kit.add(box(0.5, 0.05, 0.25), Z.yellow, M(hx + c * e, 0.45, hz - s * e, a));
+      }
+      solidBox(hx, hz, a, 1.8, 0.5);
+    }
+    // tobogán: ladder up to a platform, a slide down
+    {
+      const [tx, tz] = P(2.5, -1.2);
+      kit.add(box(0.9, 0.06, 0.9), Z.blue, M(tx, 1.6, tz, a));
+      for (const [u, v] of [[-0.4, -0.4], [0.4, -0.4], [-0.4, 0.4], [0.4, 0.4]]) kit.add(cyl(0.04, 0.04, 1.6, 5), Z.iron, M(tx + c * u + s * v, 0, tz - s * u + c * v));
+      const slide = new THREE.BoxGeometry(2.6, 0.06, 0.6).rotateZ(-0.62);
+      kit.add(slide, Z.yellow, M(tx + c * 1.5, 0.8, tz - s * 1.5, a));
+      for (let k = 0; k < 4; k++) kit.add(box(0.6, 0.04, 0.06), Z.iron, M(tx - c * 0.55, 0.35 + k * 0.38, tz + s * 0.55, a));
+      solidBox(tx + c * 0.6, tz - s * 0.6, a, 1.4, 0.5);
+    }
+    // sube y baja
+    {
+      const [bx, bz] = P(0, 2.2);
+      kit.add(box(0.2, 0.5, 0.3), Z.iron, M(bx, 0, bz, a));
+      kit.add(new THREE.BoxGeometry(3.2, 0.08, 0.3).rotateZ(0.14).translate(0, 0.55, 0), Z.blue, M(bx, 0, bz, a));
+      solidBox(bx, bz, a, 1.6, 0.25);
+    }
+  }
+  function mastil(x, z, a) {
+    kit.add(cyl(1.2, 1.4, 0.6, 16), Z.concrete, M(x, 0, z));
+    kit.add(cyl(0.07, 0.12, 14, 8), Z.white, M(x, 0.6, z));
+    kit.add(new THREE.PlaneGeometry(3, 2).translate(1.5, 0, 0), Z.flag, M(x, 13.4, z, a + 0.6));
+    solid(x, z, 1.3);
+    keepOut.push([x, z, 3]);
+  }
+  function plazaExtras(pz, { palms = false, kids = false } = {}) {
     const o = pz.box;
     const toW = (u, v) => [o.cx + o.ux * u - o.uz * v, o.cz + o.uz * u + o.ux * v];
     const a = Math.atan2(-o.uz, o.ux);
     const hu = o.hu - 3, hv = o.hv - 3;
-    // canteros de flores between the paths around the monument
-    const bedMats = [0, 1, 2].map((k) => new THREE.MeshStandardMaterial({ map: flowerTexture(k), roughness: 1 }));
+    // canteros de flores in the gaps between the paths around the monument
+    const d = Math.atan2(hv, hu);
+    const paths = [0, d, Math.PI / 2, Math.PI - d, Math.PI, Math.PI + d, Math.PI * 1.5, Math.PI * 2 - d, Math.PI * 2];
+    const R = Math.min(15, hv * 0.6);
     for (let k = 0; k < 8; k++) {
-      const ang = (k + 0.5) * (Math.PI / 4);
-      const [x, z] = toW(Math.cos(ang) * 15, Math.sin(ang) * 15);
-      const bed = new THREE.CircleGeometry(2.6, 20).rotateX(-Math.PI / 2);
-      kit.add(bed, bedMats[k % 3], M(x, 0.22, z));
-      kit.add(new THREE.CylinderGeometry(2.7, 2.75, 0.22, 20, 1, true).translate(0, 0.11, 0), Z.concrete, M(x, 0, z));
-      keepOut.push([x, z, 3]);
+      const ang = (paths[k] + paths[k + 1]) / 2;
+      const r = Math.min(2.6, R * (paths[k + 1] - paths[k]) * 0.3);
+      if (r < 1) continue;
+      const [x, z] = toW(Math.cos(ang) * R, Math.sin(ang) * R);
+      kit.add(new THREE.CircleGeometry(r, 20).rotateX(-Math.PI / 2), bedMats[k % 3], M(x, 0.22, z));
+      kit.add(new THREE.CylinderGeometry(r + 0.1, r + 0.15, 0.22, 20, 1, true).translate(0, 0.11, 0), Z.concrete, M(x, 0, z));
+      keepOut.push([x, z, r + 0.5]);
     }
-    // palmeras on both sides of the cross paths
-    const palms = [];
-    for (const f of [-0.75, -0.4, 0.4, 0.75]) palms.push([f * hu, 3.2], [f * hu, -3.2]);
-    for (const f of [-0.55, 0.55]) palms.push([3.2, f * hv], [-3.2, f * hv]);
-    for (const [u, v] of palms) {
+    if (palms) {
+      // palmeras on both sides of the cross paths
+      const spots = [];
+      for (const f of [-0.75, -0.4, 0.4, 0.75]) spots.push([f * hu, 3.2], [f * hu, -3.2]);
+      for (const f of [-0.55, 0.55]) spots.push([3.2, f * hv], [-3.2, f * hv]);
+      for (const [u, v] of spots) {
+        const [x, z] = toW(u, v);
+        palm(x, z, 7 + rng() * 3);
+        keepOut.push([x, z, 2]);
+      }
+    }
+    if (kids) {
+      // between the cross path and a diagonal, in one half of the plaza
+      const u = -0.68 * hu, v = 0.5 * (hv * 0.68 + 1.5);
       const [x, z] = toW(u, v);
-      palm(x, z, 7 + rng() * 3);
-      keepOut.push([x, z, 2]);
+      playground(x, z, a);
+      keepOut.push([x, z, 6.5]);
     }
     // mástil with the flag, at the head of the cross path
     const [mx, mz] = toW(hu - 8, 4.5);
-    kit.add(cyl(1.2, 1.4, 0.6, 16), Z.concrete, M(mx, 0, mz));
-    kit.add(cyl(0.07, 0.12, 14, 8), Z.white, M(mx, 0.6, mz));
-    kit.add(new THREE.PlaneGeometry(3, 2).translate(1.5, 0, 0), Z.flag, M(mx, 13.4, mz, a + 0.6));
-    solid(mx, mz, 1.3);
-    keepOut.push([mx, mz, 3]);
+    mastil(mx, mz, a);
     // farolas around the perimeter walk
     for (let u = -hu + 6; u <= hu - 6; u += 14) for (const v of [-hv - 1.8, hv + 1.8]) {
       const [x, z] = toW(u, v);
@@ -405,6 +476,84 @@ export function buildZones(data, { root, graph, collision, ribbon, flatMat, keep
       const [x, z] = toW(u, v);
       if (!collision.isBlocked(x, z, 0.4)) farola(x, z, a + Math.PI / 2);
     }
+  }
+  const plaza = (re) => (data.specials || []).find((s) => s.type === 'plaza' && re.test(s.name || ''));
+  if (plaza(/san mart/i)) plazaExtras(plaza(/san mart/i), { palms: true });
+  if (plaza(/f[ée]lix bernal/i)) plazaExtras(plaza(/f[ée]lix bernal/i), { kids: true });
+
+  // ---------------------------------------------------------------- mesas en la vereda
+  // Bares, cervecerías, cafés and heladerías of both centres put tables out on the
+  // sidewalk; the bars hang a string of bulbs over them.
+  const centres = stations.map((s) => [s.cx, s.cz]);
+  const gastro = /^(cafe|restaurant|pub|bar|ice_cream|fast_food)$/;
+  const bulbs = new THREE.SphereGeometry(0.06, 6, 4);
+  for (const shop of data.shops || []) {
+    if (!gastro.test(shop.kind) || !centres.some(([x, z]) => Math.hypot(shop.x - x, shop.z - z) < 650)) continue;
+    const n = graph.nearest(shop.x, shop.z, 35);
+    if (!n || n.seg.road.kind === 'footway' || n.seg.road.kind === 'pedestrian' || n.seg.road.pasillo) continue;
+    const { a: A, b: B, road } = n.seg;
+    const l = Math.hypot(B.x - A.x, B.z - A.z) || 1, dx = (B.x - A.x) / l, dz = (B.z - A.z) / l;
+    const t = Math.max(0, Math.min(l, (shop.x - A.x) * dx + (shop.z - A.z) * dz));
+    const sd = (shop.x - A.x) * -dz + (shop.z - A.z) * dx > 0 ? 1 : -1;
+    const off = road.w / 2 + 1.5;
+    const ang = Math.atan2(-dz, dx);
+    const pub = /pub|bar/.test(shop.kind);
+    const placed = [];
+    for (const k of [-1, 0, 1]) {
+      const tt = t + k * 2.8;
+      if (tt < 4 || tt > l - 4) continue;
+      const x = A.x + dx * tt - dz * off * sd, z = A.z + dz * tt + dx * off * sd;
+      if (collision.isBlocked(x, z, 0.9)) continue;
+      kit.add(cyl(0.05, 0.05, 0.72, 6), Z.iron, M(x, 0, z));
+      kit.add(cyl(0.42, 0.42, 0.04, 14), Z.tableTop, M(x, 0.72, z));
+      for (const e of [-0.65, 0.65]) {
+        const cx = x + dx * e, cz = z + dz * e;
+        kit.add(box(0.42, 0.04, 0.42), Z.chair, M(cx, 0.45, cz, ang));
+        kit.add(box(0.04, 0.45, 0.42), Z.chair, M(cx + dx * Math.sign(e) * 0.2, 0.45, cz + dz * Math.sign(e) * 0.2, ang));
+        for (const q of [-0.18, 0.18]) kit.add(cyl(0.015, 0.015, 0.45, 4), Z.iron, M(cx + dx * q, 0, cz + dz * q));
+      }
+      if (!pub) {
+        kit.add(cyl(0.025, 0.025, 2.3, 5), Z.white, M(x, 0, z));
+        kit.add(new THREE.ConeGeometry(1.25, 0.45, 8, 1, true).translate(0, 2.35, 0), [Z.tarpRed, Z.tarpGreen, Z.tarpBlue][placed.length % 3], M(x, 0, z));
+      }
+      solid(x, z, 0.75);
+      keepOut.push([x, z, 1.5]);
+      placed.push([x, z]);
+    }
+    if (pub && placed.length >= 2) {
+      // guirnalda: bulbs on a sagging string between two thin poles
+      const [p0, p1] = [placed[0], placed[placed.length - 1]];
+      const q0 = [p0[0] - dx * 1.4, p0[1] - dz * 1.4], q1 = [p1[0] + dx * 1.4, p1[1] + dz * 1.4];
+      for (const q of [q0, q1]) kit.add(cyl(0.03, 0.03, 2.9, 5), Z.iron, M(q[0], 0, q[1]));
+      for (let i = 0; i <= 12; i++) {
+        const f = i / 12;
+        kit.add(bulbs, Z.bulb, M(q0[0] + (q1[0] - q0[0]) * f, 2.85 - Math.sin(f * Math.PI) * 0.35, q0[1] + (q1[1] - q0[1]) * f));
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------- contenedores
+  // the big green dumpsters of the conurbano, at corners around Bernal and Quilmes centres
+  for (const node of graph.nodes) {
+    if (node.degree < 3 || !centres.some(([x, z]) => Math.hypot(node.x - x, node.z - z) < 500)) continue;
+    if (((node.id * 2654435761) >>> 0) % 5 > 1) continue;
+    const links = [...node.links].filter(([, r]) => r.kind === 'residential' || r.kind === 'secondary' || r.kind === 'tertiary');
+    if (!links.length) continue;
+    let maxW = 0;
+    for (const r of node.roads) maxW = Math.max(maxW, r.w);
+    const [nb, road] = links[0];
+    const l = Math.hypot(nb.x - node.x, nb.z - node.z);
+    const along = maxW / 2 + 9;
+    if (l < along + 6) continue;
+    const ux = (nb.x - node.x) / l, uz = (nb.z - node.z) / l, off = road.w / 2 + 1.1;
+    const x = node.x + ux * along - uz * off, z = node.z + uz * along + ux * off;
+    if (collision.isBlocked(x, z, 1)) continue;
+    const a = Math.atan2(-uz, ux);
+    kit.add(box(1.8, 1.15, 1.2), Z.dumpster, M(x, 0.12, z, a));
+    kit.add(new THREE.BoxGeometry(1.86, 0.08, 1.3).rotateX(-0.1).translate(0, 1.32, 0), Z.dumpsterLid, M(x, 0, z, a));
+    for (const [u, v] of [[-0.75, -0.45], [0.75, -0.45], [-0.75, 0.45], [0.75, 0.45]]) kit.add(cyl(0.07, 0.07, 0.12, 6), Z.iron, M(x + Math.cos(a) * u + Math.sin(a) * v, 0, z - Math.sin(a) * u + Math.cos(a) * v));
+    solidBox(x, z, a, 0.95, 0.65);
+    keepOut.push([x, z, 1.8]);
   }
 
   // ---------------------------------------------------------------- meshes
@@ -425,6 +574,7 @@ export function buildZones(data, { root, graph, collision, ribbon, flatMat, keep
     lamps,
     setNight(n) {
       Z.lamp.emissiveIntensity = n * 2.5;
+      Z.bulb.emissiveIntensity = n * 3;
     },
   };
 }

@@ -3,6 +3,7 @@ import { signName } from './world/alturas.js';
 // wanted stars, street name, clock and big center messages.
 export class Hud {
   constructor(data) {
+    this.data = data;
     this.el = document.getElementById('hud');
     this.mini = document.getElementById('minimap');
     this.miniCtx = this.mini.getContext('2d');
@@ -200,10 +201,29 @@ export class Hud {
     ctx.fillText('N', nx, ny);
   }
 
-  setStreet(name) {
-    if (name === this.lastStreet) return;
+  // The locality: the one around the nearest train station (Bernal, Quilmes, Don Bosco,
+  // Ezpeleta), named after it.
+  locality(x, z) {
+    this.towns ??= (this.data.specials || [])
+      .filter((s) => s.type === 'station' && s.name)
+      .map((s) => ({ x: s.cx, z: s.cz, name: s.name.replace(/^Estación /, '') }));
+    let best = 'Quilmes', bestD = Infinity;
+    for (const t of this.towns) {
+      const d = (t.x - x) ** 2 + (t.z - z) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = t.name;
+      }
+    }
+    return best;
+  }
+
+  setStreet(name, x = 0, z = 0) {
+    const town = this.locality(x, z);
+    if (name === this.lastStreet && town === this.lastTown) return;
     this.lastStreet = name;
-    this.street.textContent = name ? `${name} · Quilmes` : 'Quilmes';
+    this.lastTown = town;
+    this.street.textContent = name ? `${name} · ${town}` : town;
     this.street.classList.remove('flash');
     void this.street.offsetWidth;
     this.street.classList.add('flash');

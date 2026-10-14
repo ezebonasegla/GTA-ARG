@@ -717,7 +717,7 @@ async function main() {
 
     // ------------------------------------------------------------- HUD
     const near = world.graph.nearest(px, pz, 30);
-    hud.setStreet((ghost.on ? 'MODO FANTASMA · ' : '') + (near?.seg.road.name || ''));
+    hud.setStreet((ghost.on ? 'MODO FANTASMA · ' : '') + (near?.seg.road.name || ''), px, pz);
     hud.setSpeed(ghost.on ? null : flying ? heli.speed * 3.6 : inCar ? Math.abs(player.vehicle.speed) * 3.6 : null);
     hud.setClock(hours);
     hud.setHealth(ghost.on ? player.health : inCar ? player.vehicle.health : player.health);
