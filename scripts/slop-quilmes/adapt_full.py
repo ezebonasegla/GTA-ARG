@@ -495,7 +495,16 @@ rep(p, """  const { colliders: landmarkColliders } = buildLandmarks(scene);
   }
   let gtaHouses = null;
   try {
-    gtaHouses = await buildHouses(scene, { dataUrl: new URL('./gta-houses.json', import.meta.url), frame: GAME_FRAME });
+    // phones (and ?liviano): only ~700 m around the player, rebuilt as it moves on; ?completo forces the whole map
+    const lite = /[?&]liviano/.test(location.search) ||
+      (!/[?&]completo/.test(location.search) && (matchMedia('(pointer: coarse)').matches || (navigator.deviceMemory || 8) <= 4));
+    let center = TELEPORT_LOCATIONS.plaza;
+    try {
+      const sv = JSON.parse(localStorage.getItem(PLAYER_STATE_KEY));
+      const e = sv && sv.entities && sv.entities[sv.activeMode];
+      if (e && Number.isFinite(e.x) && Number.isFinite(e.z)) center = { x: e.x, z: e.z };
+    } catch (err) { /* no saved position */ }
+    gtaHouses = await buildHouses(scene, { dataUrl: new URL('./gta-houses.json', import.meta.url), frame: GAME_FRAME, center, radius: lite ? 700 : Infinity });
   } catch (err) {
     console.error('[gta-houses]', err);
   }
@@ -683,6 +692,19 @@ rep(p, """  function spawnVehicle(v, rMin, rMax, protectView) {
 rep(p, "      if (d <= (jump ? NEAR_RADIUS : VEHICLE_RADIUS)) continue;",
     "      // a colectivo that left its line goes back to one as soon as it is out of sight\n      const offLine = v.bus && !v.route && v.edge && ROUTES.length && !nearView(v.x, v.z, v.half + 4, VEHICLE_SPAWN_DISTANCE);\n      if (d <= (jump ? NEAR_RADIUS : VEHICLE_RADIUS) && !offLine) continue;")
 rep(p, "const NUM_BUSES = 12;", "const NUM_BUSES = 14; // colectivos (one LED sign row each, 16 at most)")
+
+rep('js/main.js', "  const controllerManager = new ThirdPersonControllerManager(scene, allColliders);", """  const controllerManager = new ThirdPersonControllerManager(scene, allColliders);
+  // the light mode rebuilds the houses around the player: swap their footprints in the collision list
+  if (gtaHouses) {
+    gtaHouses.onRebuild = (oldColliders, newColliders) => {
+      const gone = new Set(oldColliders);
+      const keep = allColliders.filter((c) => !gone.has(c));
+      allColliders.length = 0;
+      for (const c of keep) allColliders.push(c);
+      for (const c of newColliders) allColliders.push(c);
+      controllerManager._colliderCells = null;
+    };
+  }""")
 
 for p, s in _files.items():
     open(f'{S}/{p}', 'w').write(s)

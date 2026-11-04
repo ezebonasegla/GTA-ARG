@@ -373,10 +373,10 @@ function buildRails(data, plan, { root, live, tex, flatMat, collision, toGrid, t
 // already in the slop frame (gta-houses.json), so the generator and its streaming run there directly.
 // The facades read a texture array per vertex `layer`: the game does it with onBeforeCompile (WebGL only), here a
 // TSL node material.
-export async function buildHouses(scene, { dataUrl, frame, lift = 0.2 }) {
+export async function buildHouses(scene, { dataUrl, frame, lift = 0.2, center = null, radius = Infinity }) {
   const [json, TSL] = await Promise.all([fetch(dataUrl).then((r) => r.json()), import('three/tsl')]);
   const { styles, houses, roads, streetSigns: signPosts } = json;
-  const buildings = houses.map((r) => {
+  const all = houses.map((r) => {
     const pts = [[r[7] / 10, r[8] / 10]];
     for (let i = 9; i + 1 < r.length; i += 2) pts.push([pts[pts.length - 1][0] + r[i] / 10, pts[pts.length - 1][1] + r[i + 1] / 10]);
     const b = { pts, h: r[0] / 10, levels: r[1], style: styles[r[2]] };
@@ -386,47 +386,21 @@ export async function buildHouses(scene, { dataUrl, frame, lift = 0.2 }) {
     if (r[6]) b.roof = 'gable';
     return b;
   });
+  json.houses = null;
   const tex = makeTextures({ capabilities: { getMaxAnisotropy: () => 8 } });
   const graph = new RoadGraph(roads);
-  const collision = new Collision();
-  const chunks = new ChunkSet(220);
-  const data = { buildings, roads, specials: [] };
-  const { tanks, detail } = buildBuildings(data, { chunks, collision, tex, graph });
-  const root = new THREE.Group();
-  root.name = 'GtaQuilmesHouses';
-  root.position.y = lift;
-  scene.add(root);
+  const mapXZ = gridMapper(frame);
   const flatMat = (map, color = 0xffffff, extra = {}) =>
     new THREE.MeshStandardMaterial({ map, color, roughness: 0.95, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, ...extra });
-  // pasillos of the villas, as the game paints them
   const pasillos = roads.filter((r) => r.pasillo);
-  {
-    const buf = new GeoBuf();
-    for (const r of pasillos) ribbon(buf, r.pts, r.w, 0.055, 1 / 3);
-    if (!buf.empty) {
-      const m = new THREE.Mesh(buf.geometry(), flatMat(tex.pasillo));
-      m.receiveShadow = true;
-      root.add(m);
+  const pasHash = new SpatialHash(12);
+  for (const r of pasillos) for (let i = 0; i < r.pts.length - 1; i++) pasHash.insert({ a: r.pts[i], b: r.pts[i + 1], w: r.w }, bbox([r.pts[i], r.pts[i + 1]]));
+  const nearPasillo = (x, z, rr) => {
+    for (const sg of pasHash.query(x - rr - 2, z - rr - 2, x + rr + 2, z + rr + 2)) {
+      if (closestOnSegment(x, z, sg.a[0], sg.a[1], sg.b[0], sg.b[1])[3] < (sg.w / 2 + rr) ** 2) return true;
     }
-  }
-  // rejas, muros, portones, ligustros and alambrados on the property line, wooden poles with their cables along the
-  // streets, the villas' dirt, laundry lines and colgados, descampados (conurbano.js)
-  if (json.conurbano) {
-    const pasHash = new SpatialHash(12);
-    for (const r of pasillos) for (let i = 0; i < r.pts.length - 1; i++) pasHash.insert({ a: r.pts[i], b: r.pts[i + 1], w: r.w }, bbox([r.pts[i], r.pts[i + 1]]));
-    const nearPasillo = (x, z, rr) => {
-      for (const sg of pasHash.query(x - rr - 2, z - rr - 2, x + rr + 2, z + rr + 2)) {
-        if (closestOnSegment(x, z, sg.a[0], sg.a[1], sg.b[0], sg.b[1])[3] < (sg.w / 2 + rr) ** 2) return true;
-      }
-      return false;
-    };
-    const mapXZ = gridMapper(frame);
-    try {
-      buildConurbano({ ...json.conurbano, roads }, { root, chunks, collision, tex, flatMat, graph, nearPasillo, mapXZ });
-    } catch (err) {
-      console.warn('[gta-houses] conurbano', err);
-    }
-  }
+    return false;
+  };
 
   const { texture, attribute, uv, vertexColor, uniformArray, uniform, int, vec3 } = TSL;
   const F = tex.facades;
@@ -443,48 +417,112 @@ export async function buildHouses(scene, { dataUrl, frame, lift = 0.2 }) {
     alpha: new THREE.MeshStandardMaterial({ map: tex.atlas, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.9 }),
     cables: new THREE.LineBasicMaterial({ color: 0x1a1a1a }),
   };
-  chunks.build(root, mats);
-  detail.build(root, mats);
-  // tanques de agua: [x, z, roofY, scale]
+  const pasilloMat = flatMat(tex.pasillo);
+  const tankMats = [new THREE.MeshStandardMaterial({ color: 0x2d3033, roughness: 0.6 }), new THREE.MeshStandardMaterial({ color: 0x9a968f, roughness: 0.6 })];
   const tankG = new THREE.CylinderGeometry(0.6, 0.6, 1.1, 8).translate(0, 1.15, 0);
   const legG = new THREE.BoxGeometry(1, 0.6, 1).translate(0, 0.3, 0);
-  for (const [g, color] of [[tankG, 0x2d3033], [legG, 0x9a968f]]) {
-    const mesh = new THREE.InstancedMesh(g, new THREE.MeshStandardMaterial({ color, roughness: 0.6 }), tanks.length);
-    const m = new THREE.Matrix4();
-    tanks.forEach(([x, z, y, s], i) => mesh.setMatrixAt(i, m.makeScale(s, s, s).setPosition(x, y, z)));
-    mesh.castShadow = true;
-    mesh.computeBoundingSphere();
-    root.add(mesh);
-  }
-  // Buenos Aires street corner signs: green post, blue plates with name and altura (streetSigns.js, built near the camera)
-  const signs = buildStreetSigns({ streetSigns: signPosts || [], roads }, { root, collision });
-  root.updateMatrixWorld(true);
+  const near = (x, z, c, r) => r === Infinity || (x - c.x) ** 2 + (z - c.z) ** 2 < r * r;
 
-  const colliders = collision.solids.filter((sd) => sd.type === 'poly').map((sd) => {
-    const outer = sd.pts.map(([x, z]) => ({ x, z }));
-    return { minX: sd.bb.minX, maxX: sd.bb.maxX, minZ: sd.bb.minZ, maxZ: sd.bb.maxZ, minY: 0, maxY: sd.height, polygon: { outer, holes: [] }, gta: 'house' };
-  });
+  // Everything within `r` of c (the whole map with r = Infinity): houses, conurbano, signs, in their own group
+  function buildArea(c, r) {
+    const collision = new Collision();
+    const chunks = new ChunkSet(220);
+    const buildings = r === Infinity ? all : all.filter((b) => near(b.pts[0][0], b.pts[0][1], c, r));
+    const { tanks, detail } = buildBuildings({ buildings, roads, specials: [] }, { chunks, collision, tex, graph });
+    const root = new THREE.Group();
+    root.name = 'GtaQuilmesHouses';
+    root.position.y = lift;
+    // pasillos of the villas, as the game paints them
+    const buf = new GeoBuf();
+    for (const pr of pasillos) if (near(pr.pts[0][0], pr.pts[0][1], c, r + 200)) ribbon(buf, pr.pts, pr.w, 0.055, 1 / 3);
+    if (!buf.empty) {
+      const m = new THREE.Mesh(buf.geometry(), pasilloMat);
+      m.receiveShadow = true;
+      root.add(m);
+    }
+    // rejas, muros, portones, ligustros and alambrados on the property line, wooden poles with their cables along the
+    // streets, the villas' dirt, laundry lines and colgados, descampados (conurbano.js)
+    if (json.conurbano) {
+      const cu = json.conurbano;
+      let part = cu;
+      if (r !== Infinity) {
+        const fences = [];
+        for (let i = 0; i < cu.fences.length; i += 5) if (near(cu.fences[i], cu.fences[i + 1], c, r)) fences.push(...cu.fences.slice(i, i + 5));
+        const inGame = (v) => { const [x, z] = mapXZ(...v.center); return near(x, z, c, r + 300); };
+        part = {
+          ...cu, fences, villas: cu.villas.filter(inGame), wastes: cu.wastes.filter(inGame),
+          areas: cu.areas.filter((a) => near(a.pts[0][0], a.pts[0][1], c, r + 300)),
+        };
+      }
+      const rds = r === Infinity ? roads : roads.filter((rd) => rd.pts.some(([x, z]) => near(x, z, c, r)));
+      try {
+        buildConurbano({ ...part, roads: rds }, { root, chunks, collision, tex, flatMat, graph, nearPasillo, mapXZ });
+      } catch (err) {
+        console.warn('[gta-houses] conurbano', err);
+      }
+    }
+    chunks.build(root, mats);
+    detail.build(root, mats);
+    // tanques de agua: [x, z, roofY, scale]
+    [tankG, legG].forEach((g, k) => {
+      if (!tanks.length) return;
+      const mesh = new THREE.InstancedMesh(g, tankMats[k], tanks.length);
+      const m = new THREE.Matrix4();
+      tanks.forEach(([x, z, y, sc], i) => mesh.setMatrixAt(i, m.makeScale(sc, sc, sc).setPosition(x, y, z)));
+      mesh.castShadow = true;
+      mesh.computeBoundingSphere();
+      root.add(mesh);
+    });
+    // Buenos Aires street corner signs: green post, blue plates with name and altura (streetSigns.js, near the camera)
+    const posts = (signPosts || []).filter((sp) => near(sp.x, sp.z, c, r));
+    const signs = buildStreetSigns({ streetSigns: posts, roads }, { root, collision });
+    scene.add(root);
+    root.updateMatrixWorld(true);
+    const colliders = collision.solids.filter((sd) => sd.type === 'poly').map((sd) => {
+      const outer = sd.pts.map(([x, z]) => ({ x, z }));
+      return { minX: sd.bb.minX, maxX: sd.bb.maxX, minZ: sd.bb.minZ, maxZ: sd.bb.maxZ, minY: 0, maxY: sd.height, polygon: { outer, holes: [] }, gta: 'house' };
+    });
+    return { root, chunks, detail, signs, colliders, center: c, count: buildings.length };
+  }
+  function disposeArea(A) {
+    scene.remove(A.root);
+    A.root.traverse((o) => { if (o.geometry && o.geometry !== tankG && o.geometry !== legG) o.geometry.dispose(); });
+  }
+
+  let area = buildArea(center || { x: 0, z: 0 }, radius);
   let last = null, first = true;
   const p = { x: 0, z: 0 };
-  return {
-    root,
-    colliders,
-    count: buildings.length,
+  const api = {
+    get root() { return area.root; },
+    colliders: area.colliders,
+    count: area.count,
+    onRebuild: null, // (old colliders, new colliders): the page swaps them in its collision list
     setNight(n) {
       night.value = n * 0.85;
-      signs.setNight(n);
+      area.signs.setNight(n);
     },
-    // streaming around the camera, as in the game (geobuf.js ChunkSet, houseFronts.js HouseDetail)
+    // streaming around the camera, as in the game (geobuf.js ChunkSet, houseFronts.js HouseDetail); with a radius, the
+    // area is rebuilt around the camera once it gets near its edge
     update(x, z) {
+      if (radius !== Infinity && !near(x, z, area.center, radius * 0.55)) {
+        const old = area;
+        area = buildArea({ x, z }, radius);
+        disposeArea(old);
+        if (api.onRebuild) api.onRebuild(old.colliders, area.colliders);
+        api.colliders = area.colliders;
+        area.signs.setNight(night.value / 0.85);
+        first = true;
+      }
       p.x = x;
       p.z = z;
       const full = first || !last || (x - last.x) ** 2 + (z - last.z) ** 2 > 9;
       if (full) last = { x, z };
-      chunks.updateDetail(p, false, first, full);
-      detail.update(p, first, full);
-      signs.update(x, z);
-      if (full) root.updateMatrixWorld(true);
+      area.chunks.updateDetail(p, false, first, full);
+      area.detail.update(p, first, full);
+      area.signs.update(x, z);
+      if (full) area.root.updateMatrixWorld(true);
       first = false;
     },
   };
+  return api;
 }

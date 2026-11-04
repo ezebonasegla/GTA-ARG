@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { bryantParkLawn } from './landmarks.js?v=q11';
+import { bryantParkLawn } from './landmarks.js?v=q12';
 
 // Chase, action, cockpit, fixed-location and aerial cameras, with mouse/touch orbit and zoom.
 

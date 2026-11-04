@@ -1,4 +1,4 @@
-import { setControlRate } from './audio-synthesis.js?v=q11';
+import { setControlRate } from './audio-synthesis.js?v=q12';
 
 const TAU = Math.PI * 2;
 const finite = (value, fallback = 0) => Number.isFinite(value) ? value : fallback;
