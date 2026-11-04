@@ -1,26 +1,26 @@
 import * as THREE from 'three/webgpu';
 import { pass, mrt, output, normalView, positionView, metalness, roughness, vec2, smoothstep } from 'three/tsl';
 import { ssr } from 'three/addons/tsl/display/SSRNode.js';
-import { createPostProcessing } from './post-processing.js';
+import { createPostProcessing } from './post-processing.js?v=q2';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
-import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js';
+import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js?v=q2';
 
 const PLAYER_STATE_KEY = 'santafe-player-state';
-import { buildCityGrid } from './city-grid.js';
-import { buildBoroughs } from './boroughs.js';
-import { buildLandmarks } from './landmarks.js';
-import { buildCityBlocks } from './buildings.js';
-import { buildStreetDetails } from './street-details.js';
-import { createTrafficSystem, createHighwayTraffic } from './traffic.js';
-import { buildRoadPaint } from './road-paint.js';
-import { ThirdPersonControllerManager } from './controllers.js';
-import { TouchControls } from './touch-controls.js';
-import { GamepadControls } from './gamepad-controls.js';
-import { CameraSystem, CAMERA_PRESETS } from './cameras.js';
-import { LightingSystem } from './lighting.js';
-import { NYCMapSystem } from './nyc-map.js';
-import { setupSceneCulling, updateSceneCulling } from './scene-culling.js';
-import { CityAudioSystem } from './audio-system.js';
+import { buildCityGrid } from './city-grid.js?v=q2';
+import { buildBoroughs } from './boroughs.js?v=q2';
+import { buildLandmarks } from './landmarks.js?v=q2';
+import { buildCityBlocks } from './buildings.js?v=q2';
+import { buildStreetDetails } from './street-details.js?v=q2';
+import { createTrafficSystem, createHighwayTraffic } from './traffic.js?v=q2';
+import { buildRoadPaint } from './road-paint.js?v=q2';
+import { ThirdPersonControllerManager } from './controllers.js?v=q2';
+import { TouchControls } from './touch-controls.js?v=q2';
+import { GamepadControls } from './gamepad-controls.js?v=q2';
+import { CameraSystem, CAMERA_PRESETS } from './cameras.js?v=q2';
+import { LightingSystem } from './lighting.js?v=q2';
+import { NYCMapSystem } from './nyc-map.js?v=q2';
+import { setupSceneCulling, updateSceneCulling } from './scene-culling.js?v=q2';
+import { CityAudioSystem } from './audio-system.js?v=q2';
 
 // Application setup, shader warm-up and frame loop.
 

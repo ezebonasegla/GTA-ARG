@@ -1,13 +1,13 @@
 import * as THREE from 'three/webgpu';
-import { getBlockBounds, LANDMARK_SITES, BLOCKS } from './city-config.js';
+import { getBlockBounds, LANDMARK_SITES, BLOCKS } from './city-config.js?v=q2';
 import {
   createPreWarBuildingMaterial,
   createCurtainWallMaterial,
   createFacadeBoxes,
   createChryslerCrownMaterial,
   createBillboardMaterial
-} from './tsl-materials.js';
-import { batchStaticGroupMeshes } from './city-grid.js';
+} from './tsl-materials.js?v=q2';
+import { batchStaticGroupMeshes } from './city-grid.js?v=q2';
 
 let bryantParkLawn;
 

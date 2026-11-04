@@ -65,7 +65,7 @@ import {
   NJ_SHORELINE_POLYGON,
   LONG_ISLAND_POLYGONS,
   streetZ
-} from './city-config.js';
+} from './city-config.js?v=q2';
 
 // Procedural city materials: facades and interiors, vegetation, roads, water and lighting effects.
 

@@ -1,8 +1,8 @@
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { createFireEscapes } from './fire-escapes.js';
-import { addBuildingDetails } from './building-details.js';
-import { SHOPS } from './quilmes-places.js';
+import { createFireEscapes } from './fire-escapes.js?v=q2';
+import { addBuildingDetails } from './building-details.js?v=q2';
+import { SHOPS } from './quilmes-places.js?v=q2';
 import { texture as tslTexture, instancedBufferAttribute, floor as tslFloor, float as tslFloat } from 'three/tsl';
 import {
   Fn,
@@ -27,18 +27,18 @@ import {
   LANDMARK_SITES,
   streetZ,
   avenueX
-} from './city-config.js';
+} from './city-config.js?v=q2';
 import {
   createPreWarBuildingMaterial,
   createCurtainWallMaterial,
   createBillboardMaterial,
   filteredPulse
-} from './tsl-materials.js';
-import { GEO } from './nyc-geodata.js';
-import { REAL_BUILDINGS } from './building-geodata.js';
-import { createBuildingFootprints } from './building-footprints.js';
-import { polygonContains, polygonBoxOverlaps } from './building-collision.js';
-import { pavedPlazaRects, parkTreeSites, sidewalkBlocks } from './city-grid.js';
+} from './tsl-materials.js?v=q2';
+import { GEO } from './nyc-geodata.js?v=q2';
+import { REAL_BUILDINGS } from './building-geodata.js?v=q2';
+import { createBuildingFootprints } from './building-footprints.js?v=q2';
+import { polygonContains, polygonBoxOverlaps } from './building-collision.js?v=q2';
+import { pavedPlazaRects, parkTreeSites, sidewalkBlocks } from './city-grid.js?v=q2';
 
 // Surveyed footprints define buildings and collisions; architectural details stream around the player.
 

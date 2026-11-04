@@ -6,8 +6,8 @@ import {
   isTypingInField,
   blockAt,
   streetZ
-} from './city-config.js';
-import { cityUniforms, createCarPaintMaterial, createContactShadowMaterial } from './tsl-materials.js';
+} from './city-config.js?v=q2';
+import { cityUniforms, createCarPaintMaterial, createContactShadowMaterial } from './tsl-materials.js?v=q2';
 import {
   BODY_SPECS,
   buildCarGeometry,
@@ -16,17 +16,17 @@ import {
   carTipZ,
   createCarWheelMaterial,
   createLoftedCarMaterial
-} from './cars.js';
+} from './cars.js?v=q2';
 import {
   buildHelicopterBodyGeometry,
   buildHelicopterMainRotorGeometry,
   buildHelicopterTailRotorGeometry,
   createLoftedHelicopterMaterial
-} from './helicopter.js';
-import { PersonCrowd, PersonRig } from './pedestrians.js';
-import { HEADLIGHTS, createVehicleHeadlight, placeVehicleHeadlight } from './vehicle-lights.js';
-import { bryantParkLawn } from './landmarks.js';
-import { polygonContact } from './building-collision.js';
+} from './helicopter.js?v=q2';
+import { PersonCrowd, PersonRig } from './pedestrians.js?v=q2';
+import { HEADLIGHTS, createVehicleHeadlight, placeVehicleHeadlight } from './vehicle-lights.js?v=q2';
+import { bryantParkLawn } from './landmarks.js?v=q2';
+import { polygonContact } from './building-collision.js?v=q2';
 
 // Player models, animation and movement for walking, driving, cycling and flying.
 

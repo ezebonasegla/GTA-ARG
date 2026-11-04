@@ -1,10 +1,10 @@
 import * as THREE from 'three/webgpu';
-import { buildRoadNetwork } from './road-network.js';
-import { createPedestrianSystem } from './pedestrian-system.js';
-import { vehicleContact, resolveVehicleContact, sweptVehicleContact } from './vehicle-physics.js';
-import { signalPhase, walkSignal } from './city-config.js';
-import { cityUniforms, createContactShadowMaterial, createCarFlareMaterial } from './tsl-materials.js';
-import { HEADLIGHTS, createVehicleHeadlight, placeVehicleHeadlight } from './vehicle-lights.js';
+import { buildRoadNetwork } from './road-network.js?v=q2';
+import { createPedestrianSystem } from './pedestrian-system.js?v=q2';
+import { vehicleContact, resolveVehicleContact, sweptVehicleContact } from './vehicle-physics.js?v=q2';
+import { signalPhase, walkSignal } from './city-config.js?v=q2';
+import { cityUniforms, createContactShadowMaterial, createCarFlareMaterial } from './tsl-materials.js?v=q2';
+import { HEADLIGHTS, createVehicleHeadlight, placeVehicleHeadlight } from './vehicle-lights.js?v=q2';
 import {
   BODY_SPECS,
   buildCarGeometry,
@@ -15,7 +15,7 @@ import {
   carStyleCode,
   buildLightbarGeometry,
   createLightbarMaterial
-} from './cars.js';
+} from './cars.js?v=q2';
 import {
   BUS_SPEC,
   buildLoftedBusBodyGeometry,
@@ -23,7 +23,7 @@ import {
   buildBusWheelGeo,
   createBusWheelMaterial,
   createLoftedBusMaterial
-} from './bus.js';
+} from './bus.js?v=q2';
 
 // Cars and buses follow the road graph, obey signals, yield at crossings and react to collisions.
 // Vehicles replenish around the player; pedestrian-system.js manages the nearby walking population.

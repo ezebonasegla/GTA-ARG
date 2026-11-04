@@ -1,6 +1,6 @@
-import { blockAt } from './city-config.js';
-import { createPedestrianRoutes } from './pedestrian-routes.js';
-import { PersonCrowd, PersonRig, PEDESTRIAN_DIVE_DURATION } from './pedestrians.js';
+import { blockAt } from './city-config.js?v=q2';
+import { createPedestrianRoutes } from './pedestrian-routes.js?v=q2';
+import { PersonCrowd, PersonRig, PEDESTRIAN_DIVE_DURATION } from './pedestrians.js?v=q2';
 
 // Local pedestrian population: connected walks, curb queues, conversations and player avoidance.
 // Traffic supplies crossing permissions and view checks; this system owns the crowd and its animation.
