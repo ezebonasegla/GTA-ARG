@@ -1,4 +1,4 @@
-import { signalPhase, walkSignal } from './city-config.js?v=q12';
+import { signalPhase, walkSignal } from './city-config.js?v=q13';
 
 const MOTOR_RANGE = 180;
 const SIREN_RANGE = 220;

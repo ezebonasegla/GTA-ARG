@@ -45,6 +45,8 @@ node <dir>/app/tools/build-buildings.mjs tools/data/cache/gob_quilmes.csv
 node <dir>/app/tools/build-trees.mjs
 node <dir>/app/tools/build-places.mjs public/data/quilmes.json
 python3 scripts/slop-quilmes/adapt_quilmes.py <dir>/app
+# celulares: la misma ciudad del motor, solo Quilmes centro y Bernal, en <dir>/app/js/lite/
+#   (en una copia de tools/: GEO_DETAIL=-2500,900,-700,1400 con build-geodata, build-buildings y build-trees)
 npx vite build -c vite.slop.config.js && cp scripts/slop-quilmes/build/gta-world.js <dir>/app/js/   # los lugares hechos a mano del juego
 python3 scripts/slop-quilmes/adapt_full.py <dir>/app
 scripts/slop-quilmes/publish.sh <dir>/app   # copia a public/slop-quilmes/ y marca la versión en cada import (?v=...) para que

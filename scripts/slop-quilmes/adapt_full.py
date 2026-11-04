@@ -706,6 +706,65 @@ rep('js/main.js', "  const controllerManager = new ThirdPersonControllerManager(
     };
   }""")
 
+# ------------------------------------------------------------------ light mode (phones): a smaller city, crash notes
+p = 'index.html'
+s = src(p)
+a = s.index('  <script type="importmap">')
+b = s.index('</script>', a) + len('</script>')
+s = s[:a] + """  <script>
+    // Phones (coarse pointer, <= 4 GB, or ?liviano; ?completo forces the full city) get the light city: the engine's
+    // streets, blocks and trees of Quilmes centro and Bernal only (js/lite/), the game's houses near the player.
+    (() => {
+      const q = location.search;
+      let lite = /[?&]liviano/.test(q) || (!/[?&]completo/.test(q) && (matchMedia('(pointer: coarse)').matches || (navigator.deviceMemory || 8) <= 4));
+      // where the last load stopped, if it never finished (the browser closed the tab)
+      let prev = null;
+      try {
+        prev = JSON.parse(localStorage.getItem('slopq-load'));
+        localStorage.setItem('slopq-load', JSON.stringify({ stage: 'inicio', ok: false }));
+      } catch (err) { /* no storage */ }
+      window.SLOPQ_PREV = prev && !prev.ok ? prev.stage : null;
+      window.SLOPQ_LITE = lite;
+      const V = '__SLOPQ_V__', cdn = 'https://cdn.jsdelivr.net/npm/three@0.187.0/';
+      const imports = {
+        three: cdn + 'build/three.webgpu.js', 'three/webgpu': cdn + 'build/three.webgpu.js',
+        'three/tsl': cdn + 'build/three.tsl.js', 'three/addons/': cdn + 'examples/jsm/'
+      };
+      if (lite) {
+        for (const f of ['nyc-geodata', 'building-geodata', 'tree-geodata']) {
+          imports[new URL('./js/' + f + '.js?v=' + V, location.href).href] = new URL('./js/lite/' + f + '.js?v=' + V, location.href).href;
+        }
+      }
+      document.write('<script type="importmap">' + JSON.stringify({ imports }) + '<\\/script>');
+    })();
+  </script>""" + s[b:]
+s = re.sub(r'  <link rel="modulepreload" href="\./js/(nyc-geodata|building-geodata|tree-geodata)\.js" />\n', '', s)
+s = re.sub(r'  <link rel="preload" href="\./js/(tree|building)-geodata\.bin\.gz"[^>]*>\n', '', s)
+_files[p] = s
+p = 'js/main.js'
+rep(p, """  async function showLoadingStage(message) {
+    if (loadingStatus) loadingStatus.textContent = message;""", """  async function showLoadingStage(message) {
+    if (loadingStatus) loadingStatus.textContent = message;
+    try { localStorage.setItem('slopq-load', JSON.stringify({ stage: message, ok: false })); } catch (err) { /* no storage */ }
+    if (window.SLOPQ_PREV && loadingStatus && !document.getElementById('slopq-prev')) {
+      const note = document.createElement('div');
+      note.id = 'slopq-prev';
+      note.style.cssText = 'margin-top:10px;font-size:12px;opacity:.75;max-width:320px;text-align:center';
+      note.textContent = `La vez anterior la página se cerró en: «${window.SLOPQ_PREV}»` + (window.SLOPQ_LITE ? ' · modo liviano' : '');
+      loadingStatus.after(note);
+    }""")
+rep(p, """        console.log(`[init] ${initTimings.join(', ')}`);""", """        console.log(`[init] ${initTimings.join(', ')}`);
+        // playing: a crash from here on shows as «jugando» next time; leaving the page normally clears it
+        try {
+          localStorage.setItem('slopq-load', JSON.stringify({ stage: 'jugando', ok: false }));
+          const clear = () => { try { localStorage.setItem('slopq-load', JSON.stringify({ stage: 'jugando', ok: true })); } catch (err) { /* */ } };
+          addEventListener('pagehide', clear);
+          document.addEventListener('visibilitychange', () => { if (document.hidden) clear(); else localStorage.setItem('slopq-load', JSON.stringify({ stage: 'jugando', ok: false })); });
+        } catch (err) { /* no storage */ }""")
+# the game's houses: light mode from the page's choice
+_files[p] = src(p).replace("""    const lite = /[?&]liviano/.test(location.search) ||
+      (!/[?&]completo/.test(location.search) && (matchMedia('(pointer: coarse)').matches || (navigator.deviceMemory || 8) <= 4));""", """    const lite = !!window.SLOPQ_LITE;""")
+
 for p, s in _files.items():
     open(f'{S}/{p}', 'w').write(s)
 print('ok', len(_files), 'files')

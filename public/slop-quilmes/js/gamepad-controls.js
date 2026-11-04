@@ -1,4 +1,4 @@
-import { isTypingInField } from './city-config.js?v=q12';
+import { isTypingInField } from './city-config.js?v=q13';
 
 const DEAD_ZONE = 0.15;
 const BUTTON_COUNT = 17;

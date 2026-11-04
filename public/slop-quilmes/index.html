@@ -8,66 +8,78 @@
   <meta name="description" content="Demo: el centro de Quilmes (Buenos Aires) sobre el motor de Slop New York de mrdoob (three.js WebGPU + TSL), adaptado desde Slop Santa Fe. Datos: OpenStreetMap / Overture, Google Open Buildings 2.5D." />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <!-- three.js r187 release (npm package, served by jsDelivr) -->
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.webgpu.js",
-        "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.webgpu.js",
-        "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.tsl.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"
+  <script>
+    // Phones (coarse pointer, <= 4 GB, or ?liviano; ?completo forces the full city) get the light city: the engine's
+    // streets, blocks and trees of Quilmes centro and Bernal only (js/lite/), the game's houses near the player.
+    (() => {
+      const q = location.search;
+      let lite = /[?&]liviano/.test(q) || (!/[?&]completo/.test(q) && (matchMedia('(pointer: coarse)').matches || (navigator.deviceMemory || 8) <= 4));
+      // where the last load stopped, if it never finished (the browser closed the tab)
+      let prev = null;
+      try {
+        prev = JSON.parse(localStorage.getItem('slopq-load'));
+        localStorage.setItem('slopq-load', JSON.stringify({ stage: 'inicio', ok: false }));
+      } catch (err) { /* no storage */ }
+      window.SLOPQ_PREV = prev && !prev.ok ? prev.stage : null;
+      window.SLOPQ_LITE = lite;
+      const V = 'q13', cdn = 'https://cdn.jsdelivr.net/npm/three@0.187.0/';
+      const imports = {
+        three: cdn + 'build/three.webgpu.js', 'three/webgpu': cdn + 'build/three.webgpu.js',
+        'three/tsl': cdn + 'build/three.tsl.js', 'three/addons/': cdn + 'examples/jsm/'
+      };
+      if (lite) {
+        for (const f of ['nyc-geodata', 'building-geodata', 'tree-geodata']) {
+          imports[new URL('./js/' + f + '.js?v=' + V, location.href).href] = new URL('./js/lite/' + f + '.js?v=' + V, location.href).href;
+        }
       }
-    }
+      document.write('<script type="importmap">' + JSON.stringify({ imports }) + '<\/script>');
+    })();
   </script>
   <!-- Fetch the city modules in parallel before stylesheets; the module graph controls evaluation order. -->
-  <link rel="modulepreload" href="./js/nyc-geodata.js?v=q12" />
-  <link rel="modulepreload" href="./js/city-config.js?v=q12" />
-  <link rel="modulepreload" href="./js/tsl-materials.js?v=q12" />
-  <link rel="modulepreload" href="./js/trees.js?v=q12" />
-  <link rel="modulepreload" href="./js/tree-placements.js?v=q12" />
-  <link rel="modulepreload" href="./js/tree-geodata.js?v=q12" />
-  <link rel="preload" href="./js/tree-geodata.bin.gz" as="fetch" crossorigin />
-  <link rel="modulepreload" href="./js/vehicles.js?v=q12" />
-  <link rel="modulepreload" href="./js/cars.js?v=q12" />
-  <link rel="modulepreload" href="./js/bus.js?v=q12" />
-  <link rel="modulepreload" href="./js/helicopter.js?v=q12" />
-  <link rel="modulepreload" href="./js/vehicle-lights.js?v=q12" />
-  <link rel="modulepreload" href="./js/vehicle-physics.js?v=q12" />
-  <link rel="modulepreload" href="./js/pedestrians.js?v=q12" />
-  <link rel="modulepreload" href="./js/lighting.js?v=q12" />
-  <link rel="modulepreload" href="./js/city-grid.js?v=q12" />
-  <link rel="modulepreload" href="./js/boroughs.js?v=q12" />
-  <link rel="modulepreload" href="./js/buildings.js?v=q12" />
-  <link rel="modulepreload" href="./js/building-details.js?v=q12" />
-  <link rel="modulepreload" href="./js/building-geodata.js?v=q12" />
-  <link rel="preload" href="./js/building-geodata.bin.gz" as="fetch" crossorigin />
-  <link rel="modulepreload" href="./js/building-footprints.js?v=q12" />
-  <link rel="modulepreload" href="./js/building-collision.js?v=q12" />
-  <link rel="modulepreload" href="./js/fire-escapes.js?v=q12" />
-  <link rel="modulepreload" href="./js/landmarks.js?v=q12" />
-  <link rel="modulepreload" href="./js/street-details.js?v=q12" />
-  <link rel="modulepreload" href="./js/street-props.js?v=q12" />
-  <link rel="modulepreload" href="./js/quilmes-places.js?v=q12" />
-  <link rel="modulepreload" href="./js/subway-geodata.js?v=q12" />
-  <link rel="modulepreload" href="./js/subway-entrances.js?v=q12" />
-  <link rel="modulepreload" href="./js/road-network.js?v=q12" />
-  <link rel="modulepreload" href="./js/road-paint.js?v=q12" />
-  <link rel="modulepreload" href="./js/traffic.js?v=q12" />
-  <link rel="modulepreload" href="./js/pedestrian-system.js?v=q12" />
-  <link rel="modulepreload" href="./js/pedestrian-routes.js?v=q12" />
-  <link rel="modulepreload" href="./js/controllers.js?v=q12" />
-  <link rel="modulepreload" href="./js/touch-controls.js?v=q12" />
-  <link rel="modulepreload" href="./js/gamepad-controls.js?v=q12" />
-  <link rel="modulepreload" href="./js/cameras.js?v=q12" />
-  <link rel="modulepreload" href="./js/nyc-map.js?v=q12" />
-  <link rel="modulepreload" href="./js/scene-culling.js?v=q12" />
-  <link rel="modulepreload" href="./js/post-processing.js?v=q12" />
-  <link rel="modulepreload" href="./js/audio-synthesis.js?v=q12" />
-  <link rel="modulepreload" href="./js/audio-events.js?v=q12" />
-  <link rel="modulepreload" href="./js/audio-sources.js?v=q12" />
-  <link rel="modulepreload" href="./js/audio-acoustics.js?v=q12" />
-  <link rel="modulepreload" href="./js/audio-system.js?v=q12" />
-  <link rel="modulepreload" href="./js/main.js?v=q12" />
-  <script type="module" src="./js/main.js?v=q12"></script>
+  <link rel="modulepreload" href="./js/city-config.js?v=q13" />
+  <link rel="modulepreload" href="./js/tsl-materials.js?v=q13" />
+  <link rel="modulepreload" href="./js/trees.js?v=q13" />
+  <link rel="modulepreload" href="./js/tree-placements.js?v=q13" />
+  <link rel="modulepreload" href="./js/vehicles.js?v=q13" />
+  <link rel="modulepreload" href="./js/cars.js?v=q13" />
+  <link rel="modulepreload" href="./js/bus.js?v=q13" />
+  <link rel="modulepreload" href="./js/helicopter.js?v=q13" />
+  <link rel="modulepreload" href="./js/vehicle-lights.js?v=q13" />
+  <link rel="modulepreload" href="./js/vehicle-physics.js?v=q13" />
+  <link rel="modulepreload" href="./js/pedestrians.js?v=q13" />
+  <link rel="modulepreload" href="./js/lighting.js?v=q13" />
+  <link rel="modulepreload" href="./js/city-grid.js?v=q13" />
+  <link rel="modulepreload" href="./js/boroughs.js?v=q13" />
+  <link rel="modulepreload" href="./js/buildings.js?v=q13" />
+  <link rel="modulepreload" href="./js/building-details.js?v=q13" />
+  <link rel="modulepreload" href="./js/building-footprints.js?v=q13" />
+  <link rel="modulepreload" href="./js/building-collision.js?v=q13" />
+  <link rel="modulepreload" href="./js/fire-escapes.js?v=q13" />
+  <link rel="modulepreload" href="./js/landmarks.js?v=q13" />
+  <link rel="modulepreload" href="./js/street-details.js?v=q13" />
+  <link rel="modulepreload" href="./js/street-props.js?v=q13" />
+  <link rel="modulepreload" href="./js/quilmes-places.js?v=q13" />
+  <link rel="modulepreload" href="./js/subway-geodata.js?v=q13" />
+  <link rel="modulepreload" href="./js/subway-entrances.js?v=q13" />
+  <link rel="modulepreload" href="./js/road-network.js?v=q13" />
+  <link rel="modulepreload" href="./js/road-paint.js?v=q13" />
+  <link rel="modulepreload" href="./js/traffic.js?v=q13" />
+  <link rel="modulepreload" href="./js/pedestrian-system.js?v=q13" />
+  <link rel="modulepreload" href="./js/pedestrian-routes.js?v=q13" />
+  <link rel="modulepreload" href="./js/controllers.js?v=q13" />
+  <link rel="modulepreload" href="./js/touch-controls.js?v=q13" />
+  <link rel="modulepreload" href="./js/gamepad-controls.js?v=q13" />
+  <link rel="modulepreload" href="./js/cameras.js?v=q13" />
+  <link rel="modulepreload" href="./js/nyc-map.js?v=q13" />
+  <link rel="modulepreload" href="./js/scene-culling.js?v=q13" />
+  <link rel="modulepreload" href="./js/post-processing.js?v=q13" />
+  <link rel="modulepreload" href="./js/audio-synthesis.js?v=q13" />
+  <link rel="modulepreload" href="./js/audio-events.js?v=q13" />
+  <link rel="modulepreload" href="./js/audio-sources.js?v=q13" />
+  <link rel="modulepreload" href="./js/audio-acoustics.js?v=q13" />
+  <link rel="modulepreload" href="./js/audio-system.js?v=q13" />
+  <link rel="modulepreload" href="./js/main.js?v=q13" />
+  <script type="module" src="./js/main.js?v=q13"></script>
   <!-- Inter (UI) & Overpass (street-name signs: modelled on Highway Gothic, the US road sign typeface) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

@@ -1,28 +1,28 @@
 import * as THREE from 'three/webgpu';
 import { pass, mrt, output, normalView, positionView, metalness, roughness, vec2, smoothstep } from 'three/tsl';
 import { ssr } from 'three/addons/tsl/display/SSRNode.js';
-import { createPostProcessing } from './post-processing.js?v=q12';
+import { createPostProcessing } from './post-processing.js?v=q13';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
-import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js?v=q12';
+import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js?v=q13';
 
 const PLAYER_STATE_KEY = 'santafe-player-state';
-import { buildCityGrid } from './city-grid.js?v=q12';
-import { buildBoroughs } from './boroughs.js?v=q12';
-import { buildLandmarks } from './landmarks.js?v=q12';
-import { buildGtaWorld, buildHouses } from './gta-world.js?v=q12';
-import { GAME_FRAME } from './quilmes-places.js?v=q12';
-import { buildCityBlocks } from './buildings.js?v=q12';
-import { buildStreetDetails } from './street-details.js?v=q12';
-import { createTrafficSystem, createHighwayTraffic } from './traffic.js?v=q12';
-import { buildRoadPaint } from './road-paint.js?v=q12';
-import { ThirdPersonControllerManager } from './controllers.js?v=q12';
-import { TouchControls } from './touch-controls.js?v=q12';
-import { GamepadControls } from './gamepad-controls.js?v=q12';
-import { CameraSystem, CAMERA_PRESETS } from './cameras.js?v=q12';
-import { LightingSystem } from './lighting.js?v=q12';
-import { NYCMapSystem } from './nyc-map.js?v=q12';
-import { setupSceneCulling, updateSceneCulling } from './scene-culling.js?v=q12';
-import { CityAudioSystem } from './audio-system.js?v=q12';
+import { buildCityGrid } from './city-grid.js?v=q13';
+import { buildBoroughs } from './boroughs.js?v=q13';
+import { buildLandmarks } from './landmarks.js?v=q13';
+import { buildGtaWorld, buildHouses } from './gta-world.js?v=q13';
+import { GAME_FRAME } from './quilmes-places.js?v=q13';
+import { buildCityBlocks } from './buildings.js?v=q13';
+import { buildStreetDetails } from './street-details.js?v=q13';
+import { createTrafficSystem, createHighwayTraffic } from './traffic.js?v=q13';
+import { buildRoadPaint } from './road-paint.js?v=q13';
+import { ThirdPersonControllerManager } from './controllers.js?v=q13';
+import { TouchControls } from './touch-controls.js?v=q13';
+import { GamepadControls } from './gamepad-controls.js?v=q13';
+import { CameraSystem, CAMERA_PRESETS } from './cameras.js?v=q13';
+import { LightingSystem } from './lighting.js?v=q13';
+import { NYCMapSystem } from './nyc-map.js?v=q13';
+import { setupSceneCulling, updateSceneCulling } from './scene-culling.js?v=q13';
+import { CityAudioSystem } from './audio-system.js?v=q13';
 
 // Application setup, shader warm-up and frame loop.
 
@@ -41,6 +41,14 @@ async function initApp() {
 
   async function showLoadingStage(message) {
     if (loadingStatus) loadingStatus.textContent = message;
+    try { localStorage.setItem('slopq-load', JSON.stringify({ stage: message, ok: false })); } catch (err) { /* no storage */ }
+    if (window.SLOPQ_PREV && loadingStatus && !document.getElementById('slopq-prev')) {
+      const note = document.createElement('div');
+      note.id = 'slopq-prev';
+      note.style.cssText = 'margin-top:10px;font-size:12px;opacity:.75;max-width:320px;text-align:center';
+      note.textContent = `La vez anterior la página se cerró en: «${window.SLOPQ_PREV}»` + (window.SLOPQ_LITE ? ' · modo liviano' : '');
+      loadingStatus.after(note);
+    }
     if (loadingTrack) loadingTrack.classList.add('is-indeterminate');
     if (document.hidden) return;
     // Let the label paint before synchronous work. The timeout also lets hidden tabs keep loading.
@@ -97,22 +105,21 @@ async function initApp() {
   // GTA Quilmes: the game's cathedral, churches, stations, stadiums, brewery, plazas and peatonal (src/slop/gtaWorld.js)
   let gtaPlaces = null;
   try {
-    gtaPlaces = await buildGtaWorld(scene, { dataUrl: new URL('./gta-world.json?v=q12', import.meta.url), frame: GAME_FRAME });
+    gtaPlaces = await buildGtaWorld(scene, { dataUrl: new URL('./gta-world.json?v=q13', import.meta.url), frame: GAME_FRAME });
   } catch (err) {
     console.error('[gta-world]', err);
   }
   let gtaHouses = null;
   try {
     // phones (and ?liviano): only ~700 m around the player, rebuilt as it moves on; ?completo forces the whole map
-    const lite = /[?&]liviano/.test(location.search) ||
-      (!/[?&]completo/.test(location.search) && (matchMedia('(pointer: coarse)').matches || (navigator.deviceMemory || 8) <= 4));
+    const lite = !!window.SLOPQ_LITE;
     let center = TELEPORT_LOCATIONS.plaza;
     try {
       const sv = JSON.parse(localStorage.getItem(PLAYER_STATE_KEY));
       const e = sv && sv.entities && sv.entities[sv.activeMode];
       if (e && Number.isFinite(e.x) && Number.isFinite(e.z)) center = { x: e.x, z: e.z };
     } catch (err) { /* no saved position */ }
-    gtaHouses = await buildHouses(scene, { dataUrl: new URL('./gta-houses.json?v=q12', import.meta.url), frame: GAME_FRAME, center, radius: lite ? 700 : Infinity });
+    gtaHouses = await buildHouses(scene, { dataUrl: new URL('./gta-houses.json?v=q13', import.meta.url), frame: GAME_FRAME, center, radius: lite ? 700 : Infinity });
   } catch (err) {
     console.error('[gta-houses]', err);
   }
@@ -785,6 +792,13 @@ async function initApp() {
       Promise.resolve(device && device.queue.onSubmittedWorkDone()).catch(() => {}).then(() => {
         markInit('gpu');
         console.log(`[init] ${initTimings.join(', ')}`);
+        // playing: a crash from here on shows as «jugando» next time; leaving the page normally clears it
+        try {
+          localStorage.setItem('slopq-load', JSON.stringify({ stage: 'jugando', ok: false }));
+          const clear = () => { try { localStorage.setItem('slopq-load', JSON.stringify({ stage: 'jugando', ok: true })); } catch (err) { /* */ } };
+          addEventListener('pagehide', clear);
+          document.addEventListener('visibilitychange', () => { if (document.hidden) clear(); else localStorage.setItem('slopq-load', JSON.stringify({ stage: 'jugando', ok: false })); });
+        } catch (err) { /* no storage */ }
         initTimings = null;
         if (loadingOverlay) loadingOverlay.classList.add('hidden');
         audioSystem.ready = true;
