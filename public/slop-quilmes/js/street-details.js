@@ -13,15 +13,15 @@ import {
   CENTRAL_PARK_BOUNDS as CPB,
   BLOCKS,
   LANDMARK_SITES
-} from './city-config.js?v=q7';
-import { cityUniforms, createSteamMaterial, createTreeGrateMaterial, createGodRayMaterial } from './tsl-materials.js?v=q7';
-import { createTreeField } from './trees.js?v=q7';
-import { REAL_TREES } from './tree-geodata.js?v=q7';
-import { placeStreetTrees } from './tree-placements.js?v=q7';
-import { createSubwayEntranceParts, createFoodCartParts } from './street-props.js?v=q7';
-import { createSubwayEntrances } from './subway-entrances.js?v=q7';
-import { pavedPlazaRects, centralParkClearings, parkTreeSites, parkLampSites } from './city-grid.js?v=q7';
-import { bryantParkLawn } from './landmarks.js?v=q7';
+} from './city-config.js?v=q8';
+import { cityUniforms, createSteamMaterial, createTreeGrateMaterial, createGodRayMaterial } from './tsl-materials.js?v=q8';
+import { createTreeField } from './trees.js?v=q8';
+import { REAL_TREES } from './tree-geodata.js?v=q8';
+import { placeStreetTrees } from './tree-placements.js?v=q8';
+import { createSubwayEntranceParts, createFoodCartParts } from './street-props.js?v=q8';
+import { createSubwayEntrances } from './subway-entrances.js?v=q8';
+import { pavedPlazaRects, centralParkClearings, parkTreeSites, parkLampSites } from './city-grid.js?v=q8';
+import { bryantParkLawn } from './landmarks.js?v=q8';
 
 // Instanced street furniture, traffic signals, trees and nearby light pools.
 

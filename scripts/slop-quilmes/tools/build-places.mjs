@@ -113,4 +113,27 @@ const world = {
 const wout = path.join(path.dirname(out), 'gta-world.json');
 fs.writeFileSync(wout, JSON.stringify(world));
 log(`wrote ${wout} (${(fs.statSync(wout).size / 1024).toFixed(0)} KB)`);
+// The houses the game draws itself (gtaWorld.js buildHouses): low houses and the villas, carried into the grid
+// frame here (exact mapping) so the game's generator runs there directly. Compact: per building
+// [h * 10, levels, style, front (-1 none), shop, villa, gable, x0, z0 (dm), then dx, dz (dm) of the next points].
+const polyAt = (x, z) => { const f = basis(x, z); return [f.reduce((t, c, i) => t + c * polyU[i], 0), f.reduce((t, c, i) => t + c * polyV[i], 0)]; };
+const STYLES = ['house', 'brick', 'villa', 'apartments', 'industrial', 'office', 'school', 'hospital', 'brewery', 'civic', 'church', 'ph', 'mall', 'station', 'monument'];
+const stands = game.specials.filter((sp) => sp.type === 'stadium').map((sp) => [sp.box, 3 + Math.max(sp.depth || 0, 12)]);
+const underStand = (x, z) => stands.some(([o, r]) => {
+  const dx = x - o.cx, dz = z - o.cz;
+  return Math.abs(dx * o.ux + dz * o.uz) < o.hu + r && Math.abs(dx * o.vx + dz * o.vz) < o.hv + r;
+});
+export const gameHouse = (b) => !b.special && (b.villa || ((b.style === 'house' || b.style === 'brick') && b.h < 10.5));
+const houses = [];
+for (const b of game.buildings) {
+  if (!gameHouse(b) || b.pts.length < 3 || underStand(b.pts[0][0], b.pts[0][1])) continue;
+  const g = b.pts.map(([x, z]) => polyAt(x, z).map((v) => Math.round(v * 10)));
+  const row = [Math.round(b.h * 10), b.levels || 1, Math.max(0, STYLES.indexOf(b.style)), b.front ?? -1, b.shop ? 1 : 0, b.villa ? 1 : 0, b.roof === 'gable' ? 1 : 0, g[0][0], g[0][1]];
+  for (let i = 1; i < g.length; i++) row.push(g[i][0] - g[i - 1][0], g[i][1] - g[i - 1][1]);
+  houses.push(row);
+}
+const roadsGrid = game.roads.map((r) => ({ ...r, pts: r.pts.map(([x, z]) => polyAt(x, z).map((v) => Math.round(v * 100) / 100)) }));
+const hout = path.join(path.dirname(out), 'gta-houses.json');
+fs.writeFileSync(hout, JSON.stringify({ styles: STYLES, houses, roads: roadsGrid }));
+log(`wrote ${hout}: ${houses.length} houses (${(fs.statSync(hout).size / 1024).toFixed(0)} KB)`);
 log(`wrote ${out}: ${shops.length} shops, ${landmarks.length} landmarks, ${stations.length} stations`);

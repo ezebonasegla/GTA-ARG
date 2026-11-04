@@ -1,4 +1,4 @@
-import { polygonContains, polygonSegmentFraction } from './building-collision.js?v=q7';
+import { polygonContains, polygonSegmentFraction } from './building-collision.js?v=q8';
 
 // Cheap outdoor obstruction using the same static building bounds as movement. Nearby bounds are cached;
 // only audible voices trace them, a few times per second. This deliberately avoids mesh raycasts or audio-rate DSP.

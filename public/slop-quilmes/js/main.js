@@ -1,28 +1,28 @@
 import * as THREE from 'three/webgpu';
 import { pass, mrt, output, normalView, positionView, metalness, roughness, vec2, smoothstep } from 'three/tsl';
 import { ssr } from 'three/addons/tsl/display/SSRNode.js';
-import { createPostProcessing } from './post-processing.js?v=q7';
+import { createPostProcessing } from './post-processing.js?v=q8';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
-import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js?v=q7';
+import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js?v=q8';
 
 const PLAYER_STATE_KEY = 'santafe-player-state';
-import { buildCityGrid } from './city-grid.js?v=q7';
-import { buildBoroughs } from './boroughs.js?v=q7';
-import { buildLandmarks } from './landmarks.js?v=q7';
-import { buildGtaWorld } from './gta-world.js?v=q7';
-import { GAME_FRAME } from './quilmes-places.js?v=q7';
-import { buildCityBlocks } from './buildings.js?v=q7';
-import { buildStreetDetails } from './street-details.js?v=q7';
-import { createTrafficSystem, createHighwayTraffic } from './traffic.js?v=q7';
-import { buildRoadPaint } from './road-paint.js?v=q7';
-import { ThirdPersonControllerManager } from './controllers.js?v=q7';
-import { TouchControls } from './touch-controls.js?v=q7';
-import { GamepadControls } from './gamepad-controls.js?v=q7';
-import { CameraSystem, CAMERA_PRESETS } from './cameras.js?v=q7';
-import { LightingSystem } from './lighting.js?v=q7';
-import { NYCMapSystem } from './nyc-map.js?v=q7';
-import { setupSceneCulling, updateSceneCulling } from './scene-culling.js?v=q7';
-import { CityAudioSystem } from './audio-system.js?v=q7';
+import { buildCityGrid } from './city-grid.js?v=q8';
+import { buildBoroughs } from './boroughs.js?v=q8';
+import { buildLandmarks } from './landmarks.js?v=q8';
+import { buildGtaWorld, buildHouses } from './gta-world.js?v=q8';
+import { GAME_FRAME } from './quilmes-places.js?v=q8';
+import { buildCityBlocks } from './buildings.js?v=q8';
+import { buildStreetDetails } from './street-details.js?v=q8';
+import { createTrafficSystem, createHighwayTraffic } from './traffic.js?v=q8';
+import { buildRoadPaint } from './road-paint.js?v=q8';
+import { ThirdPersonControllerManager } from './controllers.js?v=q8';
+import { TouchControls } from './touch-controls.js?v=q8';
+import { GamepadControls } from './gamepad-controls.js?v=q8';
+import { CameraSystem, CAMERA_PRESETS } from './cameras.js?v=q8';
+import { LightingSystem } from './lighting.js?v=q8';
+import { NYCMapSystem } from './nyc-map.js?v=q8';
+import { setupSceneCulling, updateSceneCulling } from './scene-culling.js?v=q8';
+import { CityAudioSystem } from './audio-system.js?v=q8';
 
 // Application setup, shader warm-up and frame loop.
 
@@ -97,15 +97,21 @@ async function initApp() {
   // GTA Quilmes: the game's cathedral, churches, stations, stadiums, brewery, plazas and peatonal (src/slop/gtaWorld.js)
   let gtaPlaces = null;
   try {
-    gtaPlaces = await buildGtaWorld(scene, { dataUrl: new URL('./gta-world.json?v=q7', import.meta.url), frame: GAME_FRAME });
+    gtaPlaces = await buildGtaWorld(scene, { dataUrl: new URL('./gta-world.json?v=q8', import.meta.url), frame: GAME_FRAME });
   } catch (err) {
     console.error('[gta-world]', err);
+  }
+  let gtaHouses = null;
+  try {
+    gtaHouses = await buildHouses(scene, { dataUrl: new URL('./gta-houses.json?v=q8', import.meta.url) });
+  } catch (err) {
+    console.error('[gta-houses]', err);
   }
   markInit('landmarks');
   await showLoadingStage('Generating building footprints and facades...');
   const cityBlocks = buildCityBlocks(scene, landmarkColliders);
   markInit('blocks');
-  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...boroughs.colliders, ...(cityGrid.colliders || []), ...(gtaPlaces ? gtaPlaces.colliders : [])];
+  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...boroughs.colliders, ...(cityGrid.colliders || []), ...(gtaPlaces ? gtaPlaces.colliders : []), ...(gtaHouses ? gtaHouses.colliders : [])];
 
   await showLoadingStage('Placing trees, streetlights and street furniture...');
   const streetDetails = buildStreetDetails(scene, allColliders);
@@ -358,6 +364,7 @@ async function initApp() {
     lightingSystem.applyPreset(timeId);
     colorGrade.applyPreset(lightingSystem.activePresetId);
     if (gtaPlaces) gtaPlaces.setNight(lightingSystem.uNightFactor.value);
+    if (gtaHouses) gtaHouses.setNight(lightingSystem.uNightFactor.value);
     timeButtons.forEach((btn) => {
       btn.classList.toggle('active', btn.getAttribute('data-time') === timeId);
     });
@@ -715,6 +722,7 @@ async function initApp() {
       nextPlayerSave = now + 5000;
     }
     if (gtaPlaces) gtaPlaces.update(dt); // trains and barreras
+    if (gtaHouses) gtaHouses.update(cameraSystem.currentPos.x, cameraSystem.currentPos.z); // house streaming
     if (boroughs.update) boroughs.update(elapsed); // Roosevelt Island Tramway cabins
     cityBlocks.update(cameraSystem.currentPos.x, cameraSystem.currentPos.z);
     if (cityBlocks.updateLights) cityBlocks.updateLights(cameraSystem.camera);

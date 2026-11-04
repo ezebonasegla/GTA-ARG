@@ -483,7 +483,7 @@ rep('js/street-details.js', "    color: 0xe6a817, // Authentic NYC DOT school-bu
 
 # ------------------------------------------------------------------ the game's hand-made places (gta-world.js)
 p = 'js/main.js'
-rep(p, "import { buildLandmarks } from './landmarks.js';", "import { buildLandmarks } from './landmarks.js';\nimport { buildGtaWorld } from './gta-world.js';\nimport { GAME_FRAME } from './quilmes-places.js';")
+rep(p, "import { buildLandmarks } from './landmarks.js';", "import { buildLandmarks } from './landmarks.js';\nimport { buildGtaWorld, buildHouses } from './gta-world.js';\nimport { GAME_FRAME } from './quilmes-places.js';")
 rep(p, """  const { colliders: landmarkColliders } = buildLandmarks(scene);
   markInit('landmarks');""", """  const { colliders: landmarkColliders } = buildLandmarks(scene);
   // GTA Quilmes: the game's cathedral, churches, stations, stadiums, brewery, plazas and peatonal (src/slop/gtaWorld.js)
@@ -493,15 +493,22 @@ rep(p, """  const { colliders: landmarkColliders } = buildLandmarks(scene);
   } catch (err) {
     console.error('[gta-world]', err);
   }
+  let gtaHouses = null;
+  try {
+    gtaHouses = await buildHouses(scene, { dataUrl: new URL('./gta-houses.json', import.meta.url) });
+  } catch (err) {
+    console.error('[gta-houses]', err);
+  }
   markInit('landmarks');""")
 rep(p, "  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...boroughs.colliders, ...(cityGrid.colliders || [])];",
-    "  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...boroughs.colliders, ...(cityGrid.colliders || []), ...(gtaPlaces ? gtaPlaces.colliders : [])];")
+    "  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...boroughs.colliders, ...(cityGrid.colliders || []), ...(gtaPlaces ? gtaPlaces.colliders : []), ...(gtaHouses ? gtaHouses.colliders : [])];")
 rep(p, """    lightingSystem.applyPreset(timeId);
     colorGrade.applyPreset(lightingSystem.activePresetId);""", """    lightingSystem.applyPreset(timeId);
     colorGrade.applyPreset(lightingSystem.activePresetId);
-    if (gtaPlaces) gtaPlaces.setNight(lightingSystem.uNightFactor.value);""")
+    if (gtaPlaces) gtaPlaces.setNight(lightingSystem.uNightFactor.value);
+    if (gtaHouses) gtaHouses.setNight(lightingSystem.uNightFactor.value);""")
 
-rep('js/main.js', "    if (boroughs.update) boroughs.update(elapsed);", "    if (gtaPlaces) gtaPlaces.update(dt); // trains and barreras\n    if (boroughs.update) boroughs.update(elapsed);")
+rep('js/main.js', "    if (boroughs.update) boroughs.update(elapsed);", "    if (gtaPlaces) gtaPlaces.update(dt); // trains and barreras\n    if (gtaHouses) gtaHouses.update(cameraSystem.currentPos.x, cameraSystem.currentPos.z); // house streaming\n    if (boroughs.update) boroughs.update(elapsed);")
 
 rep('js/main.js', "    controllerManager.entities.cyclist.helmet\n  ];", "    controllerManager.entities.cyclist.helmet,\n    ...(gtaPlaces && gtaPlaces.dynamic ? [gtaPlaces.dynamic] : [])\n  ];")
 

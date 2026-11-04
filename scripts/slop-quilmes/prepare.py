@@ -110,6 +110,9 @@ for b in g['buildings']:
         continue
     if not spec and under_stand(*b['pts'][0]):
         continue
+    # low houses and villas are drawn by the game's own generator (gtaWorld.js buildHouses)
+    if not spec and (b.get('villa') or (b['style'] in ('house', 'brick') and b['h'] < 10.5)):
+        continue
     x, z = p[:, 0], p[:, 1]
     area = abs(np.dot(x, np.roll(z, 1)) - np.dot(z, np.roll(x, 1))) / 2
     if area < 6:
