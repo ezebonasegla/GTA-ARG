@@ -13,6 +13,8 @@ import { Trains } from '../entities/train.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GeoBuf, ChunkSet } from '../world/geobuf.js';
 import { buildBuildings } from '../world/buildings.js';
+import { buildStreetSigns } from '../world/streetSigns.js';
+import { Buses } from '../entities/buses.js';
 import { makeTextures } from '../world/textures.js';
 import { SpatialHash, bbox, closestOnSegment, pointInPolygon } from '../world/geo.js';
 
@@ -170,6 +172,14 @@ export async function buildGtaWorld(scene, { dataUrl, frame, lift = 0.2 }) {
   // the businesses: shopfronts with persiana, cajón and lit sign, kits per rubro, supermarkets (shops.js)
   const nightMaterials = [];
   const shops = buildShops(data, { root, graph, collision, nightMaterials });
+  // paradas de colectivo and metrobus stations of the real lines (buses.js; the buses themselves are the engine's)
+  if (data.buses) {
+    try {
+      new Buses(root, data.buses, { collision, traffic: { vehicles: [], add() {} }, graph });
+    } catch (err) {
+      console.warn('[gta-world] paradas', err);
+    }
+  }
   const zones = buildZones(data, { root, graph, collision, ribbon, flatMat, keepOut: landmarks.keepOut, GeoBuf });
   // trains and barreras move: they live outside the warped group, placed through the mapping every frame
   const live = new THREE.Group();
@@ -357,7 +367,7 @@ function buildRails(data, plan, { root, live, tex, flatMat, collision, toGrid, t
 // TSL node material.
 export async function buildHouses(scene, { dataUrl, lift = 0.2 }) {
   const [json, TSL] = await Promise.all([fetch(dataUrl).then((r) => r.json()), import('three/tsl')]);
-  const { styles, houses, roads } = json;
+  const { styles, houses, roads, streetSigns: signPosts } = json;
   const buildings = houses.map((r) => {
     const pts = [[r[7] / 10, r[8] / 10]];
     for (let i = 9; i + 1 < r.length; i += 2) pts.push([pts[pts.length - 1][0] + r[i] / 10, pts[pts.length - 1][1] + r[i + 1] / 10]);
@@ -407,6 +417,8 @@ export async function buildHouses(scene, { dataUrl, lift = 0.2 }) {
     mesh.computeBoundingSphere();
     root.add(mesh);
   }
+  // Buenos Aires street corner signs: green post, blue plates with name and altura (streetSigns.js, built near the camera)
+  const signs = buildStreetSigns({ streetSigns: signPosts || [], roads }, { root, collision });
   root.updateMatrixWorld(true);
 
   const colliders = collision.solids.filter((sd) => sd.type === 'poly').map((sd) => {
@@ -421,6 +433,7 @@ export async function buildHouses(scene, { dataUrl, lift = 0.2 }) {
     count: buildings.length,
     setNight(n) {
       night.value = n * 0.85;
+      signs.setNight(n);
     },
     // streaming around the camera, as in the game (geobuf.js ChunkSet, houseFronts.js HouseDetail)
     update(x, z) {
@@ -430,6 +443,7 @@ export async function buildHouses(scene, { dataUrl, lift = 0.2 }) {
       if (full) last = { x, z };
       chunks.updateDetail(p, false, first, full);
       detail.update(p, first, full);
+      signs.update(x, z);
       if (full) root.updateMatrixWorld(true);
       first = false;
     },

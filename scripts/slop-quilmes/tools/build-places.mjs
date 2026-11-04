@@ -99,6 +99,8 @@ for (const s of game.shops) {
 const world = {
   roads: game.roads, specials: game.specials, shops: game.shops,
   rails: game.rails, decks: game.decks, levelCrossings: game.levelCrossings,
+  // colectivo lines and stops (paradas, metrobus stations)
+  buses: JSON.parse(fs.readFileSync(path.join(path.dirname(process.argv[2]), 'buses.json'), 'utf8')),
   // the landmarks' buildings, and the ones a shop may hang its front on
   buildings: game.buildings.filter((b) => {
     if (b.special) return true;
@@ -134,6 +136,12 @@ for (const b of game.buildings) {
 }
 const roadsGrid = game.roads.map((r) => ({ ...r, pts: r.pts.map(([x, z]) => polyAt(x, z).map((v) => Math.round(v * 100) / 100)) }));
 const hout = path.join(path.dirname(out), 'gta-houses.json');
-fs.writeFileSync(hout, JSON.stringify({ styles: STYLES, houses, roads: roadsGrid }));
+// street corner signs (posts and the direction of each plate) in the grid frame too
+const [tc, ts] = [Math.cos(theta), Math.sin(theta)];
+const streetSigns = (game.streetSigns || []).map((p) => {
+  const [x, z] = polyAt(p.x, p.z);
+  return { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100, signs: p.signs.map((sg) => ({ ...sg, dir: [sg.dir[0] * tc + sg.dir[1] * ts, -sg.dir[0] * ts + sg.dir[1] * tc].map((v) => Math.round(v * 1000) / 1000) })) };
+});
+fs.writeFileSync(hout, JSON.stringify({ styles: STYLES, houses, roads: roadsGrid, streetSigns }));
 log(`wrote ${hout}: ${houses.length} houses (${(fs.statSync(hout).size / 1024).toFixed(0)} KB)`);
 log(`wrote ${out}: ${shops.length} shops, ${landmarks.length} landmarks, ${stations.length} stations`);
