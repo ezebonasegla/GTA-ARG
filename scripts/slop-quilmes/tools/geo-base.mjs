@@ -49,6 +49,7 @@ const toWorld = (lon, lat) => {
 // The detailed city (grid frame, metres from the origin): blocks, streets & buildings inside, low-detail land beyond.
 // North to Bv. Pellegrini / Bv. Gálvez's far side, south to the port & Riacho Santa Fe, west past Av. Freyre, east
 // to the Setúbal lagoon (the water clips it).
+// GTA Quilmes: the whole game map. The box is set below from the streets' extent (env GEO_DETAIL=x0,x1,z0,z1 to force)
 const DETAIL = { x0: -1050, x1: 1050, z0: -1050, z1: 1050 };
 
 // =====================================================================================================================
@@ -371,6 +372,18 @@ log(`${cscl.length} street pieces from ${highwayWays.length} OSM ways`);
     if (n.has('Alsina') && n.has('Avenida Mitre')) { ORIGIN = gridUV(p[0], p[1]); found = true; }
   }
   if (!found) throw new Error('origin intersection (Alsina & Av. Mitre) not found');
+  if (process.env.GEO_DETAIL) {
+    const [x0, x1, z0, z1] = process.env.GEO_DETAIL.split(',').map(Number);
+    Object.assign(DETAIL, { x0, x1, z0, z1 });
+  } else {
+    const b = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity };
+    for (const s of cscl) for (const ln of segLines(s)) for (const c of ln) {
+      const [x, z] = toWorld(c[0], c[1]);
+      b.x0 = Math.min(b.x0, x); b.x1 = Math.max(b.x1, x); b.z0 = Math.min(b.z0, z); b.z1 = Math.max(b.z1, z);
+    }
+    Object.assign(DETAIL, { x0: Math.floor(b.x0 - 60), x1: Math.ceil(b.x1 + 60), z0: Math.floor(b.z0 - 60), z1: Math.ceil(b.z1 + 60) });
+  }
+  log(`detail box ${JSON.stringify(DETAIL)}`);
   log(`bearing ${(THETA * 180 / Math.PI).toFixed(3)}°, origin (San Martín & Gral. López) at grid ${ORIGIN.map((v) => v.toFixed(1))}`);
 }
 
@@ -427,6 +440,26 @@ for (let j = 0; j < det.h; j++) {
 // keep a 1-cell water rim so the trace closes inside the box
 for (let i = 0; i < det.w; i++) { det.d[i] = 0; det.d[(det.h - 1) * det.w + i] = 0; }
 for (let j = 0; j < det.h; j++) { det.d[j * det.w] = 0; det.d[j * det.w + det.w - 1] = 0; }
+// only where the map has streets: land within ~90 m of one, holes between them filled
+{
+  const cov = new Raster(DETAIL.x0, DETAIL.z0, DETAIL.x1, DETAIL.z1, RES);
+  for (const s of cscl) for (const ln of segLines(s)) {
+    for (let i = 1; i < ln.length; i++) {
+      const [ax, az] = toWorld(...ln[i - 1]), [bx, bz] = toWorld(...ln[i]);
+      const n = Math.ceil(Math.hypot(bx - ax, bz - az) / (RES / 2)) + 1;
+      for (let k = 0; k <= n; k++) {
+        const x = ax + ((bx - ax) * k) / n, z = az + ((bz - az) * k) / n;
+        const ci = Math.floor((x - cov.x0) / RES), cj = Math.floor((z - cov.z0) / RES);
+        if (ci >= 0 && cj >= 0 && ci < cov.w && cj < cov.h) cov.d[cj * cov.w + ci] = 1;
+      }
+    }
+  }
+  const dist = cov.edt((v) => v === 1);
+  const r2 = (90 / RES) ** 2;
+  for (let k = 0; k < cov.d.length; k++) cov.d[k] = dist[k] <= r2 ? 1 : 0;
+  cov.close(120);
+  for (let k = 0; k < det.d.length; k++) if (!cov.d[k]) det.d[k] = 0;
+}
 det.open(8);
 det.keepLargest();
 let manhattan = rdpRing(det.traceOuter(), 2);

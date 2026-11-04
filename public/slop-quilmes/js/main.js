@@ -279,7 +279,7 @@ async function initApp() {
     helicopter: [[['W', 'S'], 'Pitch'], [['A', 'D'], 'Yaw'], [['Space', 'E'], 'Ascend'], [['Q', 'C'], 'Descend']]
   };
   // Top speeds in mph (controllers.js caps them at 8.2, 36, 19 & 52 m/s): full scale of the speed meter
-  const topSpeedMph = { person: 18, car: 81, cyclist: 43, helicopter: 116 };
+  const topSpeedMph = { person: 30, car: 130, cyclist: 70, helicopter: 187 }; // km/h
 
   function renderControlHints(mode) {
     if (!elControlsHint) return;
@@ -546,13 +546,13 @@ async function initApp() {
         selectCamera('pov', true);
         break;
       case 'Digit8':
-        selectCamera('fifthAve', true);
+        selectCamera('peatonal', true);
         break;
       case 'Digit9':
-        selectCamera('timesSquare', true);
+        selectCamera('estacion', true);
         break;
       case 'Digit0':
-        selectCamera('chryslerGCT', true);
+        selectCamera('cerveceria', true);
         break;
       case 'KeyV':
         cycleCamera(e.shiftKey ? -1 : 1);
@@ -763,8 +763,8 @@ async function initApp() {
 
       const activeEnt = controllerManager.getActiveEntity();
       const mode = controllerManager.activeMode;
-      const mph = Math.round(Math.abs(activeEnt.speed) * 2.237);
-      const altFt = Math.max(0, Math.round(activeEnt.position.y * 3.281));
+      const mph = Math.round(Math.abs(activeEnt.speed) * 3.6); // km/h
+      const altFt = Math.max(0, Math.round(activeEnt.position.y)); // metres
 
       if (elFps) {
         elFps.textContent = String(currentFps);

@@ -1305,24 +1305,27 @@ function carPlateTexture() {
   canvas.width = 128;
   canvas.height = 256;
   const ctx = canvas.getContext('2d');
+  // Mercosur plates (white, blue band) and the older black Argentine ones
   const rows = [
-    { bg: '#f2b718', bar: '#14233c', fg: '#14233c', label: 'KBM-4728' },
-    { bg: '#e8edf2', bar: '#162b4c', fg: '#162b4c', label: 'JTR-8319' },
-    { bg: '#f2b718', bar: '#14233c', fg: '#14233c', label: 'HXL-2506' },
-    { bg: '#f0b416', bar: '#14233c', fg: '#14233c', label: 'T748219C' }
+    { bg: '#f4f6f8', bar: '#1a3d8f', fg: '#111111', label: 'AE 482 KD', top: 'REPUBLICA ARGENTINA' },
+    { bg: '#f4f6f8', bar: '#1a3d8f', fg: '#111111', label: 'AF 193 RT', top: 'REPUBLICA ARGENTINA' },
+    { bg: '#111317', bar: '#111317', fg: '#f2f2f2', label: 'MKL 406', top: '' },
+    { bg: '#f4f6f8', bar: '#1a3d8f', fg: '#111111', label: 'AD 755 QB', top: 'REPUBLICA ARGENTINA' }
   ];
-  rows.forEach(({ bg, bar, fg, label }, row) => {
+  rows.forEach(({ bg, bar, fg, label, top }, row) => {
     const y0 = row * 64;
     ctx.fillStyle = bg;
     ctx.fillRect(0, y0, 128, 64);
     ctx.fillStyle = bar;
     ctx.fillRect(0, y0, 128, 13);
-    ctx.fillRect(0, y0 + 56, 128, 8);
+    if (!top) ctx.fillRect(0, y0 + 56, 128, 8);
     ctx.fillStyle = bg;
     ctx.font = 'bold 9px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('NEW YORK', 64, y0 + 7);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 7px sans-serif';
+    ctx.fillText(top, 64, y0 + 7);
     ctx.fillStyle = fg;
     ctx.font = 'bold 21px monospace';
     ctx.fillText(label, 64, y0 + 35);
@@ -1581,6 +1584,21 @@ function createLoftedCarMaterial(spec, fixedColorHex = null) {
         bCol.assign(mix(bCol, color(0x16191d), bedTop));
       }
       const grime = smoothstep(sillY + 0.16, sillY - 0.01, p.y).mul(0.2);
+      if (spec.sign) {
+        // taxi porteño: black body, yellow roof
+        const roof = smoothstep(0.55, 0.8, n.y).mul(smoothstep(0.2, 0.26, p.y.sub(belt)));
+        bCol.assign(mix(bCol, color(0xf2b316).mul(ao), roof));
+      }
+      if (spec.sign) {
+        // taxi porteño: black body, yellow roof
+        const roof = smoothstep(0.55, 0.8, n.y).mul(smoothstep(0.2, 0.26, p.y.sub(belt)));
+        bCol.assign(mix(bCol, color(0xf2b316).mul(ao), roof));
+      }
+      if (spec.sign) {
+        // taxi porteño: black body, yellow roof
+        const roof = smoothstep(0.55, 0.8, n.y).mul(smoothstep(0.2, 0.26, p.y.sub(belt)));
+        bCol.assign(mix(bCol, color(0xf2b316).mul(ao), roof));
+      }
       bCol.assign(mix(bCol, color(0x2d2b28), grime));
 
       // Side doors, handles & liveries (evaluated only on side-facing body fragments)

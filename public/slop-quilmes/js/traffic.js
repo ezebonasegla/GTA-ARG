@@ -186,7 +186,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
   carWheelRightGeo.setAttribute('wheelStyle', carWheelStyles);
   const carWheelMat = createCarWheelMaterial({ instanced: true });
 
-  const taxiYellow = new THREE.Color(0xffbe14);
+  const taxiYellow = new THREE.Color(0x15171a); // taxi porteño: black (the roof is yellow)
   const boroGreen = new THREE.Color(0x5cae3e);
   const policeWhite = new THREE.Color(0xf6f9fc);
   // NYC street fleet palettes: white/black/grey/silver dominate with TLC black cars, blue/red/green accents,
@@ -260,8 +260,8 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
   };
   // Of every 20 cars: 4 yellow cabs, 5 sedans, 6 SUVs, 2 delivery vans, 2 minivans & a pickup. NYPD cruisers are sedans
   // or Interceptor SUVs, green Boro cabs sedans or SUVs.
-  const FLEET_MIX = ['taxi', 'sedan', 'van', 'sedan', 'suv', 'taxi', 'suv', 'minivan', 'suv', 'pickup',
-    'taxi', 'sedan', 'suv', 'van', 'suv', 'taxi', 'minivan', 'sedan', 'suv', 'sedan'];
+  const FLEET_MIX = ['taxi', 'sedan', 'van', 'sedan', 'suv', 'sedan', 'suv', 'minivan', 'sedan', 'pickup',
+    'taxi', 'sedan', 'suv', 'van', 'sedan', 'sedan', 'minivan', 'sedan', 'suv', 'pickup'];
 
   const cars = [];
   const counts = Object.fromEntries(Object.keys(CAR_KINDS).map((kind) => [kind, 0]));
@@ -269,7 +269,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
 
   for (let i = 0; i < NUM_CARS; i++) {
     const isPolice = (i % 50) === 6 || (i % 100) === 56;
-    const isBoroTaxi = !isPolice && (i % 25) === 3;
+    const isBoroTaxi = false; // no green Boro cabs in Quilmes
     let bodyType = FLEET_MIX[i % FLEET_MIX.length];
     if (isPolice) bodyType = (i % 100) === 56 ? 'suv' : 'sedan';
     else if (isBoroTaxi) bodyType = i % 2 === 0 ? 'suv' : 'sedan';

@@ -7,14 +7,14 @@ const CAMERA_PRESETS = [
   { id: 'chase',       name: '3rd-Person Chase',         category: 'follow', fov: 56 },
   { id: 'action',      name: 'Low-Angle Action',         category: 'follow', fov: 60 },
   { id: 'pov',         name: 'First-Person / Cockpit',   category: 'follow', fov: 68 },
-  { id: 'centralPark', name: 'Central Park Oasis',       category: 'scenic', fov: 52 },
-  { id: 'fifthAve',    name: '5th Ave & Empire State',   category: 'scenic', fov: 48 },
-  { id: 'timesSquare', name: 'Times Square Crossroads',  category: 'scenic', fov: 58 },
-  { id: 'chryslerGCT', name: '42nd St · Chrysler & GCT', category: 'scenic', fov: 50 },
-  { id: 'observatory', name: 'Empire State 86th Deck',   category: 'scenic', fov: 52 },
-  { id: 'bryantPark',  name: 'Bryant Park & NYPL',       category: 'scenic', fov: 52 },
-  { id: 'waterfront',  name: 'East River & Skyline',     category: 'scenic', fov: 46 },
-  { id: 'drone',       name: 'Auto-Director Aerial',     category: 'scenic', fov: 50 }
+  { id: 'plaza', name: 'Plaza San Martín y Catedral', category: 'scenic', fov: 52 },
+  { id: 'peatonal', name: 'Peatonal Rivadavia', category: 'scenic', fov: 58 },
+  { id: 'estacion', name: 'Estación Quilmes', category: 'scenic', fov: 52 },
+  { id: 'cerveceria', name: 'Cervecería Quilmes', category: 'scenic', fov: 50 },
+  { id: 'estadio', name: 'Estadio Centenario', category: 'scenic', fov: 52 },
+  { id: 'bernal', name: 'Estación Bernal', category: 'scenic', fov: 52 },
+  { id: 'ribera', name: 'La Ribera y el Río', category: 'scenic', fov: 46 },
+  { id: 'drone',       name: 'Vista aérea',     category: 'scenic', fov: 50 }
 ];
 
 class CameraSystem {
@@ -253,61 +253,52 @@ class CameraSystem {
         break;
       }
 
-      case 'centralPark': {
-        // Above the southern canopy, looking across The Pond toward the park and skyline.
-        const sway = Math.sin(elapsed * 0.22) * 3.5;
-        desiredPos.set(-70.0 + sway, 26.0, -1425.0);
-        desiredLook.set(-250.0, 6.5, -1690.0);
+      case 'plaza': {
+        const sway = Math.sin(elapsed * 0.22) * 2.5;
+        desiredPos.set(10.0 + sway, 9.0, -120.0);
+        desiredLook.set(113.0, 16.0, -12.0);
         break;
       }
 
-      case 'fifthAve': {
-        // 5th Avenue & 42nd St looking South down the 5th Ave canyon toward the Empire State Building
-        const sway = Math.sin(elapsed * 0.25) * 1.8;
-        desiredPos.set(0.0 + sway, 6.5, -20.0);
-        desiredLook.set(-60.0, 150.0, 686.0);
+      case 'peatonal': {
+        const sway = Math.sin(elapsed * 0.22) * 2.5;
+        desiredPos.set(150.0 + sway, 6.0, 250.0);
+        desiredLook.set(150.0, 4.0, 480.0);
         break;
       }
 
-      case 'timesSquare': {
-        // Times Square & Broadway looking across Duffy Square red steps and One Times Square billboards
-        const sway = Math.sin(elapsed * 0.3) * 3.0;
-        desiredPos.set(-603.0 + sway, 5.5, -290.0);
-        desiredLook.set(-566.0, 40.0, -40.0);
+      case 'estacion': {
+        const sway = Math.sin(elapsed * 0.22) * 2.5;
+        desiredPos.set(40.0 + sway, 14.0, 620.0);
+        desiredLook.set(141.0, 5.0, 715.0);
         break;
       }
 
-      case 'chryslerGCT': {
-        // Park Ave & 42nd St intersection looking straight at Grand Central, MetLife, and Chrysler Building Crown
-        const sway = Math.cos(elapsed * 0.22) * 2.5;
-        desiredPos.set(300.0 + sway, 9.5, 95.0);
-        desiredLook.set(470.0, 120.0, -50.0);
+      case 'cerveceria': {
+        const sway = Math.sin(elapsed * 0.22) * 2.5;
+        desiredPos.set(560.0 + sway, 35.0, 650.0);
+        desiredLook.set(768.0, 12.0, 893.0);
         break;
       }
 
-      case 'observatory': {
-        // Empire State Building 86th Floor Deck looking North-East across Midtown skyline
-        const pan = Math.sin(elapsed * 0.18) * 80.0;
-        desiredPos.set(-58.0, 322.0, 660.0);
-        desiredLook.set(420.0 + pan, 150.0, -200.0);
+      case 'estadio': {
+        const sway = Math.sin(elapsed * 0.22) * 2.5;
+        desiredPos.set(2040.0 + sway, 50.0, 880.0);
+        desiredLook.set(2217.0, 8.0, 1049.0);
         break;
       }
 
-      case 'bryantPark': {
-        // Inside Bryant Park Great Lawn looking East toward NYPL portico, One Vanderbilt & Chrysler Building
-        const sway = Math.sin(elapsed * 0.25) * 1.5;
-        const lawn = bryantParkLawn || { minX: -260, maxX: -150, minZ: 40, maxZ: 120, top: 1.3 };
-        const lz = (lawn.minZ + lawn.maxZ) * 0.5;
-        desiredPos.set(lawn.minX + 18.0, lawn.top + 1.7, lz + sway);
-        desiredLook.set(lawn.maxX + 260.0, 70.0, lz - 60.0);
+      case 'bernal': {
+        const sway = Math.sin(elapsed * 0.22) * 2.5;
+        desiredPos.set(-2140.0 + sway, 12.0, 1260.0);
+        desiredLook.set(-2211.0, 5.0, 1356.0);
         break;
       }
 
-      case 'waterfront': {
-        // Over the shimmering East River looking across the FDR Drive, Queensboro Bridge & Midtown Skyline
-        const drift = Math.sin(elapsed * 0.15) * 40.0;
-        desiredPos.set(1640.0, 60.0, 60.0 + drift);
-        desiredLook.set(150.0, 150.0, -150.0);
+      case 'ribera': {
+        const sway = Math.sin(elapsed * 0.22) * 2.5;
+        desiredPos.set(-312.0 + sway * 10.0, 45.0, -3200.0);
+        desiredLook.set(-120.0, 10.0, -1700.0);
         break;
       }
 
@@ -316,11 +307,11 @@ class CameraSystem {
         const radius = 720.0 + Math.sin(elapsed * 0.23) * 140.0;
         const alt = 330.0 + Math.cos(elapsed * 0.19) * 90.0;
         desiredPos.set(
-          Math.cos(angle) * radius + 60.0,
-          alt,
-          Math.sin(angle) * radius + 250.0
+          Math.cos(angle) * radius + 150.0,
+          alt * 0.55,
+          Math.sin(angle) * radius + 350.0
         );
-        desiredLook.set(60.0, 160.0, 250.0);
+        desiredLook.set(150.0, 20.0, 350.0);
         break;
       }
     }

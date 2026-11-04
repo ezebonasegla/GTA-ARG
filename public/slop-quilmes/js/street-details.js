@@ -789,7 +789,7 @@ function buildStreetDetails(scene, colliders = []) {
       const mb = [ave.x + ave.width * 0.5 + 1.2, zMid - 22];
       if (isOnSidewalk(h1[0], h1[1], 0.45)) hydrantPositions.push(h1);
       if (isOnSidewalk(h2[0], h2[1], 0.45)) hydrantPositions.push(h2);
-      if (isOnSidewalk(mb[0], mb[1], 0.45)) mailboxPositions.push(mb);
+      // (no USPS mailboxes in Quilmes)
     }
   }
 

@@ -89,7 +89,7 @@ function addBuildingDetails(b, detail, { masonry, rand, neighbours }) {
   for (const e of edges) {
     const segments = Math.floor(e.length / 10);
     for (let i = 0; i < segments && count < 4; i++) {
-      if (rand() > 0.22) continue;
+      if (rand() > (b.shops ? 0.75 : 0.22)) continue;
       const u = ((i + 0.5) / segments - 0.5) * e.length, d = Math.min(8.5, e.length / segments - 1.6);
       const x = e.x - e.nz * u, z = e.z + e.nx * u, cs = e.nx, sn = -e.nz;
       // Keep storefronts out of courtyards and away from neighbouring walls or fire escapes.
@@ -101,7 +101,8 @@ function addBuildingDetails(b, detail, { masonry, rand, neighbours }) {
         detail.scaffoldSheds.push(item);
       } else {
         if (!b.storefronts) continue;
-        item = { x: x + e.nx, y: 3.8, z: z + e.nz, w: 1.8, d, colorIdx: Math.floor(rand() * 5), ry };
+        const sign = b.shops ? b.shops[detail.awnings.length % b.shops.length] : Math.floor(rand() * b.genericSigns);
+        item = { x: x + e.nx, y: Math.min(3.8, b.height - 1.35), z: z + e.nz, w: 1.8, d, colorIdx: Math.floor(rand() * 5), ry, sign };
         detail.awnings.push(item);
       }
       const outer = boxCorners(item.x, item.z, item.w, item.d, cs, sn);

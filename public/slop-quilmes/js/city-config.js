@@ -337,6 +337,7 @@ function roadSpot(x, z, tx, tz, name = null) {
   if (tx !== undefined && (tx - best.px) * ux + (tz - best.pz) * uz < 0) { ux = -ux; uz = -uz; }
   return { x: best.px - uz * 2, z: best.pz + ux * 2, heading: Math.atan2(ux, uz) };
 }
+import { LANDMARKS as Q_LANDMARKS, STATIONS as Q_STATIONS } from './quilmes-places.js';
 const P = (k, fallback) => (POINTS[k] ? { x: POINTS[k][0], z: POINTS[k][1] } : fallback);
 // Quilmes: positions in the grid frame (origin Alsina & Av. Mitre, by the Plaza San Martín)
 const plaza = { x: 51, z: -46 };
@@ -348,14 +349,22 @@ const TELEPORT_LOCATIONS = {
   plaza: roadSpot(plaza.x - 60, plaza.z, plaza.x + 60, plaza.z, /Mitre|Alsina/),
   catedral: roadSpot(catedral.x + 30, catedral.z, catedral.x + 30, catedral.z + 100, /Rivadavia|Sarmiento/),
   peatonal: roadSpot(peatonal.x, peatonal.z, peatonal.x, peatonal.z + 100, /Rivadavia/),
-  estacion: roadSpot(estacion.x, estacion.z - 40, estacion.x, estacion.z, /Gaboto|Yrigoyen|Rivadavia|Sarmiento/)
+  estacion: roadSpot(estacion.x, estacion.z - 40, estacion.x, estacion.z, /Gaboto|Yrigoyen|Rivadavia|Sarmiento/),
+  bernal: roadSpot(-2211, 1300, -2211, 1356),
+  cerveceria: roadSpot(700, 830, 768, 893),
+  estadio: roadSpot(2150, 1000, 2217, 1049),
+  ribera: roadSpot(-312, -2800, -312, -2876),
+  ezpeleta: roadSpot(4020, 200, 4020, 257)
 };
 const site = (name) => LANDMARK_SITES[name];
 const lm = (id, name, short, at, district) => (at ? { id, name, short, x: at.x, z: at.z, district } : null);
 const NYC_LANDMARKS = [
   lm('plaza', 'Plaza San Martín', 'Plaza San Martín', plaza, 'Centro'),
   lm('catedral', 'Catedral de Quilmes', 'Catedral', catedral, 'Centro'),
-  lm('estacion', 'Estación Quilmes', 'Estación', estacion, 'Centro')
+  lm('estacion', 'Estación Quilmes', 'Estación', estacion, 'Centro'),
+  // every named place of the GTA Quilmes map
+  ...Q_STATIONS.filter(([n]) => n !== 'Estación Quilmes').map(([n, x, z], i) => lm(`st${i}`, n, n.replace('Estación ', ''), { x, z }, 'Quilmes')),
+  ...Q_LANDMARKS.filter(([n]) => !/^Estaci|^Plaza San Mart|^Catedral/.test(n)).map(([n, x, z], i) => lm(`q${i}`, n, n.length > 26 ? n.slice(0, 24) + '…' : n, { x, z }, 'Quilmes'))
 ].filter(Boolean);
 
 const ISLAND_BOUNDS = (() => {

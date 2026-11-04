@@ -135,56 +135,46 @@ function buildingContact(c, x, y, z, body, contact) {
 }
 
 function createTaxiDoorDecalTexture() {
+  // door sign of a Quilmes radio taxi
   const c = document.createElement('canvas');
   c.width = 256;
   c.height = 128;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#ffbe14';
+  ctx.fillStyle = '#15171a';
   ctx.fillRect(0, 0, 256, 128);
-  // Black T&LC circle emblem
-  ctx.fillStyle = '#111317';
-  ctx.beginPath();
-  ctx.arc(58, 64, 42, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#ffbe14';
-  ctx.font = '900 32px Inter, Arial, sans-serif';
+  ctx.fillStyle = '#f2b316';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('T', 58, 66);
-  // NYC TAXI typography & Fare Rate
-  ctx.fillStyle = '#111317';
-  ctx.textAlign = 'left';
-  ctx.font = '900 26px Inter, Arial, sans-serif';
-  ctx.fillText('NYC TAXI', 112, 42);
-  ctx.font = '700 15px JetBrains Mono, monospace';
-  ctx.fillText('7Y48 · MEDALLION', 112, 68);
-  ctx.font = '600 13px Inter, Arial, sans-serif';
-  ctx.fillText('$3.00 INITIAL FARE', 112, 90);
+  ctx.font = '900 46px Inter, Arial, sans-serif';
+  ctx.fillText('TAXI', 128, 44);
+  ctx.font = '700 19px Inter, Arial, sans-serif';
+  ctx.fillText('QUILMES · LIC. 0482', 128, 96);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  // The decals are mostly seen at grazing angles from the chase camera
   tex.anisotropy = 16;
   return tex;
 }
 
 function createNYLicensePlateTexture() {
+  // Mercosur plate
   const c = document.createElement('canvas');
   c.width = 256;
   c.height = 128;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#ffb81c';
+  ctx.fillStyle = '#f4f6f8';
   ctx.fillRect(0, 0, 256, 128);
-  ctx.fillStyle = '#0d2244';
-  ctx.fillRect(6, 6, 244, 24);
-  ctx.fillStyle = '#ffb81c';
+  ctx.fillStyle = '#1a3d8f';
+  ctx.fillRect(0, 0, 256, 28);
+  ctx.fillStyle = '#ffffff';
   ctx.font = '800 15px Inter, Arial, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('NEW YORK', 128, 23);
-  ctx.fillStyle = '#0d2244';
-  ctx.font = '900 48px JetBrains Mono, monospace';
-  ctx.fillText('7Y48A', 128, 82);
-  ctx.font = '700 13px Inter, Arial, sans-serif';
-  ctx.fillText('NYC T&LC', 128, 114);
+  ctx.fillText('REPUBLICA ARGENTINA', 128, 20);
+  ctx.fillStyle = '#111111';
+  ctx.font = '900 50px JetBrains Mono, monospace';
+  ctx.fillText('AE 482 KD', 128, 90);
+  ctx.strokeStyle = '#111111';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(2, 2, 252, 124);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 16;
@@ -500,7 +490,7 @@ class ThirdPersonControllerManager {
     root.add(chassisPivot);
 
     const spec = BODY_SPECS.taxi;
-    const taxiLoftMat = createLoftedCarMaterial(spec, 0xffbe14);
+    const taxiLoftMat = createLoftedCarMaterial(spec, 0x15171a);
 
     // 1. 3D Lofted Taxi Body + Curved Windscreens + Crowned Roof + Side Mirrors + Roof Sign
     const carBodyGeo = buildCarGeometry(spec, false);
@@ -521,7 +511,7 @@ class ThirdPersonControllerManager {
     });
     const doorMid = (spec.doors[0] + spec.doors[1]) / 2;
     for (const side of [-1, 1]) {
-      const decal = new THREE.Mesh(buildCarSidePatch(spec, side, doorMid - 0.36, doorMid + 0.36, 0.53, 0.81, 0.003), doorDecalMat);
+      const decal = new THREE.Mesh(buildCarSidePatch(spec, side, doorMid - 0.3, doorMid + 0.3, 0.6, 0.78, 0.003), doorDecalMat);
       chassisPivot.add(decal);
     }
 

@@ -1,48 +1,102 @@
-"""Quilmes data in the shape the slop engine's tools expect (from Overture + our map)."""
+"""The whole GTA Quilmes map in the shape the slop engine's tools expect.
+
+usage: prepare.py <dir> public/data/quilmes.json
+Writes <dir>/app/tools/data/osm_quilmes.json (streets, water, parks as Overpass-style OSM) and the buildings with
+their heights as Open Buildings-style CSVs (<dir>/app/tools/data/cache/gob_quilmes.csv, gob_heights.csv), all from
+the game's own map, so both show the same streets and buildings.
+"""
 import json, math, sys
 import numpy as np
 from pyproj import Transformer
 
 S, GAME = sys.argv[1], sys.argv[2]
-raw = json.load(open(f'{S}/data/overture-raw.json'))
-# 1. OSM-like extract: ways get node ids from their coordinates (shared vertex = same id)
-ids = {}
-def nid(p):
-    k = (round(p['lat'], 7), round(p['lon'], 7))
-    if k not in ids: ids[k] = len(ids) + 1
-    return ids[k]
-els = []
-for e in raw['elements']:
-    t = e.get('tags') or {}
-    if e['type'] == 'way' and t.get('building') and not (t.get('name') or t.get('height') or t.get('building:levels')):
-        continue  # footprints come from the CSV below
-    if e['type'] == 'way' and e.get('geometry'):
-        e['nodes'] = [nid(p) for p in e['geometry']]
-    els.append(e)
-json.dump({'version': 0.6, 'elements': els}, open(f'{S}/app/tools/data/osm_quilmes.json', 'w'))
-print('osm elements', len(els))
-
-# 2. Buildings of our map (clipped to the streets, real heights) -> Open Buildings-style CSV
 g = json.load(open(GAME))
-LAT0, LON0 = -34.7206, -58.2546
+LAT0, LON0 = g['origin']['lat'], g['origin']['lon']
 to_ecef = Transformer.from_crs('EPSG:4326', 'EPSG:4978', always_xy=True)
 to_ll = Transformer.from_crs('EPSG:4978', 'EPSG:4326', always_xy=True)
 x0, y0, z0 = to_ecef.transform(LON0, LAT0, 0)
 la, lo = math.radians(LAT0), math.radians(LON0)
 sl, cl, sp, cp = math.sin(lo), math.cos(lo), math.sin(la), math.cos(la)
+
+
 def lonlat(pts):
-    p = np.asarray(pts, float); e, n = p[:, 0], -p[:, 1]
-    X = x0 - sl * e - sp * cl * n; Y = y0 + cl * e - sp * sl * n; Z = z0 + cp * n
+    """game (x east, z south) metres -> lon, lat arrays"""
+    p = np.asarray(pts, float)
+    e, n = p[:, 0], -p[:, 1]
+    X = x0 - sl * e - sp * cl * n
+    Y = y0 + cl * e - sp * sl * n
+    Z = z0 + cp * n
     lon, lat, _ = to_ll.transform(X, Y, Z)
     return lon, lat
-R = 1500
+
+
+# ---------------------------------------------------------------- OSM-like extract
+ids = {}
+
+
+def way(pts, tags, wid):
+    lon, lat = lonlat(pts)
+    geom, nodes = [], []
+    for a, b in zip(lon, lat):
+        k = (round(float(b), 6), round(float(a), 6))  # shared vertex (to ~10 cm) = same node
+        if k not in ids:
+            ids[k] = len(ids) + 1
+        nodes.append(ids[k])
+        geom.append({'lat': float(b), 'lon': float(a)})
+    return {'type': 'way', 'id': wid, 'tags': tags, 'nodes': nodes, 'geometry': geom}
+
+
+els = []
+for i, r in enumerate(g['roads']):
+    if len(r['pts']) < 2:
+        continue
+    t = {'highway': r['kind'], 'width': str(r['w'])}
+    if r.get('name'):
+        t['name'] = r['name']
+    if r.get('oneway'):
+        t['oneway'] = 'yes'
+    els.append(way(r['pts'], t, 1_000_000 + i))
+
+# parks and plazas get the name of the landmark inside them
+def inside(px, pz, ring):
+    c = False
+    for i in range(len(ring)):
+        (xa, za), (xb, zb) = ring[i - 1], ring[i]
+        if (za > pz) != (zb > pz) and px < xa + (pz - za) * (xb - xa) / (zb - za):
+            c = not c
+    return c
+
+
+named = g['landmarks']
+for i, a in enumerate(g['areas']):
+    pts = a['pts']
+    if len(pts) < 3:
+        continue
+    ring = pts + [pts[0]] if pts[0] != pts[-1] else pts
+    if a['kind'] == 'water':
+        t = {'natural': 'water'}
+    elif a['kind'] in ('park', 'plaza'):
+        t = {'leisure': 'park'}
+        for l in named:
+            if inside(l['pos'][0], l['pos'][1], pts) and ('Plaza' in l['name'] or 'Parque' in l['name']):
+                t['name'] = l['name']
+                break
+    else:
+        continue
+    els.append(way(ring, t, 2_000_000 + i))
+json.dump({'version': 0.6, 'elements': els}, open(f'{S}/app/tools/data/osm_quilmes.json', 'w'))
+print('osm elements', len(els), 'nodes', len(ids))
+
+# ---------------------------------------------------------------- buildings -> Open Buildings-style CSV
 rows, heights = ['latitude,longitude,area_in_meters,confidence,geometry,full_plus_code'], ['0,0,0']
 for b in g['buildings']:
     p = np.asarray(b['pts'], float)
-    if np.hypot(*p.mean(0)) > R or len(p) < 3: continue
+    if len(p) < 3:
+        continue
     x, z = p[:, 0], p[:, 1]
     area = abs(np.dot(x, np.roll(z, 1)) - np.dot(z, np.roll(x, 1))) / 2
-    if area < 6: continue
+    if area < 6:
+        continue
     lon, lat = lonlat(p)
     ring = ', '.join(f'{a:.7f} {b2:.7f}' for a, b2 in zip(list(lon) + [lon[0]], list(lat) + [lat[0]]))
     cx, cy = lonlat(p.mean(0, keepdims=True))

@@ -2,6 +2,8 @@ import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createFireEscapes } from './fire-escapes.js';
 import { addBuildingDetails } from './building-details.js';
+import { SHOPS } from './quilmes-places.js';
+import { texture as tslTexture, instancedBufferAttribute, floor as tslFloor, float as tslFloat } from 'three/tsl';
 import {
   Fn,
   vec2,
@@ -194,6 +196,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   // Costanera & Candioti towers by the Setúbal, and the low-rise barrios
   function districtOf(x, z) {
     if (x > -600 && x < 600 && z > -600 && z < 900) return 'centro'; // Quilmes centro: plaza to the station
+    if (Math.hypot(x + 2211, z - 1356) < 450) return 'centro'; // Bernal centro
     return 'barrio';
   }
   const pickFrom = (t, table) => { for (const [p, m] of table) { if (t < p) return m; t -= p; } return table[table.length - 1][1]; };
@@ -334,6 +337,35 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     }
   }
 
+  // GTA Quilmes: every real shop goes on the nearest building; other storefronts get a generic trade sign
+  const SIGN_GENERIC = ['KIOSCO', 'ALMACÉN', 'VERDULERÍA', 'PANADERÍA', 'FERRETERÍA', 'PELUQUERÍA', 'LIBRERÍA',
+    'CARNICERÍA', 'PIZZERÍA', 'ROTISERÍA', 'LAVADERO', 'MERCERÍA', 'BAZAR', 'DIETÉTICA', 'FIAMBRERÍA', 'HELADERÍA',
+    'AUTOSERVICIO', 'QUINIELA', 'REGALERÍA', 'ZAPATERÍA', 'ÓPTICA', 'CERRAJERÍA', 'FARMACIA', 'TIENDA', 'POLIRRUBRO',
+    'CELULARES', 'VETERINARIA', 'GOMERÍA'];
+  const shopsOf = new Map();
+  {
+    const cellOf = (x, z) => `${Math.floor(x / 25)},${Math.floor(z / 25)}`;
+    const hash = new Map();
+    for (const b of surveyedBuildings) {
+      if (b.height < 3) continue;
+      const k = cellOf(b.cx, b.cz);
+      if (!hash.has(k)) hash.set(k, []);
+      hash.get(k).push(b);
+    }
+    SHOPS.forEach(([, , x, z], i) => {
+      let best = null, bd = 30;
+      const ci = Math.floor(x / 25), cj = Math.floor(z / 25);
+      for (let a = ci - 1; a <= ci + 1; a++) for (let c = cj - 1; c <= cj + 1; c++) {
+        for (const b of hash.get(`${a},${c}`) || []) {
+          const d = Math.hypot(b.cx - x, b.cz - z);
+          if (d < bd) { bd = d; best = b; }
+        }
+      }
+      if (!best) return;
+      if (!shopsOf.has(best)) shopsOf.set(best, []);
+      shopsOf.get(best).push(SIGN_GENERIC.length + i);
+    });
+  }
   const surveyedBuckets = materials.map(() => []);
   const detailsToPlace = [];
   for (const b of surveyedBuildings) {
@@ -342,8 +374,10 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     const tone = rand();
     const mat = facadeFor(b, tone, rand());
     // The survey has no building-use data; choose retail independently of facade style and roof details.
-    const storefronts = b.height >= 6 && mulberry32(seed ^ 0x53544f52)() < 0.55;
-    const record = { ...b, tone, storefronts };
+    const shops = shopsOf.get(b) || null;
+    const centro = districtOf(b.cx, b.cz) === 'centro';
+    const storefronts = !!shops || (b.height >= 3.6 && mulberry32(seed ^ 0x53544f52)() < (centro ? 0.3 : 0.035));
+    const record = { ...b, tone, storefronts, shops, genericSigns: SIGN_GENERIC.length };
     surveyedBuckets[mat].push(record);
     const detail = {
       cx: b.cx, cz: b.cz, minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ,
@@ -613,30 +647,55 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     { bg: '#101318', border: '#e0e6ed', text: 'EMPIRE WATCHES · NEW YORK', color: '#f5f9ff' }
   ];
   const MAX_SIGNS_PER_THEME = Math.ceil(MAX_AWNINGS / signThemes.length) + 32;
-  const signInsts = signThemes.map((st) => {
-    const c = document.createElement('canvas');
-    c.width = 512;
-    c.height = 96;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = st.bg;
-    ctx.fillRect(0, 0, 512, 96);
-    ctx.strokeStyle = st.border;
-    ctx.lineWidth = 6;
-    ctx.strokeRect(6, 6, 500, 84);
-    ctx.fillStyle = st.color;
-    ctx.font = '800 26px Inter, Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(st.text, 256, 50);
-
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const sMat = new THREE.MeshBasicNodeMaterial({ map: tex });
-    const sInst = new THREE.InstancedMesh(unitBox, sMat, MAX_SIGNS_PER_THEME);
+  // One atlas with every sign: the generic trades, then the real shops (quilmes-places.js), 8 per row
+  const SIGN_COLS = 8, SIGN_W = 256, SIGN_H = 32;
+  const signTexts = [...SIGN_GENERIC.map((t) => [t, '']), ...SHOPS.map(([name, kind]) => [name.toUpperCase(), kind])];
+  const SIGN_ROWS = Math.ceil(signTexts.length / SIGN_COLS);
+  const signCanvas = document.createElement('canvas');
+  signCanvas.width = SIGN_COLS * SIGN_W;
+  signCanvas.height = SIGN_ROWS * SIGN_H;
+  {
+    const ctx = signCanvas.getContext('2d');
+    const KIND_BG = { pharmacy: '#0f6b3a', bank: '#123d7a', supermarket: '#b3121f', restaurant: '#3a1d12', bar: '#1b1b22',
+      pub: '#1b1b22', cafe: '#3b2616', fast_food: '#c0391b', ice_cream: '#e85d9a', bakery: '#8a5a1e', butcher: '#8f1d1d',
+      clothes: '#222831', lottery: '#1f5fa8', hardware: '#d46f12' };
+    const PALETTE = ['#f4f1ea', '#13294b', '#7a1020', '#0f5132', '#e3b505', '#2b2b2b', '#f0f4f8', '#5b2a86'];
+    signTexts.forEach(([text, kind], i) => {
+      const x = (i % SIGN_COLS) * SIGN_W, y = Math.floor(i / SIGN_COLS) * SIGN_H;
+      const bg = KIND_BG[kind] || PALETTE[(i * 7) % PALETTE.length];
+      ctx.fillStyle = bg;
+      ctx.fillRect(x, y, SIGN_W, SIGN_H);
+      const light = ['#f4f1ea', '#e3b505', '#f0f4f8', '#e85d9a'].includes(bg);
+      ctx.fillStyle = light ? '#1a1a1a' : '#fbf6e8';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      let size = 22;
+      ctx.font = `800 ${size}px Inter, Arial, sans-serif`;
+      while (size > 9 && ctx.measureText(text).width > SIGN_W - 14) {
+        size--;
+        ctx.font = `800 ${size}px Inter, Arial, sans-serif`;
+      }
+      ctx.fillText(text, x + SIGN_W / 2, y + SIGN_H / 2 + 1);
+    });
+  }
+  const signTex = new THREE.CanvasTexture(signCanvas);
+  signTex.colorSpace = THREE.SRGBColorSpace;
+  signTex.anisotropy = 8;
+  const signCell = new THREE.InstancedBufferAttribute(new Float32Array(MAX_SIGNS_PER_THEME * signThemes.length), 1);
+  signCell.setUsage(THREE.DynamicDrawUsage);
+  const signSlots = MAX_SIGNS_PER_THEME * signThemes.length;
+  const signInsts = [(() => {
+    const cell = instancedBufferAttribute(signCell);
+    const row = tslFloor(cell.div(SIGN_COLS));
+    const col = cell.sub(row.mul(SIGN_COLS));
+    const suv = vec2(uv().x.add(col).div(SIGN_COLS), uv().y.add(tslFloat(SIGN_ROWS - 1).sub(row)).div(SIGN_ROWS));
+    const sMat = new THREE.MeshBasicNodeMaterial();
+    sMat.colorNode = tslTexture(signTex, suv);
+    const sInst = new THREE.InstancedMesh(unitBox, sMat, signSlots);
     sInst.frustumCulled = false;
     group.add(sInst);
     return sInst;
-  });
+  })()];
 
   // 6. Sidewalk construction scaffolding sheds
   const shedMat = new THREE.MeshStandardNodeMaterial({ color: 0x214f37, roughness: 0.6, metalness: 0.25 });
@@ -774,12 +833,13 @@ function buildCityBlocks(scene, landmarkColliders = []) {
         awningInst.setMatrixAt(awningCount, dummy.matrix);
         awningInst.setColorAt(awningCount, awningPalette[a.colorIdx % awningPalette.length]);
 
-        const themeIdx = a.colorIdx % signInsts.length;
-        if (signCounts[themeIdx] < MAX_SIGNS_PER_THEME) {
-          dummy.position.set(a.x, 4.68, a.z);
+        const themeIdx = a.colorIdx % storeThemeColors.length;
+        if (signCounts[0] < signSlots) {
+          dummy.position.set(a.x, a.y + 0.88, a.z);
           dummy.scale.set(0.28, 0.86, a.d * 0.92);
           dummy.updateMatrix();
-          signInsts[themeIdx].setMatrixAt(signCounts[themeIdx]++, dummy.matrix);
+          signCell.setX(signCounts[0], a.sign || 0);
+          signInsts[0].setMatrixAt(signCounts[0]++, dummy.matrix);
         }
         if (collectNearLights) {
           activeAwnings.push({ a, themeIdx, ry: a.ry || 0 });
@@ -822,6 +882,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
       sInst.count = signCounts[idx];
       flagRange(sInst.instanceMatrix, signCounts[idx]);
     });
+    flagRange(signCell, signCounts[0]);
 
     shedInst.count = shedCount;
     flagRange(shedInst.instanceMatrix, shedCount);
@@ -878,7 +939,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
         const fade = smoothFade(cand.effDist, storeCutoff * 0.62, storeCutoff);
         const outX = Math.cos(ry);
         const outZ = -Math.sin(ry);
-        spot.position.set(a.x + outX * 0.45, 4.35, a.z + outZ * 0.45);
+        spot.position.set(a.x + outX * 0.45, a.y + 0.55, a.z + outZ * 0.45);
         spot.target.position.set(a.x + outX * 1.85, 0.0, a.z + outZ * 1.85);
         spot.target.updateMatrixWorld();
         spot.color.copy(storeThemeColors[themeIdx % storeThemeColors.length]);
