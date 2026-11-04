@@ -1,4 +1,4 @@
-import { blockAt } from './city-config.js?v=q9';
+import { blockAt } from './city-config.js?v=q10';
 
 function hashPos(x, y, z) {
   const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;

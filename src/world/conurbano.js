@@ -35,7 +35,9 @@ const WRECKS = ['#7a5a3c', '#8c8f94', '#4d5f7a', '#9a3a2a', '#c8c2b0', '#3d4a3a'
 const WALLS = ['#efe6d6', '#e9dcc4', '#f1efe8', '#e2d4bd', '#d9dfd9', '#efd9c6', '#dfe6ea', '#e8e0a8'].map(hex);
 const GATES = ['#4a5a4a', '#2e2e2e', '#6b4a32', '#7a7f84', '#3c4f66', '#8a3b2a', '#e0e0e0', '#2f4f3f'].map(hex);
 
-export function buildConurbano(data, { root, chunks, collision, tex, flatMat, graph, nearPasillo = () => false }) {
+// `mapXZ` (optional) carries the villa / descampado cell corners into another frame (Slop Quilmes); the rest of the
+// data then comes already in that frame
+export function buildConurbano(data, { root, chunks, collision, tex, flatMat, graph, nearPasillo = () => false, mapXZ = null }) {
   const L = tex.facades.layer;
   // not on a street, sidewalk or path
   const offRoad = (x, z, pad = 0.4) => {
@@ -60,7 +62,8 @@ export function buildConurbano(data, { root, chunks, collision, tex, flatMat, gr
   const corner = (i, j) => {
     const h = hashString(`${i},${j}`);
     const jx = ((h & 1023) / 1023 - 0.5) * 0.75, jz = (((h >>> 10) & 1023) / 1023 - 0.5) * 0.75;
-    return [grid.x0 + (i + jx) * cellX, grid.z0 + (j + jz) * cellZ];
+    const x = grid.x0 + (i + jx) * cellX, z = grid.z0 + (j + jz) * cellZ;
+    return mapXZ ? mapXZ(x, z) : [x, z];
   };
   const cellQuads = (buf, cells, y) => {
     for (const k of cells) {
@@ -69,7 +72,10 @@ export function buildConurbano(data, { root, chunks, collision, tex, flatMat, gr
       buf.quad(...q.map(([x, z]) => [x, y, z]), ...q.map(([x, z]) => [x / 8, z / 8]), white, [0, 1, 0]);
     }
   };
-  const cellCenter = (k) => [grid.x0 + ((k % grid.n) + 0.5) * cellX, grid.z0 + (Math.floor(k / grid.n) + 0.5) * cellZ];
+  const cellCenter = (k) => {
+    const x = grid.x0 + ((k % grid.n) + 0.5) * cellX, z = grid.z0 + (Math.floor(k / grid.n) + 0.5) * cellZ;
+    return mapXZ ? mapXZ(x, z) : [x, z];
+  };
 
   for (const v of data.villas || []) cellQuads(dirtBuf, cellsOf(v.cells), 0.05);
   const wastes = (data.wastes || []).map((w) => ({ ...w, list: cellsOf(w.cells) }));

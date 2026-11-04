@@ -142,6 +142,16 @@ const streetSigns = (game.streetSigns || []).map((p) => {
   const [x, z] = polyAt(p.x, p.z);
   return { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100, signs: p.signs.map((sg) => ({ ...sg, dir: [sg.dir[0] * tc + sg.dir[1] * ts, -sg.dir[0] * ts + sg.dir[1] * tc].map((v) => Math.round(v * 1000) / 1000) })) };
 });
-fs.writeFileSync(hout, JSON.stringify({ styles: STYLES, houses, roads: roadsGrid, streetSigns }));
+// the conurbano layer (conurbano.js): property-line fences, villas, descampados (their cells stay in the game's
+// grid, mapped at build time), scrub / wetland areas
+const r2 = (v) => Math.round(v * 100) / 100;
+const fences = [];
+for (let i = 0; i < game.fences.length; i += 5) {
+  const a = polyAt(game.fences[i], game.fences[i + 1]), b = polyAt(game.fences[i + 2], game.fences[i + 3]);
+  fences.push(r2(a[0]), r2(a[1]), r2(b[0]), r2(b[1]), game.fences[i + 4]);
+}
+const wastes = game.wastes.map((w) => (w.potrero ? { ...w, potrero: { c: polyAt(...w.potrero.c).map(r2), a: w.potrero.a - theta } } : w));
+const areas = game.areas.filter((a) => ['scrub', 'waste', 'wetland'].includes(a.kind)).map((a) => ({ kind: a.kind, pts: a.pts.map(([x, z]) => polyAt(x, z).map(r2)) }));
+fs.writeFileSync(hout, JSON.stringify({ styles: STYLES, houses, roads: roadsGrid, streetSigns, conurbano: { grid: game.grid, villas: game.villas, wastes, fences, fenceTypes: game.fenceTypes, areas } }));
 log(`wrote ${hout}: ${houses.length} houses (${(fs.statSync(hout).size / 1024).toFixed(0)} KB)`);
 log(`wrote ${out}: ${shops.length} shops, ${landmarks.length} landmarks, ${stations.length} stations`);

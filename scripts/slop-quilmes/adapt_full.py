@@ -495,7 +495,7 @@ rep(p, """  const { colliders: landmarkColliders } = buildLandmarks(scene);
   }
   let gtaHouses = null;
   try {
-    gtaHouses = await buildHouses(scene, { dataUrl: new URL('./gta-houses.json', import.meta.url) });
+    gtaHouses = await buildHouses(scene, { dataUrl: new URL('./gta-houses.json', import.meta.url), frame: GAME_FRAME });
   } catch (err) {
     console.error('[gta-houses]', err);
   }

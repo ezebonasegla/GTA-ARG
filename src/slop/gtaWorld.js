@@ -13,6 +13,7 @@ import { Trains } from '../entities/train.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GeoBuf, ChunkSet } from '../world/geobuf.js';
 import { buildBuildings } from '../world/buildings.js';
+import { buildConurbano } from '../world/conurbano.js';
 import { buildStreetSigns } from '../world/streetSigns.js';
 import { Buses } from '../entities/buses.js';
 import { makeTextures } from '../world/textures.js';
@@ -50,6 +51,13 @@ class Collision {
       }
     }
     return false;
+  }
+  heightAt(x, z) {
+    let h = 0;
+    for (const s of this.hash.query(x, z, x, z)) {
+      if (s.type === 'poly' && s.height > h && pointInPolygon(x, z, s.pts)) h = s.height;
+    }
+    return h;
   }
 }
 
@@ -365,7 +373,7 @@ function buildRails(data, plan, { root, live, tex, flatMat, collision, toGrid, t
 // already in the slop frame (gta-houses.json), so the generator and its streaming run there directly.
 // The facades read a texture array per vertex `layer`: the game does it with onBeforeCompile (WebGL only), here a
 // TSL node material.
-export async function buildHouses(scene, { dataUrl, lift = 0.2 }) {
+export async function buildHouses(scene, { dataUrl, frame, lift = 0.2 }) {
   const [json, TSL] = await Promise.all([fetch(dataUrl).then((r) => r.json()), import('three/tsl')]);
   const { styles, houses, roads, streetSigns: signPosts } = json;
   const buildings = houses.map((r) => {
@@ -384,11 +392,42 @@ export async function buildHouses(scene, { dataUrl, lift = 0.2 }) {
   const chunks = new ChunkSet(220);
   const data = { buildings, roads, specials: [] };
   const { tanks, detail } = buildBuildings(data, { chunks, collision, tex, graph });
-
   const root = new THREE.Group();
   root.name = 'GtaQuilmesHouses';
   root.position.y = lift;
   scene.add(root);
+  const flatMat = (map, color = 0xffffff, extra = {}) =>
+    new THREE.MeshStandardMaterial({ map, color, roughness: 0.95, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, ...extra });
+  // pasillos of the villas, as the game paints them
+  const pasillos = roads.filter((r) => r.pasillo);
+  {
+    const buf = new GeoBuf();
+    for (const r of pasillos) ribbon(buf, r.pts, r.w, 0.055, 1 / 3);
+    if (!buf.empty) {
+      const m = new THREE.Mesh(buf.geometry(), flatMat(tex.pasillo));
+      m.receiveShadow = true;
+      root.add(m);
+    }
+  }
+  // rejas, muros, portones, ligustros and alambrados on the property line, wooden poles with their cables along the
+  // streets, the villas' dirt, laundry lines and colgados, descampados (conurbano.js)
+  if (json.conurbano) {
+    const pasHash = new SpatialHash(12);
+    for (const r of pasillos) for (let i = 0; i < r.pts.length - 1; i++) pasHash.insert({ a: r.pts[i], b: r.pts[i + 1], w: r.w }, bbox([r.pts[i], r.pts[i + 1]]));
+    const nearPasillo = (x, z, rr) => {
+      for (const sg of pasHash.query(x - rr - 2, z - rr - 2, x + rr + 2, z + rr + 2)) {
+        if (closestOnSegment(x, z, sg.a[0], sg.a[1], sg.b[0], sg.b[1])[3] < (sg.w / 2 + rr) ** 2) return true;
+      }
+      return false;
+    };
+    const mapXZ = gridMapper(frame);
+    try {
+      buildConurbano({ ...json.conurbano, roads }, { root, chunks, collision, tex, flatMat, graph, nearPasillo, mapXZ });
+    } catch (err) {
+      console.warn('[gta-houses] conurbano', err);
+    }
+  }
+
   const { texture, attribute, uv, vertexColor, uniformArray, uniform, int, vec3 } = TSL;
   const F = tex.facades;
   const layer = attribute('layer', 'float');
