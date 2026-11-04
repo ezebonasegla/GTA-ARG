@@ -7,6 +7,9 @@ import * as THREE from 'three';
 import { buildLandmarks } from '../world/landmarks.js';
 import { markZones, buildZones } from '../world/zones.js';
 import { RoadGraph } from '../world/roadGraph.js';
+import { planCorridors } from '../world/corridors.js';
+import { Trains } from '../entities/train.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GeoBuf } from '../world/geobuf.js';
 import { makeTextures } from '../world/textures.js';
 import { SpatialHash, bbox, closestOnSegment, pointInPolygon } from '../world/geo.js';
@@ -89,6 +92,7 @@ export async function buildGtaWorld(scene, { dataUrl, frame, lift = 0.2 }) {
   const tex = makeTextures(fakeRenderer);
   const collision = new Collision();
   markZones(data);
+  const plan = planCorridors(data); // level crossings of the Línea Roca
   const graph = new RoadGraph(data.roads);
   const root = new THREE.Group();
   root.name = 'GtaQuilmesPlaces';
@@ -100,6 +104,7 @@ export async function buildGtaWorld(scene, { dataUrl, frame, lift = 0.2 }) {
 
   const landmarks = buildLandmarks(data, { root, collision, graph, tex });
   const zones = buildZones(data, { root, graph, collision, ribbon, flatMat, keepOut: landmarks.keepOut, GeoBuf });
+  const rail = buildRails(data, plan, { root, tex, flatMat, collision });
   root.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = o.castShadow || !o.material?.transparent;
@@ -130,6 +135,134 @@ export async function buildGtaWorld(scene, { dataUrl, frame, lift = 0.2 }) {
     setNight(n) {
       landmarks.setNight(n);
       zones.setNight(n);
+    },
+    dynamic: rail.dynamic || null, // moving trains: their matrices are updated every frame
+    update(dt) {
+      rail.update(Math.min(dt, 0.1));
+    }
+  };
+}
+
+// The Línea Roca as in the game: ballast, rails and sleepers (builder.js), barreras with cruces de San Andrés at the
+// level crossings (corridors.js) and the trains running between the stations (entities/train.js)
+function buildRails(data, plan, { root, tex, flatMat, collision }) {
+  const none = { update() {} };
+  if (!data.rails?.length) return none;
+  const ballast = new GeoBuf(), railBuf = new GeoBuf();
+  for (const r of data.rails) ribbon(ballast, r.pts, 3.6, 0.05, 1 / 4);
+  const bm = new THREE.Mesh(ballast.geometry(), flatMat(tex.gravel));
+  bm.receiveShadow = true;
+  root.add(bm);
+  const steel = new THREE.Color(0.55, 0.55, 0.58);
+  const sleepers = [];
+  for (const r of data.rails) {
+    for (let i = 0; i < r.pts.length - 1; i++) {
+      const [ax, az] = r.pts[i], [bx, bz] = r.pts[i + 1];
+      const len = Math.hypot(bx - ax, bz - az);
+      if (len < 0.01) continue;
+      const dx = (bx - ax) / len, dz = (bz - az) / len, nx = -dz, nz = dx;
+      for (const off of [-0.72, 0.72]) {
+        const y = 0.18, hw = 0.05;
+        const a0 = [ax + nx * (off - hw), y, az + nz * (off - hw)], a1 = [ax + nx * (off + hw), y, az + nz * (off + hw)];
+        const b0 = [bx + nx * (off - hw), y, bz + nz * (off - hw)], b1 = [bx + nx * (off + hw), y, bz + nz * (off + hw)];
+        railBuf.quad(a0, a1, b1, b0, [0, 0], [1, 0], [1, 1], [0, 1], steel, [0, 1, 0]);
+      }
+      for (let t = 0; t < len; t += 0.7) sleepers.push([ax + dx * t, az + dz * t, Math.atan2(dx, dz)]);
+    }
+  }
+  root.add(new THREE.Mesh(railBuf.geometry(), new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.8, roughness: 0.35 })));
+  {
+    const sl = new THREE.InstancedMesh(new THREE.BoxGeometry(2.4, 0.14, 0.24), new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 1 }), sleepers.length);
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
+    sleepers.forEach(([x, z, h], i) => sl.setMatrixAt(i, m.compose(p.set(x, 0.08, z), q.setFromAxisAngle(Y, h), one)));
+    sl.receiveShadow = true;
+    sl.computeBoundingSphere();
+    root.add(sl);
+  }
+
+  // barreras
+  const levels = plan.levels || [];
+  const gates = [];
+  for (const l of levels) {
+    if (l.ped) continue;
+    for (const sg of [-1, 1]) {
+      const s = sg * (l.half + 2.2), t = -sg * (l.w / 2 + 0.6);
+      const x = l.x + l.ux * s - l.uz * t, z = l.z + l.uz * s + l.ux * t;
+      const Dx = -sg * l.uz, Dz = sg * l.ux;
+      gates.push({ x, z, ry: Math.atan2(-Dz, Dx), Dx, Dz, len: l.w / 2 + 0.2, l, a: Math.PI / 2 });
+      collision.addCircle(x, z, 0.2, 'pole');
+    }
+  }
+  let gateMesh = null;
+  const _gm = new THREE.Matrix4(), _e = new THREE.Euler(), gateQ = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
+  const drawGates = () => {
+    gates.forEach((g, i) => {
+      _e.set(0, g.ry, g.a, 'YXZ');
+      gateQ.setFromEuler(_e);
+      gateMesh.setMatrixAt(i, _gm.compose(_p.set(g.x, 1.05, g.z), gateQ, _s.set(g.len, 1, 1)));
+    });
+    gateMesh.instanceMatrix.needsUpdate = true;
+  };
+  if (gates.length) {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 4;
+    const ctx = c.getContext('2d');
+    for (let i = 0; i < 8; i++) {
+      ctx.fillStyle = i % 2 ? '#f4f4f4' : '#d11f1f';
+      ctx.fillRect(i * 8, 0, 8, 4);
+    }
+    const map = new THREE.CanvasTexture(c);
+    map.colorSpace = THREE.SRGBColorSpace;
+    gateMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.12, 0.12).translate(0.5, 0, 0), new THREE.MeshStandardMaterial({ map, roughness: 0.6 }), gates.length);
+    gateMesh.castShadow = true;
+    gateMesh.frustumCulled = false;
+    root.add(gateMesh);
+    const postG = [], crossG = [];
+    for (const g of gates) {
+      postG.push(new THREE.CylinderGeometry(0.1, 0.12, 1.2, 6).translate(g.x, 0.6, g.z), new THREE.BoxGeometry(0.35, 0.5, 0.35).translate(g.x, 1.0, g.z));
+      const pole = new THREE.CylinderGeometry(0.06, 0.06, 3.2, 5).translate(0, 1.6, 0);
+      const bar = (r) => new THREE.BoxGeometry(1.4, 0.22, 0.04).rotateZ(r).translate(0, 2.9, 0.06);
+      for (const piece of [pole, bar(0.6), bar(-0.6)]) crossG.push(piece.applyMatrix4(new THREE.Matrix4().makeRotationY(g.ry + Math.PI / 2).setPosition(g.x - g.Dx * 0.7, 0, g.z - g.Dz * 0.7)));
+    }
+    const merge = (list, mat) => {
+      const m = new THREE.Mesh(mergeGeometries(list.map((g) => (g.index ? g.toNonIndexed() : g))), mat);
+      m.castShadow = true;
+      root.add(m);
+    };
+    merge(postG, new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: 0.6 }));
+    merge(crossG, new THREE.MeshStandardMaterial({ color: 0xf4f4f4, roughness: 0.6 }));
+    drawGates();
+  }
+
+  const trainsRoot = new THREE.Group();
+  trainsRoot.name = 'GtaQuilmesTrains';
+  root.add(trainsRoot);
+  const trains = new Trains(trainsRoot, data);
+  let trackPos = null;
+  return {
+    trains,
+    dynamic: trainsRoot,
+    update(dt) {
+      trains.update(dt);
+      if (!gateMesh || !trains.trains.length) return;
+      if (!trackPos) {
+        trackPos = levels.map((l) => trains.trains.map((tr) => {
+          const p = tr.track.project(l.x, l.z);
+          return p.d < 20 ? p.s : null;
+        }));
+      }
+      const closed = levels.map((l, i) => trains.trains.some((tr, k) => trackPos[i][k] !== null && Math.abs(tr.s - trackPos[i][k]) < 250));
+      let changed = false;
+      for (const g of gates) {
+        const want = closed[levels.indexOf(g.l)] ? 0 : Math.PI / 2 - 0.05;
+        const a = g.a + Math.sign(want - g.a) * Math.min(Math.abs(want - g.a), dt * 0.9);
+        if (a !== g.a) {
+          g.a = a;
+          changed = true;
+        }
+      }
+      if (changed) drawGates();
     }
   };
 }

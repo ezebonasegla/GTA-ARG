@@ -476,7 +476,7 @@ function b(t, { root: n, collision: r, graph: i, tex: a }) {
 			[-o / 2, i + a]
 		];
 		r.addPolygon(c.map(([r, i]) => t ? f(e, t * i, r) : f(e, r, n * i)), s, "building");
-	}, ee = (t, n, i, a) => {
+	}, A = (t, n, i, a) => {
 		for (let [o, s] of [
 			[1, 1],
 			[1, -1],
@@ -486,7 +486,7 @@ function b(t, { root: n, collision: r, graph: i, tex: a }) {
 			let c = o * (t.hu + i), l = s * (t.hv + i), u = new e.CylinderGeometry(.45, .8, a, 8);
 			u.translate(0, a / 2, 0), x.add(u, b.metal, d(n, c, 0, l)), x.add(m(5, 3, .6), b.flood, d(n, c, a - 1, l, Math.atan2(-o, -s))), r.addCircle(...f(t, c, l), 1, "pole");
 		}
-	}, A = (t, n, r, i, a, o, s, c, l) => {
+	}, j = (t, n, r, i, a, o, s, c, l) => {
 		let u = new e.MeshStandardMaterial({
 			map: _(n, r, "#ffffff"),
 			roughness: .6
@@ -527,7 +527,7 @@ function b(t, { root: n, collision: r, graph: i, tex: a }) {
 				[e + .08, 0],
 				[e + .08, o + 1.1],
 				[e, o + 1.1]
-			], t, r, i, l, T.concrete), k(n, t, r, i, e, l, o), t === c.nu && r === c.nv && A(a, "ESTADIO CENTENARIO · QUILMES ATLÉTICO CLUB", "#1b3a8c", t, r, i + e + .14, o * .55, Math.min(60, l * .6), 4);
+			], t, r, i, l, T.concrete), k(n, t, r, i, e, l, o), t === c.nu && r === c.nv && j(a, "ESTADIO CENTENARIO · QUILMES ATLÉTICO CLUB", "#1b3a8c", t, r, i + e + .14, o * .55, Math.min(60, l * .6), 4);
 			for (let [t, i] of [
 				[1, 1],
 				[1, -1],
@@ -538,7 +538,7 @@ function b(t, { root: n, collision: r, graph: i, tex: a }) {
 				let o = f(n, t * (n.hu + 3 + e * .5), i * (n.hv + 3 + e * .5));
 				r.addCircle(o[0], o[1], e * .6, "building");
 			}
-			A(a, "QUILMES", "#1b3a8c", 1, 0, n.hu + 3 + e * .55, o * .55 + 1, 26, 4.5), ee(n, a, 3 + e + 4, o + 26), u.push([
+			j(a, "QUILMES", "#1b3a8c", 1, 0, n.hu + 3 + e * .55, o * .55 + 1, 26, 4.5), A(n, a, 3 + e + 4, o + 26), u.push([
 				n.cx,
 				n.cz,
 				Math.hypot(n.hu, n.hv) + e + 10
@@ -589,7 +589,7 @@ function b(t, { root: n, collision: r, graph: i, tex: a }) {
 				let i = s.off - .9;
 				x.add(n, T.iron, r ? d(a, r * i, 0, t) : d(a, t, 0, o * i));
 			}
-			A(a, "CLUB ATLÉTICO ARGENTINO DE QUILMES", "#4f8fc9", -r, -o, -(s.off - 1.35), s.H + 3.4, Math.min(40, s.len * .8), 1), A(a, "ARGENTINO DE QUILMES · PLATEA 1927", "#4f8fc9", r, o, s.off + s.D + .05, s.H * .6, Math.min(34, s.len * .7), 2.6);
+			j(a, "CLUB ATLÉTICO ARGENTINO DE QUILMES", "#4f8fc9", -r, -o, -(s.off - 1.35), s.H + 3.4, Math.min(40, s.len * .8), 1), j(a, "ARGENTINO DE QUILMES · PLATEA 1927", "#4f8fc9", r, o, s.off + s.D + .05, s.H * .6, Math.min(34, s.len * .7), 2.6);
 			let g = 2 * ((r ? n.hv : n.hu) + 3), _ = s.off;
 			D(a, E(10, 5, 10), -r, -o, _, g, T.concrete), D(a, [
 				[9.6, 5],
@@ -612,7 +612,7 @@ function b(t, { root: n, collision: r, graph: i, tex: a }) {
 					[.32, 1.4]
 				], t, i, v + 2, b, T.celeste), k(n, t, i, v + 2, .3, b, 2.2);
 			}
-			ee(n, a, 11, 22), u.push([
+			A(n, a, 11, 22), u.push([
 				n.cx,
 				n.cz,
 				Math.hypot(n.hu, n.hv) + 16
@@ -766,9 +766,9 @@ function b(t, { root: n, collision: r, graph: i, tex: a }) {
 			let s = t * i * .5, c = n * a * .5;
 			x.add(new e.CylinderGeometry(.07, .1, 3.6, 6).translate(0, 1.8, 0), b.iron, d(r, s, 0, c)), x.add(new e.SphereGeometry(.32, 12, 8), b.lamp, d(r, s, 3.8, c));
 		}
-		j(t.monument, r, n);
+		ee(t.monument, r, n);
 	}
-	function j(t, n, i) {
+	function ee(t, n, i) {
 		if (t === "equestrian") {
 			x.add(m(7, 1, 4.6), b.stuccoDark, d(n, 0, 0, 0)), x.add(m(5.6, 4.5, 3), b.stone, d(n, 0, 1, 0)), x.add(m(6, .5, 3.4), b.stuccoDark, d(n, 0, 5.5, 0));
 			let t = 1.7, a = (r, i, a, o, s, c, l = 0) => {
@@ -920,21 +920,26 @@ var x = class {
 	}
 };
 new e.Vector3(), new e.Vector3(), new e.Matrix3(), new e.Matrix4();
+function D(e) {
+	let t = e.index ? e.toNonIndexed() : e;
+	for (let e of Object.keys(t.attributes)) e !== "position" && e !== "normal" && t.deleteAttribute(e);
+	return t;
+}
 //#endregion
 //#region src/world/metrobus.js
-var D = 2.6, O = 34, k = .32;
+var O = 2.6, k = 34, A = .32;
 (() => {
-	let t = (t, n, r, i, a, o) => new e.BoxGeometry(t, n, r).translate(i, a + n / 2, o), n = [t(D, k, O, 0, 0, 0)], r = [t(.3, .01, O, -2.6 / 2 + .15, k, 0)], i = [t(3, .12, O * .7, .1, 3, 0)];
-	for (let e = -11.22; e <= O * .34; e += O * .165) i.push(t(.12, 2.7, .12, D / 2 - .25, k, e));
-	return i.push(t(.1, 1, O, D / 2 - .05, k, 0)), {
+	let t = (t, n, r, i, a, o) => new e.BoxGeometry(t, n, r).translate(i, a + n / 2, o), n = [t(O, A, k, 0, 0, 0)], r = [t(.3, .01, k, -2.6 / 2 + .15, A, 0)], i = [t(3, .12, k * .7, .1, 3, 0)];
+	for (let e = -11.22; e <= k * .34; e += k * .165) i.push(t(.12, 2.7, .12, O / 2 - .25, A, e));
+	return i.push(t(.1, 1, k, O / 2 - .05, A, 0)), {
 		deck: n,
 		edge: r,
 		frame: i,
-		glass: [t(.03, 1.6, O * .66, D / 2 - .12, 1.32, 0)],
-		sign: [t(.08, .7, 3.2, .1, 3.12, O * .35 - 1.6)]
+		glass: [t(.03, 1.6, k * .66, O / 2 - .12, 1.32, 0)],
+		sign: [t(.08, .7, 3.2, .1, 3.12, k * .35 - 1.6)]
 	};
 })(), new e.Color(.92, .92, .88), new e.Color(.93, .72, .08), new e.Color(.74, .73, .7), new e.Color(.9, .7, .1), new e.Color(.1, .1, .1), new e.Color(.8, .79, .76);
-var ee = class {
+var j = class {
 	constructor(e) {
 		this.pts = e, this.d = [0];
 		for (let t = 1; t < e.length; t++) this.d.push(this.d[t - 1] + Math.hypot(e[t][0] - e[t - 1][0], e[t][1] - e[t - 1][1]));
@@ -957,16 +962,16 @@ var ee = class {
 		for (let r = 1; r < this.pts.length - 1; r++) this.d[r] > e && this.d[r] < t && n.push(this.pts[r]);
 		return n.push(this.at(t).slice(0, 2)), n;
 	}
-}, A = (e) => e.kind === "pedestrian" && /^rivadavia$/i.test(e.name);
-function j(e) {
-	for (let t of e.roads) A(t) && (t.noCars = !0);
+}, ee = (e) => e.kind === "pedestrian" && /^rivadavia$/i.test(e.name);
+function te(e) {
+	for (let t of e.roads) ee(t) && (t.noCars = !0);
 }
-var te = new e.Matrix4(), ne = new e.Quaternion(), M = new e.Vector3(0, 1, 0);
-function N(t, n, r, i = 0, a = 1, o = a, s = a) {
-	return te.compose(new e.Vector3(t, n, r), ne.setFromAxisAngle(M, i), new e.Vector3(a, o, s)).clone();
+var ne = new e.Matrix4(), re = new e.Quaternion(), ie = new e.Vector3(0, 1, 0);
+function M(t, n, r, i = 0, a = 1, o = a, s = a) {
+	return ne.compose(new e.Vector3(t, n, r), re.setFromAxisAngle(ie, i), new e.Vector3(a, o, s)).clone();
 }
-var P = (t, n, r) => new e.BoxGeometry(t, n, r).translate(0, n / 2, 0), F = (t, n, r, i = 10) => new e.CylinderGeometry(t, n, r, i).translate(0, r / 2, 0);
-function re() {
+var N = (t, n, r) => new e.BoxGeometry(t, n, r).translate(0, n / 2, 0), P = (t, n, r, i = 10) => new e.CylinderGeometry(t, n, r, i).translate(0, r / 2, 0);
+function ae() {
 	let t = g(256, 256, (e, t, r) => {
 		let i = n(77), a = (t, n, a, o) => {
 			for (let s = 0; s < r; s += 10) {
@@ -993,7 +998,7 @@ function re() {
 	});
 	return t.wrapS = t.wrapT = e.RepeatWrapping, t;
 }
-function ie(e, t = !1) {
+function oe(e, t = !1) {
 	return g(256, 128, (r, i, a) => {
 		let o = n(e);
 		r.fillStyle = t ? "#2f4a22" : "#203828", r.fillRect(0, 0, i, a);
@@ -1016,7 +1021,7 @@ function ie(e, t = !1) {
 		for (let e = 6; e < a - 10; e += t ? 14 : 30) for (let n = 4; n < i - 20; n += t ? 10 + o() * 6 : 22 + o() * 6) r.fillStyle = s[Math.floor(o() * s.length)], t ? (r.beginPath(), r.arc(n + 5, e + 6, 4 + o() * 2, 0, Math.PI * 2), r.fill()) : (r.fillRect(n, e, 18, 25), r.fillStyle = "rgba(0,0,0,0.5)", r.fillRect(n + 2, e + 3, 14, 3));
 	});
 }
-function ae(t) {
+function se(t) {
 	let r = g(128, 128, (e, r, i) => {
 		let a = n(t);
 		e.fillStyle = "#3d5a2a", e.fillRect(0, 0, r, i);
@@ -1032,7 +1037,7 @@ function ae(t) {
 	});
 	return r.wrapS = r.wrapT = e.RepeatWrapping, r;
 }
-function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut: l, GeoBuf: u }) {
+function ce(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut: l, GeoBuf: u }) {
 	let d = (t, n = {}) => new e.MeshStandardMaterial({
 		color: t,
 		roughness: .8,
@@ -1104,12 +1109,12 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 			roughness: .9
 		}),
 		diarios: d(16777215, { map: _("DIARIOS · REVISTAS", "#f2efe4", "#1f3a2a", 1024, 160) }),
-		rack: d(16777215, { map: ie(5) }),
+		rack: d(16777215, { map: oe(5) }),
 		floreria: d(16777215, { map: _("FLORERÍA", "#f6e7ef", "#8a1c4a", 1024, 160) }),
-		flowers: d(16777215, { map: ie(9, !0) }),
+		flowers: d(16777215, { map: oe(9, !0) }),
 		taxi: d(16777215, { map: _("PARADA DE TAXIS", "#111111", "#f2c200", 1024, 200, "bold 92px Arial, sans-serif") }),
 		choripan: d(16777215, { map: _("CHORIPÁN · BONDIOLA", "#c0392b", "#fff4d6", 1024, 160) })
-	}, p = new c(), m = new c(), h = s(re()), g = n(2024), y = (e, t, n) => a.addCircle(e, t, n, "prop"), b = (e, t, n, r, i) => {
+	}, p = new c(), m = new c(), h = s(ae()), g = n(2024), y = (e, t, n) => a.addCircle(e, t, n, "prop"), b = (e, t, n, r, i) => {
 		let o = Math.cos(n), s = Math.sin(n);
 		a.addPolygon([
 			[-r, -i],
@@ -1119,40 +1124,40 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 		].map(([n, r]) => [e + o * n + s * r, t - s * n + o * r]), 3, "prop");
 	};
 	function x(t, n, r = 3.2, i = f.leaf) {
-		p.add(F(.12, .18, r, 7), f.trunk, N(t, 0, n));
+		p.add(P(.12, .18, r, 7), f.trunk, M(t, 0, n));
 		let a = new e.IcosahedronGeometry(1.7, 0);
-		p.add(a, i, N(t, r + .6, n, g() * 6, 1, .8 + g() * .3, 1)), p.add(new e.IcosahedronGeometry(1.1, 0), i, N(t + .6, r + 1.4, n - .3, g() * 6));
+		p.add(a, i, M(t, r + .6, n, g() * 6, 1, .8 + g() * .3, 1)), p.add(new e.IcosahedronGeometry(1.1, 0), i, M(t + .6, r + 1.4, n - .3, g() * 6));
 	}
 	function S(e, t, n) {
-		p.add(P(1.9, .55, 1.9), f.brick, N(e, 0, t, n)), p.add(P(1.6, .02, 1.6), f.soil, N(e, .55, t, n)), x(e, t, 3 + g()), b(e, t, n, .95, .95);
+		p.add(N(1.9, .55, 1.9), f.brick, M(e, 0, t, n)), p.add(N(1.6, .02, 1.6), f.soil, M(e, .55, t, n)), x(e, t, 3 + g()), b(e, t, n, .95, .95);
 	}
 	function C(e, t, n) {
-		p.add(P(1.8, .08, .5), f.wood, N(e, .42, t, n)), p.add(P(1.8, .45, .06), f.wood, N(e - Math.sin(n) * .24, .5, t - Math.cos(n) * .24, n));
-		for (let r of [-.75, .75]) p.add(P(.08, .42, .45), f.iron, N(e + Math.cos(n) * r, 0, t - Math.sin(n) * r, n));
+		p.add(N(1.8, .08, .5), f.wood, M(e, .42, t, n)), p.add(N(1.8, .45, .06), f.wood, M(e - Math.sin(n) * .24, .5, t - Math.cos(n) * .24, n));
+		for (let r of [-.75, .75]) p.add(N(.08, .42, .45), f.iron, M(e + Math.cos(n) * r, 0, t - Math.sin(n) * r, n));
 	}
 	let w = [];
 	function T(t, n, r) {
-		p.add(F(.07, .11, 4.6, 8), f.green, N(t, 0, n)), p.add(P(1.5, .08, .08), f.green, N(t, 4.5, n, r));
+		p.add(P(.07, .11, 4.6, 8), f.green, M(t, 0, n)), p.add(N(1.5, .08, .08), f.green, M(t, 4.5, n, r));
 		for (let i of [-.7, .7]) {
 			let a = t + Math.cos(r) * i, o = n - Math.sin(r) * i;
-			p.add(F(.03, .03, .25, 6), f.green, N(a, 4.55, o)), p.add(new e.SphereGeometry(.24, 12, 8), f.lamp, N(a, 5, o));
+			p.add(P(.03, .03, .25, 6), f.green, M(a, 4.55, o)), p.add(new e.SphereGeometry(.24, 12, 8), f.lamp, M(a, 5, o));
 		}
 		w.push([t, n]), y(t, n, .15);
 	}
 	function E(e, t) {
-		p.add(F(.24, .22, .85, 10), f.green, N(e, 0, t)), p.add(F(.27, .27, .06, 10), f.iron, N(e, .85, t)), y(e, t, .3);
+		p.add(P(.24, .22, .85, 10), f.green, M(e, 0, t)), p.add(P(.27, .27, .06, 10), f.iron, M(e, .85, t)), y(e, t, .3);
 	}
 	function D(e, t) {
-		p.add(F(.1, .12, .85, 8), f.iron, N(e, 0, t)), p.add(F(.11, .11, .08, 8), f.yellow, N(e, .7, t)), y(e, t, .13);
+		p.add(P(.1, .12, .85, 8), f.iron, M(e, 0, t)), p.add(P(.11, .11, .08, 8), f.yellow, M(e, .7, t)), y(e, t, .13);
 	}
 	function O(t, n, r, i = !1) {
-		p.add(P(2.6, 2.3, 1.6), f.green, N(t, 0, n, r)), p.add(P(3.4, .12, 2.4), f.green, N(t, 2.3, n, r));
+		p.add(N(2.6, 2.3, 1.6), f.green, M(t, 0, n, r)), p.add(N(3.4, .12, 2.4), f.green, M(t, 2.3, n, r));
 		let a = i ? f.floreria : f.diarios, o = i ? f.flowers : f.rack;
 		for (let i of [-1, 1]) {
 			let s = Math.sin(r) * i, c = Math.cos(r) * i, l = r + (i < 0 ? Math.PI : 0);
-			p.add(new e.PlaneGeometry(3.2, .42), a, N(t + s * 1.21, 2.62, n + c * 1.21, l)), p.add(new e.PlaneGeometry(3.2, .42), a, N(t + s * 1.19, 2.62, n + c * 1.19, l + Math.PI)), p.add(new e.PlaneGeometry(2.4, 1.2), o, N(t + s * .81, 1, n + c * .81, l));
+			p.add(new e.PlaneGeometry(3.2, .42), a, M(t + s * 1.21, 2.62, n + c * 1.21, l)), p.add(new e.PlaneGeometry(3.2, .42), a, M(t + s * 1.19, 2.62, n + c * 1.19, l + Math.PI)), p.add(new e.PlaneGeometry(2.4, 1.2), o, M(t + s * .81, 1, n + c * .81, l));
 		}
-		p.add(P(3.2, .42, .04), f.white, N(t, 2.42, n, r)), b(t, n, r, 1.4, .9);
+		p.add(N(3.2, .42, .04), f.white, M(t, 2.42, n, r)), b(t, n, r, 1.4, .9);
 	}
 	function k(t, n, r, i) {
 		for (let [e, i] of [
@@ -1162,24 +1167,24 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 			[1, .8]
 		]) {
 			let a = t + Math.cos(r) * e + Math.sin(r) * i, o = n - Math.sin(r) * e + Math.cos(r) * i;
-			p.add(F(.025, .025, 2.2, 5), f.iron, N(a, 0, o));
+			p.add(P(.025, .025, 2.2, 5), f.iron, M(a, 0, o));
 		}
 		let a = new e.PlaneGeometry(2.4, 2).rotateX(-Math.PI / 2 + .12);
-		p.add(a, i, N(t, 2.25, n, r)), p.add(P(1.9, .05, .9), f.wood, N(t, .75, n, r)), p.add(new e.PlaneGeometry(1.8, .8).rotateX(-Math.PI / 2), f.rack, N(t, .81, n, r)), b(t, n, r, 1, .5);
+		p.add(a, i, M(t, 2.25, n, r)), p.add(N(1.9, .05, .9), f.wood, M(t, .75, n, r)), p.add(new e.PlaneGeometry(1.8, .8).rotateX(-Math.PI / 2), f.rack, M(t, .81, n, r)), b(t, n, r, 1, .5);
 	}
-	function j(t, n, r) {
-		p.add(P(1.8, .95, .9), f.white, N(t, .25, n, r)), p.add(P(1.7, .08, .8), f.grill, N(t, 1.2, n, r)), p.add(P(1.4, .03, .6), f.ember, N(t, 1.22, n, r));
-		for (let i of [-.7, .7]) p.add(new e.CylinderGeometry(.25, .25, .08, 12).rotateX(Math.PI / 2).translate(0, .25, 0), f.iron, N(t + Math.cos(r) * i, 0, n - Math.sin(r) * i, r));
-		p.add(new e.PlaneGeometry(1.8, .4), f.choripan, N(t + Math.sin(r) * .46, .7, n + Math.cos(r) * .46, r)), p.add(new e.PlaneGeometry(1.8, .4), f.choripan, N(t - Math.sin(r) * .46, .7, n - Math.cos(r) * .46, r + Math.PI)), p.add(F(.03, .03, 2.4, 5), f.iron, N(t, 0, n)), p.add(new e.ConeGeometry(1.4, .5, 10, 1, !0).translate(0, 2.5, 0), f.tarpRed, N(t, 0, n));
-		for (let r = 0; r < 4; r++) p.add(new e.SphereGeometry(.25 + r * .12, 8, 6), f.smoke, N(t + r * .15, 1.5 + r * .35, n + r * .05));
+	function A(t, n, r) {
+		p.add(N(1.8, .95, .9), f.white, M(t, .25, n, r)), p.add(N(1.7, .08, .8), f.grill, M(t, 1.2, n, r)), p.add(N(1.4, .03, .6), f.ember, M(t, 1.22, n, r));
+		for (let i of [-.7, .7]) p.add(new e.CylinderGeometry(.25, .25, .08, 12).rotateX(Math.PI / 2).translate(0, .25, 0), f.iron, M(t + Math.cos(r) * i, 0, n - Math.sin(r) * i, r));
+		p.add(new e.PlaneGeometry(1.8, .4), f.choripan, M(t + Math.sin(r) * .46, .7, n + Math.cos(r) * .46, r)), p.add(new e.PlaneGeometry(1.8, .4), f.choripan, M(t - Math.sin(r) * .46, .7, n - Math.cos(r) * .46, r + Math.PI)), p.add(P(.03, .03, 2.4, 5), f.iron, M(t, 0, n)), p.add(new e.ConeGeometry(1.4, .5, 10, 1, !0).translate(0, 2.5, 0), f.tarpRed, M(t, 0, n));
+		for (let r = 0; r < 4; r++) p.add(new e.SphereGeometry(.25 + r * .12, 8, 6), f.smoke, M(t + r * .15, 1.5 + r * .35, n + r * .05));
 		b(t, n, r, .95, .5);
 	}
 	function te(t, n, r) {
-		for (let e = 0; e < 4; e++) p.add(F(.2 - e * .02, .22 - e * .02, r / 4 + .05, 8), f.palm, N(t + e * .05, e * r / 4, n));
+		for (let e = 0; e < 4; e++) p.add(P(.2 - e * .02, .22 - e * .02, r / 4 + .05, 8), f.palm, M(t + e * .05, e * r / 4, n));
 		for (let i = 0; i < 9; i++) {
 			let a = new e.PlaneGeometry(.7, 3.4, 1, 3), o = a.attributes.position;
 			for (let e = 0; e < o.count; e++) o.setZ(e, -((o.getY(e) + 1.7) ** 2) * .12);
-			a.translate(0, 1.7, 0).rotateX(-1), p.add(a, f.frond, N(t + .15, r, n, i / 9 * Math.PI * 2 + g() * .3));
+			a.translate(0, 1.7, 0).rotateX(-1), p.add(a, f.frond, M(t + .15, r, n, i / 9 * Math.PI * 2 + g() * .3));
 		}
 		y(t, n, .3);
 	}
@@ -1198,9 +1203,9 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 			]);
 		}
 	}
-	let M = new u(), I = new u(), oe = ([e, t]) => i.byKey.get(`${Math.round(e * 2)},${Math.round(t * 2)}`), L = 0;
-	for (let e of t.roads.filter(A)) {
-		let t = new ee(e.pts), n = [];
+	let re = new u(), ie = new u(), ce = ([e, t]) => i.byKey.get(`${Math.round(e * 2)},${Math.round(t * 2)}`), F = 0;
+	for (let e of t.roads.filter(ee)) {
+		let t = new j(e.pts), n = [];
 		for (let e = 5; e < t.len; e += 7) {
 			let [r, i, o, s] = t.at(e);
 			for (let e of [-1, 1]) {
@@ -1212,7 +1217,7 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 		n.sort((e, t) => e - t);
 		let r = Math.max(4, Math.min(8, n[Math.floor(n.length * .3)] ?? 4) - .2), i = [];
 		for (let n = 0; n < e.pts.length; n++) {
-			let a = oe(e.pts[n]);
+			let a = ce(e.pts[n]);
 			if (!a) continue;
 			let o = 0, s = 0, c = 0;
 			for (let [t, n] of a.links) if (n !== e && n.kind !== "footway" && n.kind !== "pedestrian" && n.w / 2 > o) {
@@ -1223,7 +1228,7 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 			o && (i.push({
 				s: t.d[n],
 				cw: o
-			}), ne(I, a.x, a.z, s, c, o, Math.min(2 * r - 1, 6)));
+			}), ne(ie, a.x, a.z, s, c, o, Math.min(2 * r - 1, 6)));
 		}
 		let s = [], c = {
 			s: 0,
@@ -1241,7 +1246,7 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 		for (let [e, n, i, a] of s) {
 			let s = t.sub(e, n);
 			if (!s) continue;
-			o(M, s, r * 2, .14, 1 / 6);
+			o(re, s, r * 2, .14, 1 / 6);
 			for (let [o, s] of [[e + .6, i], [n - .6, a]]) {
 				if (!s) continue;
 				let [e, n, i, a] = t.at(o);
@@ -1250,7 +1255,7 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 			let c = 0;
 			for (let r = e + 6; r < n - 5; r += 8, c++) {
 				let [i, a, o, s] = t.at(r), u = Math.atan2(-s, o), d = c % 4;
-				d === 0 || d === 2 ? S(i, a, u) : d === 1 ? L < 3 && n - e > 50 && c === 5 ? (O(i, a, u, L === 2), L++) : (C(i - s * .35, a + o * .35, u), C(i + s * .35, a - o * .35, u + Math.PI)) : (T(i, a, u + Math.PI / 2), E(i + o * 1.2 - s * .6, a + s * 1.2 + o * .6)), l.push([
+				d === 0 || d === 2 ? S(i, a, u) : d === 1 ? F < 3 && n - e > 50 && c === 5 ? (O(i, a, u, F === 2), F++) : (C(i - s * .35, a + o * .35, u), C(i + s * .35, a - o * .35, u + Math.PI)) : (T(i, a, u + Math.PI / 2), E(i + o * 1.2 - s * .6, a + s * 1.2 + o * .6)), l.push([
 					i,
 					a,
 					2.5
@@ -1258,7 +1263,7 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 			}
 		}
 	}
-	function R(t) {
+	function I(t) {
 		let n = (e, n) => [t.cx + t.ux * e - t.uz * n, t.cz + t.uz * e + t.ux * n], r = t.houseSide > 0 ? 1 : -1, o = r > 0 ? t.hi + 1.7 + 6.5 + 5.5 : t.lo - 1.7 - 6.5 - 5.5, s = null;
 		for (let e = o + r * 6; Math.abs(e - o) < 70; e += r) {
 			let [t, r] = n(0, e), a = i.nearest(t, r, 20);
@@ -1301,20 +1306,20 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 		];
 		for (let [e, t, r] of d) {
 			let [i, o] = n(e, u);
-			a.isBlocked(i, o, 1.3) || (t === "chori" ? j(i, o, c) : k(i, o, c, r), l.push([
+			a.isBlocked(i, o, 1.3) || (t === "chori" ? A(i, o, c) : k(i, o, c, r), l.push([
 				i,
 				o,
 				2.5
 			]));
 		}
 		let [g, _] = n(-8, s.v - r * .6);
-		p.add(F(.04, .04, 2.6, 6), f.iron, N(g, 0, _)), p.add(new e.PlaneGeometry(1.3, .26), f.taxi, N(g, 2.45, _, c)), p.add(new e.PlaneGeometry(1.3, .26), f.taxi, N(g, 2.45, _, c + Math.PI)), y(g, _, .1);
+		p.add(P(.04, .04, 2.6, 6), f.iron, M(g, 0, _)), p.add(new e.PlaneGeometry(1.3, .26), f.taxi, M(g, 2.45, _, c)), p.add(new e.PlaneGeometry(1.3, .26), f.taxi, M(g, 2.45, _, c + Math.PI)), y(g, _, .1);
 		let v = Math.abs(s.v - o) - 5;
 		if (v > 2) {
 			let t = new e.PlaneGeometry(60, v).rotateX(-Math.PI / 2), i = t.attributes.uv;
 			for (let e = 0; e < i.count; e++) i.setXY(e, i.getX(e) * 10, i.getY(e) * 3);
 			let [a, l] = n(0, (o + r * 5 + s.v - r * 3.2) / 2);
-			m.add(t, h, N(a, .14, l, c));
+			m.add(t, h, M(a, .14, l, c));
 		}
 		for (let e of [
 			-24,
@@ -1326,19 +1331,19 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 			a.isBlocked(t, r, 1) || (T(t, r, c), C(t + Math.sin(c) * 1.5, r + Math.cos(c) * 1.5, c));
 		}
 	}
-	let z = (t.specials || []).filter((e) => e.type === "station" && /quilmes|bernal/i.test(e.name || ""));
-	for (let e of z) R(e);
-	let B = [
+	let L = (t.specials || []).filter((e) => e.type === "station" && /quilmes|bernal/i.test(e.name || ""));
+	for (let e of L) I(e);
+	let R = [
 		0,
 		1,
 		2
 	].map((t) => new e.MeshStandardMaterial({
-		map: ae(t),
+		map: se(t),
 		roughness: 1
 	}));
-	function V(t, n, r) {
+	function z(t, n, r) {
 		let i = Math.cos(r), a = Math.sin(r), o = (e, r) => [t + i * e + a * r, n - a * e + i * r], s = new e.PlaneGeometry(9, 7).rotateX(-Math.PI / 2);
-		p.add(s, f.sand, N(t, .16, n, r));
+		p.add(s, f.sand, M(t, .16, n, r));
 		for (let [e, t, n, i] of [
 			[
 				0,
@@ -1366,48 +1371,48 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 			]
 		]) {
 			let [a, s] = o(e, t);
-			p.add(P(n, .3, i), f.concrete, N(a, 0, s, r));
+			p.add(N(n, .3, i), f.concrete, M(a, 0, s, r));
 		}
 		{
 			let [t, n] = o(-2, -1.5);
 			for (let o of [-1.7, 1.7]) for (let s of [-.25, .25]) {
 				let c = new e.CylinderGeometry(.05, .05, 2.6, 6).translate(0, 1.3, 0).rotateX(s);
-				p.add(c, f.red, N(t + i * o, 0, n - a * o, r));
+				p.add(c, f.red, M(t + i * o, 0, n - a * o, r));
 			}
-			p.add(new e.CylinderGeometry(.06, .06, 3.5, 6).rotateZ(Math.PI / 2).translate(0, 2.5, 0), f.red, N(t, 0, n, r));
+			p.add(new e.CylinderGeometry(.06, .06, 3.5, 6).rotateZ(Math.PI / 2).translate(0, 2.5, 0), f.red, M(t, 0, n, r));
 			for (let o of [-.8, .8]) {
-				for (let s of [-.22, .22]) p.add(new e.CylinderGeometry(.01, .01, 2, 4).translate(0, 1.5, 0), f.iron, N(t + i * (o + s), 0, n - a * (o + s), r));
-				p.add(P(.5, .05, .25), f.yellow, N(t + i * o, .45, n - a * o, r));
+				for (let s of [-.22, .22]) p.add(new e.CylinderGeometry(.01, .01, 2, 4).translate(0, 1.5, 0), f.iron, M(t + i * (o + s), 0, n - a * (o + s), r));
+				p.add(N(.5, .05, .25), f.yellow, M(t + i * o, .45, n - a * o, r));
 			}
 			b(t, n, r, 1.8, .5);
 		}
 		{
 			let [t, n] = o(2.5, -1.2);
-			p.add(P(.9, .06, .9), f.blue, N(t, 1.6, n, r));
+			p.add(N(.9, .06, .9), f.blue, M(t, 1.6, n, r));
 			for (let [e, r] of [
 				[-.4, -.4],
 				[.4, -.4],
 				[-.4, .4],
 				[.4, .4]
-			]) p.add(F(.04, .04, 1.6, 5), f.iron, N(t + i * e + a * r, 0, n - a * e + i * r));
+			]) p.add(P(.04, .04, 1.6, 5), f.iron, M(t + i * e + a * r, 0, n - a * e + i * r));
 			let s = new e.BoxGeometry(2.6, .06, .6).rotateZ(-.62);
-			p.add(s, f.yellow, N(t + i * 1.5, .8, n - a * 1.5, r));
-			for (let e = 0; e < 4; e++) p.add(P(.6, .04, .06), f.iron, N(t - i * .55, .35 + e * .38, n + a * .55, r));
+			p.add(s, f.yellow, M(t + i * 1.5, .8, n - a * 1.5, r));
+			for (let e = 0; e < 4; e++) p.add(N(.6, .04, .06), f.iron, M(t - i * .55, .35 + e * .38, n + a * .55, r));
 			b(t + i * .6, n - a * .6, r, 1.4, .5);
 		}
 		{
 			let [t, n] = o(0, 2.2);
-			p.add(P(.2, .5, .3), f.iron, N(t, 0, n, r)), p.add(new e.BoxGeometry(3.2, .08, .3).rotateZ(.14).translate(0, .55, 0), f.blue, N(t, 0, n, r)), b(t, n, r, 1.6, .25);
+			p.add(N(.2, .5, .3), f.iron, M(t, 0, n, r)), p.add(new e.BoxGeometry(3.2, .08, .3).rotateZ(.14).translate(0, .55, 0), f.blue, M(t, 0, n, r)), b(t, n, r, 1.6, .25);
 		}
 	}
-	function H(t, n, r) {
-		p.add(F(1.2, 1.4, .6, 16), f.concrete, N(t, 0, n)), p.add(F(.07, .12, 14, 8), f.white, N(t, .6, n)), p.add(new e.PlaneGeometry(3, 2).translate(1.5, 0, 0), f.flag, N(t, 13.4, n, r + .6)), y(t, n, 1.3), l.push([
+	function B(t, n, r) {
+		p.add(P(1.2, 1.4, .6, 16), f.concrete, M(t, 0, n)), p.add(P(.07, .12, 14, 8), f.white, M(t, .6, n)), p.add(new e.PlaneGeometry(3, 2).translate(1.5, 0, 0), f.flag, M(t, 13.4, n, r + .6)), y(t, n, 1.3), l.push([
 			t,
 			n,
 			3
 		]);
 	}
-	function U(t, { palms: n = !1, kids: r = !1 } = {}) {
+	function V(t, { palms: n = !1, kids: r = !1 } = {}) {
 		let i = t.box, o = (e, t) => [i.cx + i.ux * e - i.uz * t, i.cz + i.uz * e + i.ux * t], s = Math.atan2(-i.uz, i.ux), c = i.hu - 3, u = i.hv - 3, d = Math.atan2(u, c), m = [
 			0,
 			d,
@@ -1423,7 +1428,7 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 			let n = (m[t] + m[t + 1]) / 2, r = Math.min(2.6, h * (m[t + 1] - m[t]) * .3);
 			if (r < 1) continue;
 			let [i, a] = o(Math.cos(n) * h, Math.sin(n) * h);
-			p.add(new e.CircleGeometry(r, 20).rotateX(-Math.PI / 2), B[t % 3], N(i, .22, a)), p.add(new e.CylinderGeometry(r + .1, r + .15, .22, 20, 1, !0).translate(0, .11, 0), f.concrete, N(i, 0, a)), l.push([
+			p.add(new e.CircleGeometry(r, 20).rotateX(-Math.PI / 2), R[t % 3], M(i, .22, a)), p.add(new e.CylinderGeometry(r + .1, r + .15, .22, 20, 1, !0).translate(0, .11, 0), f.concrete, M(i, 0, a)), l.push([
 				i,
 				a,
 				r + .5
@@ -1449,14 +1454,14 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 		}
 		if (r) {
 			let [e, t] = o(-.68 * c, .5 * (u * .68 + 1.5));
-			V(e, t, s), l.push([
+			z(e, t, s), l.push([
 				e,
 				t,
 				6.5
 			]);
 		}
 		let [_, v] = o(c - 8, 4.5);
-		H(_, v, s);
+		B(_, v, s);
 		for (let e = -c + 6; e <= c - 6; e += 14) for (let t of [-u - 1.8, u + 1.8]) {
 			let [n, r] = o(e, t);
 			a.isBlocked(n, r, .4) || T(n, r, s);
@@ -1466,11 +1471,11 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 			a.isBlocked(n, r, .4) || T(n, r, s + Math.PI / 2);
 		}
 	}
-	let W = (e) => (t.specials || []).find((t) => t.type === "plaza" && e.test(t.name || ""));
-	W(/san mart/i) && U(W(/san mart/i), { palms: !0 }), W(/f[ée]lix bernal/i) && U(W(/f[ée]lix bernal/i), { kids: !0 });
-	let G = z.map((e) => [e.cx, e.cz]), K = /^(cafe|restaurant|pub|bar|ice_cream|fast_food)$/, q = new e.SphereGeometry(.06, 6, 4);
+	let H = (e) => (t.specials || []).find((t) => t.type === "plaza" && e.test(t.name || ""));
+	H(/san mart/i) && V(H(/san mart/i), { palms: !0 }), H(/f[ée]lix bernal/i) && V(H(/f[ée]lix bernal/i), { kids: !0 });
+	let U = L.map((e) => [e.cx, e.cz]), W = /^(cafe|restaurant|pub|bar|ice_cream|fast_food)$/, G = new e.SphereGeometry(.06, 6, 4);
 	for (let n of t.shops || []) {
-		if (!K.test(n.kind) || !G.some(([e, t]) => Math.hypot(n.x - e, n.z - t) < 650)) continue;
+		if (!W.test(n.kind) || !U.some(([e, t]) => Math.hypot(n.x - e, n.z - t) < 650)) continue;
 		let t = i.nearest(n.x, n.z, 35);
 		if (!t || t.seg.road.kind === "footway" || t.seg.road.kind === "pedestrian" || t.seg.road.pasillo) continue;
 		let { a: r, b: o, road: s } = t.seg, c = Math.hypot(o.x - r.x, o.z - r.z) || 1, u = (o.x - r.x) / c, d = (o.z - r.z) / c, m = Math.max(0, Math.min(c, (n.x - r.x) * u + (n.z - r.z) * d)), h = (n.x - r.x) * -d + (n.z - r.z) * u > 0 ? 1 : -1, g = s.w / 2 + 1.5, _ = Math.atan2(-d, u), v = /pub|bar/.test(n.kind), b = [];
@@ -1483,17 +1488,17 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 			if (n < 4 || n > c - 4) continue;
 			let i = r.x + u * n - d * g * h, o = r.z + d * n + u * g * h;
 			if (!a.isBlocked(i, o, .9)) {
-				p.add(F(.05, .05, .72, 6), f.iron, N(i, 0, o)), p.add(F(.42, .42, .04, 14), f.tableTop, N(i, .72, o));
+				p.add(P(.05, .05, .72, 6), f.iron, M(i, 0, o)), p.add(P(.42, .42, .04, 14), f.tableTop, M(i, .72, o));
 				for (let e of [-.65, .65]) {
 					let t = i + u * e, n = o + d * e;
-					p.add(P(.42, .04, .42), f.chair, N(t, .45, n, _)), p.add(P(.04, .45, .42), f.chair, N(t + u * Math.sign(e) * .2, .45, n + d * Math.sign(e) * .2, _));
-					for (let e of [-.18, .18]) p.add(F(.015, .015, .45, 4), f.iron, N(t + u * e, 0, n + d * e));
+					p.add(N(.42, .04, .42), f.chair, M(t, .45, n, _)), p.add(N(.04, .45, .42), f.chair, M(t + u * Math.sign(e) * .2, .45, n + d * Math.sign(e) * .2, _));
+					for (let e of [-.18, .18]) p.add(P(.015, .015, .45, 4), f.iron, M(t + u * e, 0, n + d * e));
 				}
-				v || (p.add(F(.025, .025, 2.3, 5), f.white, N(i, 0, o)), p.add(new e.ConeGeometry(1.25, .45, 8, 1, !0).translate(0, 2.35, 0), [
+				v || (p.add(P(.025, .025, 2.3, 5), f.white, M(i, 0, o)), p.add(new e.ConeGeometry(1.25, .45, 8, 1, !0).translate(0, 2.35, 0), [
 					f.tarpRed,
 					f.tarpGreen,
 					f.tarpBlue
-				][b.length % 3], N(i, 0, o))), y(i, o, .75), l.push([
+				][b.length % 3], M(i, 0, o))), y(i, o, .75), l.push([
 					i,
 					o,
 					1.5
@@ -1502,15 +1507,15 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 		}
 		if (v && b.length >= 2) {
 			let [e, t] = [b[0], b[b.length - 1]], n = [e[0] - u * 1.4, e[1] - d * 1.4], r = [t[0] + u * 1.4, t[1] + d * 1.4];
-			for (let e of [n, r]) p.add(F(.03, .03, 2.9, 5), f.iron, N(e[0], 0, e[1]));
+			for (let e of [n, r]) p.add(P(.03, .03, 2.9, 5), f.iron, M(e[0], 0, e[1]));
 			for (let e = 0; e <= 12; e++) {
 				let t = e / 12;
-				p.add(q, f.bulb, N(n[0] + (r[0] - n[0]) * t, 2.85 - Math.sin(t * Math.PI) * .35, n[1] + (r[1] - n[1]) * t));
+				p.add(G, f.bulb, M(n[0] + (r[0] - n[0]) * t, 2.85 - Math.sin(t * Math.PI) * .35, n[1] + (r[1] - n[1]) * t));
 			}
 		}
 	}
 	for (let t of i.nodes) {
-		if (t.degree < 3 || !G.some(([e, n]) => Math.hypot(t.x - e, t.z - n) < 500) || (t.id * 2654435761 >>> 0) % 5 > 1) continue;
+		if (t.degree < 3 || !U.some(([e, n]) => Math.hypot(t.x - e, t.z - n) < 500) || (t.id * 2654435761 >>> 0) % 5 > 1) continue;
 		let n = [...t.links].filter(([, e]) => e.kind === "residential" || e.kind === "secondary" || e.kind === "tertiary");
 		if (!n.length) continue;
 		let r = 0;
@@ -1520,25 +1525,25 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 		let u = (i.x - t.x) / s, d = (i.z - t.z) / s, m = o.w / 2 + 1.1, h = t.x + u * c - d * m, g = t.z + d * c + u * m;
 		if (a.isBlocked(h, g, 1)) continue;
 		let _ = Math.atan2(-d, u);
-		p.add(P(1.8, 1.15, 1.2), f.dumpster, N(h, .12, g, _)), p.add(new e.BoxGeometry(1.86, .08, 1.3).rotateX(-.1).translate(0, 1.32, 0), f.dumpsterLid, N(h, 0, g, _));
+		p.add(N(1.8, 1.15, 1.2), f.dumpster, M(h, .12, g, _)), p.add(new e.BoxGeometry(1.86, .08, 1.3).rotateX(-.1).translate(0, 1.32, 0), f.dumpsterLid, M(h, 0, g, _));
 		for (let [e, t] of [
 			[-.75, -.45],
 			[.75, -.45],
 			[-.75, .45],
 			[.75, .45]
-		]) p.add(F(.07, .07, .12, 6), f.iron, N(h + Math.cos(_) * e + Math.sin(_) * t, 0, g - Math.sin(_) * e + Math.cos(_) * t));
+		]) p.add(P(.07, .07, .12, 6), f.iron, M(h + Math.cos(_) * e + Math.sin(_) * t, 0, g - Math.sin(_) * e + Math.cos(_) * t));
 		b(h, g, _, .95, .65), l.push([
 			h,
 			g,
 			1.8
 		]);
 	}
-	if (M.pos.length) {
-		let t = new e.Mesh(M.geometry(), h);
+	if (re.pos.length) {
+		let t = new e.Mesh(re.geometry(), h);
 		t.receiveShadow = !0, t.renderOrder = -6.5, r.add(t);
 	}
-	if (I.pos.length) {
-		let t = new e.Mesh(I.geometry(), s(null, 16777215, { vertexColors: !0 }));
+	if (ie.pos.length) {
+		let t = new e.Mesh(ie.geometry(), s(null, 16777215, { vertexColors: !0 }));
 		t.renderOrder = -5.8, r.add(t);
 	}
 	return m.build(r, {
@@ -1553,7 +1558,7 @@ function I(t, { root: r, graph: i, collision: a, ribbon: o, flatMat: s, keepOut:
 }
 //#endregion
 //#region src/world/roadGraph.js
-var oe = class {
+var F = class {
 	constructor(e) {
 		this.nodes = [], this.edges = [], this.byKey = /* @__PURE__ */ new Map(), this.segIndex = new o(40);
 		for (let t of e) {
@@ -1680,29 +1685,29 @@ var oe = class {
 		}
 		return this.edges[0];
 	}
-}, L = 256;
-function R(e = L, t = L) {
+}, I = 256;
+function L(e = I, t = I) {
 	let n = document.createElement("canvas");
 	return n.width = e, n.height = t, [n, n.getContext("2d", { willReadFrequently: !0 })];
 }
-function z(e, t, n, r, i, a = .08, o = 0, s = 0) {
+function R(e, t, n, r, i, a = .08, o = 0, s = 0) {
 	for (let c = 0; c < r; c++) {
 		let r = Math.floor(i() * 255);
 		e.fillStyle = `rgba(${r},${r},${r},${a})`, e.fillRect(o + i() * t, s + i() * n, 1 + i() * 3, 1 + i() * 3);
 	}
 }
-function B(e, t, n, r, i, a) {
+function z(e, t, n, r, i, a) {
 	let o = e.createRadialGradient(n, r, 0, n, r, i);
 	o.addColorStop(0, a), o.addColorStop(1, "rgba(0,0,0,0)"), e.fillStyle = o, e.beginPath(), e.ellipse(n, r, i, i * (.5 + t() * .8), t() * 3, 0, Math.PI * 2), e.fill();
 }
-function V(e, t, n, r, i = 6) {
-	for (let a = 0; a < i; a++) B(e, t, t() * n, r - t() * 20, 20 + t() * 40, `rgba(70,60,45,${.12 + t() * .12})`);
+function B(e, t, n, r, i = 6) {
+	for (let a = 0; a < i; a++) z(e, t, t() * n, r - t() * 20, 20 + t() * 40, `rgba(70,60,45,${.12 + t() * .12})`);
 	for (let a = 0; a < i * 2; a++) {
 		let i = t() * n, a = t() * r, o = 10 + t() * 40, s = e.createLinearGradient(i, a, i, a + o);
 		s.addColorStop(0, "rgba(50,45,35,0.18)"), s.addColorStop(1, "rgba(50,45,35,0)"), e.fillStyle = s, e.fillRect(i, a, 2 + t() * 4, o);
 	}
 }
-function H(e, t, n, r, i = 4) {
+function V(e, t, n, r, i = 4) {
 	e.strokeStyle = "rgba(40,35,30,0.35)", e.lineWidth = 1;
 	for (let a = 0; a < i; a++) {
 		let i = t() * n, a = t() * r;
@@ -1711,7 +1716,7 @@ function H(e, t, n, r, i = 4) {
 		e.stroke();
 	}
 }
-function U(e, t, n, r, i, a, o = 14, s = 8) {
+function H(e, t, n, r, i, a, o = 14, s = 8) {
 	e.fillStyle = "#9d968a", e.fillRect(n, r, i, a);
 	for (let c = r; c < r + a; c += s) {
 		let a = (c - r) / s % 2 ? o / 2 : 0;
@@ -1726,10 +1731,10 @@ function U(e, t, n, r, i, a, o = 14, s = 8) {
 	e.fillStyle = "rgba(160,154,142,0.7)";
 	for (let o = 0; o < i * a / 60; o++) e.fillRect(n + t() * i, r + Math.floor(t() * (a / s)) * s - 1, 2 + t() * 5, 2 + t() * 1.5);
 }
-function W(e, t, n, r, i, a) {
-	e.fillStyle = `hsl(40,${4 + t() * 5}%,${58 + t() * 8}%)`, e.fillRect(n, r, i, a), z(e, i, a, i * a / 12, t, .14, n, r), e.fillStyle = "rgba(0,0,0,0.12)", e.fillRect(n, r + a - 2, i, 2);
+function U(e, t, n, r, i, a) {
+	e.fillStyle = `hsl(40,${4 + t() * 5}%,${58 + t() * 8}%)`, e.fillRect(n, r, i, a), R(e, i, a, i * a / 12, t, .14, n, r), e.fillStyle = "rgba(0,0,0,0.12)", e.fillRect(n, r + a - 2, i, 2);
 }
-function G(e, t, n, r, i, a, o) {
+function W(e, t, n, r, i, a, o) {
 	if (a) e.fillStyle = o() < .8 ? `hsl(${34 + o() * 12},90%,${52 + o() * 15}%)` : `hsl(200,55%,${60 + o() * 15}%)`;
 	else {
 		let a = e.createLinearGradient(t, n, t + r, n + i);
@@ -1737,21 +1742,21 @@ function G(e, t, n, r, i, a, o) {
 	}
 	e.fillRect(t, n, r, i);
 }
-function K(e, t, n, r, i, a = 7, o = "#1b1b1b") {
+function G(e, t, n, r, i, a = 7, o = "#1b1b1b") {
 	e.fillStyle = o;
 	for (let o = t + a / 2; o < t + r; o += a) e.fillRect(o, n, 2, i);
 	e.fillRect(t, n, r, 2), e.fillRect(t, n + i - 2, r, 2), e.fillRect(t, n + i * .45, r, 2);
 }
-function q(e, t, n, r, i, a, o, s = {}) {
-	if (e.fillStyle = "rgba(0,0,0,0.25)", e.fillRect(r - 3, i - 3, a + 6, o + 7), e.fillStyle = "rgba(255,255,255,0.35)", e.fillRect(r - 4, i + o + 1, a + 8, 3), G(e, r, i, a, o, !1, n), t && n() < .5 && G(t, r, i, a, o, !0, n), s.persiana ?? n() < .6) {
+function K(e, t, n, r, i, a, o, s = {}) {
+	if (e.fillStyle = "rgba(0,0,0,0.25)", e.fillRect(r - 3, i - 3, a + 6, o + 7), e.fillStyle = "rgba(255,255,255,0.35)", e.fillRect(r - 4, i + o + 1, a + 8, 3), W(e, r, i, a, o, !1, n), t && n() < .5 && W(t, r, i, a, o, !0, n), s.persiana ?? n() < .6) {
 		let s = o * (.25 + n() * .75);
 		e.fillStyle = n() < .5 ? "#b9b2a2" : "#7d6a52", e.fillRect(r, i, a, s), e.fillStyle = "rgba(0,0,0,0.25)";
 		for (let t = i; t < i + s; t += 3) e.fillRect(r, t, a, 1);
 		t && (t.fillStyle = "#000", t.fillRect(r, i, a, s));
 	}
-	(s.reja ?? !0) && K(e, r - 1, i - 1, a + 2, o + 2, 6 + n() * 3);
+	(s.reja ?? !0) && G(e, r - 1, i - 1, a + 2, o + 2, 6 + n() * 3);
 }
-function J(e, t, n, r, i, a, o) {
+function le(e, t, n, r, i, a, o) {
 	let s = n();
 	if (e.fillStyle = "rgba(0,0,0,0.3)", e.fillRect(r - 3, i - 3, a + 6, o + 3), s < .45) e.fillStyle = `hsl(${22 + n() * 10},${35 + n() * 20}%,${22 + n() * 12}%)`, e.fillRect(r, i, a, o), e.strokeStyle = "rgba(0,0,0,0.35)", e.lineWidth = 2, e.strokeRect(r + 5, i + 6, a - 10, o * .4), e.strokeRect(r + 5, i + o * .52, a - 10, o * .4);
 	else {
@@ -1761,12 +1766,12 @@ function J(e, t, n, r, i, a, o) {
 			"#4a3b2c",
 			"#34404c",
 			"#6b6e70"
-		][Math.floor(n() * 5)], e.fillRect(r, i, a, o), G(e, r + 6, i + 8, a - 12, o * .3, !1, n), K(e, r + 6, i + 8, a - 12, o * .3, 5), e.fillStyle = "rgba(255,255,255,0.1)";
+		][Math.floor(n() * 5)], e.fillRect(r, i, a, o), W(e, r + 6, i + 8, a - 12, o * .3, !1, n), G(e, r + 6, i + 8, a - 12, o * .3, 5), e.fillStyle = "rgba(255,255,255,0.1)";
 		for (let t = i + o * .45; t < i + o; t += 5) e.fillRect(r, t, a, 1);
 	}
 	e.fillStyle = "#c9b27a", e.fillRect(r + a - 8, i + o * .5, 4, 3), e.fillStyle = "#ddd", e.fillRect(r + a / 2 - 3, i - 12, 6, 5), t && (t.fillStyle = "#ffd890", t.fillRect(r + a / 2 - 4, i - 13, 8, 7));
 }
-function se(e, t, n, r, i, a, o = t() < .4) {
+function ue(e, t, n, r, i, a, o = t() < .4) {
 	if (e.fillStyle = "rgba(0,0,0,0.3)", e.fillRect(n - 3, r - 3, i + 6, a + 3), o) {
 		e.fillStyle = "#8e9296", e.fillRect(n, r, i, a), e.fillStyle = "rgba(0,0,0,0.28)";
 		for (let t = r; t < r + a; t += 4) e.fillRect(n, t, i, 1.5);
@@ -1782,22 +1787,22 @@ function se(e, t, n, r, i, a, o = t() < .4) {
 		for (let t = n + 3; t < n + i; t += 6) e.fillRect(t, r, 2, a);
 		e.fillStyle = "rgba(0,0,0,0.3)", e.fillRect(n + i / 2 - 1, r, 2, a);
 	}
-	for (let o = 0; o < 6; o++) B(e, t, n + t() * i, r + a - t() * 12, 6 + t() * 10, "rgba(120,70,30,0.3)");
+	for (let o = 0; o < 6; o++) z(e, t, n + t() * i, r + a - t() * 12, 6 + t() * 10, "rgba(120,70,30,0.3)");
 }
-function ce(e, t, n, r, i, a) {
+function de(e, t, n, r, i, a) {
 	e.lineCap = "round", e.lineJoin = "round", e.strokeStyle = `hsl(${t() * 360},${60 + t() * 30}%,${35 + t() * 25}%)`, e.lineWidth = 2 + t() * 4, e.beginPath();
 	let o = n, s = r + a / 2;
 	e.moveTo(o, s);
 	for (let n = 0; n < 8; n++) o += i / 8, e.quadraticCurveTo(o - i / 16, r + t() * a, o, r + t() * a);
 	e.stroke();
 }
-function le(e, t, n) {
-	e.fillStyle = "#ece7dc", e.fillRect(0, 0, L, L), z(e, L, L, 4e3, t, .06), W(e, t, 0, 0, L, 10), V(e, t, L, L, 4), H(e, t, L, L, 3);
-	let r = e.createLinearGradient(0, 216, 0, L);
-	if (r.addColorStop(0, "rgba(90,75,50,0)"), r.addColorStop(1, "rgba(90,75,50,0.4)"), e.fillStyle = r, e.fillRect(0, 216, L, 40), n >= 1) for (let n = 0; n < 2; n++) ce(e, t, t() * 180, 110 + t() * 90, 40 + t() * 60, 25 + t() * 25);
-	n >= 2 && (e.font = `bold ${26 + t() * 12}px Impact, Arial Black, sans-serif`, e.textAlign = "center", e.fillStyle = `hsl(${t() < .5 ? 210 : t() * 360},65%,${30 + t() * 20}%)`, e.fillText(ue[Math.floor(t() * ue.length)], L / 2 + (t() - .5) * 60, 140 + t() * 50, 226));
+function fe(e, t, n) {
+	e.fillStyle = "#ece7dc", e.fillRect(0, 0, I, I), R(e, I, I, 4e3, t, .06), U(e, t, 0, 0, I, 10), B(e, t, I, I, 4), V(e, t, I, I, 3);
+	let r = e.createLinearGradient(0, 216, 0, I);
+	if (r.addColorStop(0, "rgba(90,75,50,0)"), r.addColorStop(1, "rgba(90,75,50,0.4)"), e.fillStyle = r, e.fillRect(0, 216, I, 40), n >= 1) for (let n = 0; n < 2; n++) de(e, t, t() * 180, 110 + t() * 90, 40 + t() * 60, 25 + t() * 25);
+	n >= 2 && (e.font = `bold ${26 + t() * 12}px Impact, Arial Black, sans-serif`, e.textAlign = "center", e.fillStyle = `hsl(${t() < .5 ? 210 : t() * 360},65%,${30 + t() * 20}%)`, e.fillText(pe[Math.floor(t() * pe.length)], I / 2 + (t() - .5) * 60, 140 + t() * 50, 226));
 }
-var ue = [
+var pe = [
 	"QUILMES",
 	"CERVECERO",
 	"AGUANTE QAC",
@@ -1809,21 +1814,21 @@ var ue = [
 	"MATE",
 	"ARGENTINO"
 ];
-function de(e, t) {
+function me(e, t) {
 	e.strokeStyle = t, e.lineWidth = 10, e.strokeRect(5, 5, 246, 246);
 }
-function fe(e, t, n, r) {
+function he(e, t, n, r) {
 	let i = n() < .6 ? "#c7cacc" : "#f2f2ef";
-	e.fillStyle = i, e.fillRect(0, 0, L, L), t.fillStyle = "#000", t.fillRect(0, 0, L, L);
+	e.fillStyle = i, e.fillRect(0, 0, I, I), t.fillStyle = "#000", t.fillRect(0, 0, I, I);
 	let a = [[
 		14,
 		14,
-		L / 2 - 18,
+		I / 2 - 18,
 		228
 	], [
 		132,
 		14,
-		L / 2 - 18,
+		I / 2 - 18,
 		228
 	]];
 	for (let [n, i, o, s] of a) {
@@ -1848,39 +1853,39 @@ function fe(e, t, n, r) {
 		for (let t = 10; t < 10 + r; t += 7) e.fillStyle = "rgba(0,0,0,0.18)", e.fillRect(10, t, 236, 1.5), e.fillStyle = "rgba(255,255,255,0.25)", e.fillRect(10, t + 2, 236, 1);
 		t.fillStyle = "#000", t.fillRect(10, 10, 236, r);
 	}
-	e.fillStyle = i, e.fillRect(L / 2 - 6, 8, 12, 240), e.fillStyle = "rgba(0,0,0,0.3)", e.fillRect(134, 8, 2, 240), e.fillRect(12, 240, 232, 3), e.strokeStyle = "rgba(0,0,0,0.35)", e.lineWidth = 3, e.strokeRect(2, 2, 252, 252);
+	e.fillStyle = i, e.fillRect(I / 2 - 6, 8, 12, 240), e.fillStyle = "rgba(0,0,0,0.3)", e.fillRect(134, 8, 2, 240), e.fillRect(12, 240, 232, 3), e.strokeStyle = "rgba(0,0,0,0.35)", e.lineWidth = 3, e.strokeRect(2, 2, 252, 252);
 }
-function pe(e, t, n, r, i, a) {
-	e.fillStyle = "#ddd5c6", e.fillRect(0, 0, L, L), e.fillStyle = n, e.fillRect(8, 30, 240, 196), e.fillStyle = r, e.textAlign = "center", e.textBaseline = "middle", e.font = "bold 54px Impact, Arial Black, sans-serif", e.fillText(i, L / 2, 105, 226), e.font = "bold 22px Arial, sans-serif", e.fillText(a, L / 2, 165, 226), e.fillStyle = "rgba(235,228,214,0.35)", e.fillRect(0, 0, L, L);
+function ge(e, t, n, r, i, a) {
+	e.fillStyle = "#ddd5c6", e.fillRect(0, 0, I, I), e.fillStyle = n, e.fillRect(8, 30, 240, 196), e.fillStyle = r, e.textAlign = "center", e.textBaseline = "middle", e.font = "bold 54px Impact, Arial Black, sans-serif", e.fillText(i, I / 2, 105, 226), e.font = "bold 22px Arial, sans-serif", e.fillText(a, I / 2, 165, 226), e.fillStyle = "rgba(235,228,214,0.35)", e.fillRect(0, 0, I, I);
 	for (let n = 0; n < 40; n++) {
 		e.fillStyle = `rgba(221,213,198,${.5 + t() * .5})`;
-		let n = t() < .5 ? t() * 30 : L - t() * 30;
+		let n = t() < .5 ? t() * 30 : I - t() * 30;
 		e.fillRect(n, 30 + t() * 196, 4 + t() * 12, 3 + t() * 10);
 	}
-	z(e, L, L, 3e3, t, .08), V(e, t, L, L, 3);
+	R(e, I, I, 3e3, t, .08), B(e, t, I, I, 3);
 }
-var me = {
+var _e = {
 	medianera(e, t, n) {
-		e.fillStyle = "#e6dfd2", e.fillRect(0, 0, L, L);
-		for (let t = 0; t < 5; t++) e.fillStyle = `rgba(${200 + n() * 40},${190 + n() * 40},${170 + n() * 40},0.5)`, e.fillRect(n() * L, n() * L, 30 + n() * 80, 20 + n() * 60);
-		z(e, L, L, 5e3, n, .07), V(e, n, L, L, 4);
-		for (let t = 0; t < 2; t++) B(e, n, n() * L, n() * L * .6, 25 + n() * 30, "rgba(90,85,70,0.1)");
-		H(e, n, L, L, 4);
+		e.fillStyle = "#e6dfd2", e.fillRect(0, 0, I, I);
+		for (let t = 0; t < 5; t++) e.fillStyle = `rgba(${200 + n() * 40},${190 + n() * 40},${170 + n() * 40},0.5)`, e.fillRect(n() * I, n() * I, 30 + n() * 80, 20 + n() * 60);
+		R(e, I, I, 5e3, n, .07), B(e, n, I, I, 4);
+		for (let t = 0; t < 2; t++) z(e, n, n() * I, n() * I * .6, 25 + n() * 30, "rgba(90,85,70,0.1)");
+		V(e, n, I, I, 4);
 		let r = 40 + n() * 156, i = 40 + n() * 156;
 		e.save(), e.beginPath(), e.moveTo(r, i);
 		for (let t = 0; t < 9; t++) e.lineTo(r + (n() - .3) * 40, i + (n() - .3) * 24);
-		e.closePath(), e.clip(), U(e, n, r - 20, i - 12, 70, 50), e.restore(), e.fillStyle = "rgba(0,0,0,0.1)", e.fillRect(0, 0, L, 4);
+		e.closePath(), e.clip(), H(e, n, r - 20, i - 12, 70, 50), e.restore(), e.fillStyle = "rgba(0,0,0,0.1)", e.fillRect(0, 0, I, 4);
 	},
 	medianeraLadrillo(e, t, n) {
-		U(e, n, 0, 0, L, L);
-		for (let t of [0, L / 2]) W(e, n, 0, t, L, 9);
-		for (let t of [0, L / 2]) W(e, n, t, 0, 9, L);
-		V(e, n, L, L, 4);
+		H(e, n, 0, 0, I, I);
+		for (let t of [0, I / 2]) U(e, n, 0, t, I, 9);
+		for (let t of [0, I / 2]) U(e, n, t, 0, 9, I);
+		B(e, n, I, I, 4);
 	},
 	hueco(e, t, n) {
-		U(e, n, 0, 0, L, L);
-		for (let t of [0, L / 2]) W(e, n, 0, t, L, 10);
-		for (let t of [0, L / 2]) W(e, n, t - 1, 0, 10, L);
+		H(e, n, 0, 0, I, I);
+		for (let t of [0, I / 2]) U(e, n, 0, t, I, 10);
+		for (let t of [0, I / 2]) U(e, n, t - 1, 0, 10, I);
 		for (let r = 0; r < 2; r++) for (let i = 0; i < 2; i++) {
 			let a = i * 128, o = r * 128, s = n();
 			if (r === 1 && i === 0) {
@@ -1891,27 +1896,27 @@ var me = {
 					"#7b7f82"
 				][Math.floor(n() * 4)], e.fillRect(a + 40, o + 36, 38, 82), e.fillStyle = "rgba(0,0,0,0.25)";
 				for (let t = a + 42; t < a + 78; t += 5) e.fillRect(t, o + 36, 1.5, 82);
-				B(e, n, a + 60, o + 112, 16, "rgba(120,70,30,0.35)");
+				z(e, n, a + 60, o + 112, 16, "rgba(120,70,30,0.35)");
 				continue;
 			}
 			if (s < .15) continue;
 			let c = a + 34 + n() * 20, l = o + 34, u = 40 + n() * 14, d = 36 + n() * 8;
-			if (W(e, n, c - 4, l - 5, u + 8, 5), s < .3) {
+			if (U(e, n, c - 4, l - 5, u + 8, 5), s < .3) {
 				e.fillStyle = n() < .5 ? "#2f5f9e" : `hsl(${n() * 360},40%,40%)`, e.fillRect(c, l, u, d), e.fillStyle = "rgba(0,0,0,0.25)";
 				for (let t = 0; t < 4; t++) e.fillRect(c + n() * u, l, 1.5, d);
-			} else G(e, c, l, u, d, !1, n), n() < .45 && G(t, c, l, u, d, !0, n), e.strokeStyle = s < .7 ? "#b8bcbf" : "#2a2a2a", e.lineWidth = 3, e.strokeRect(c, l, u, d), e.beginPath(), e.moveTo(c + u / 2, l), e.lineTo(c + u / 2, l + d), e.stroke(), n() < .5 && K(e, c, l, u, d, 7);
+			} else W(e, c, l, u, d, !1, n), n() < .45 && W(t, c, l, u, d, !0, n), e.strokeStyle = s < .7 ? "#b8bcbf" : "#2a2a2a", e.lineWidth = 3, e.strokeRect(c, l, u, d), e.beginPath(), e.moveTo(c + u / 2, l), e.lineTo(c + u / 2, l + d), e.stroke(), n() < .5 && G(e, c, l, u, d, 7);
 		}
-		V(e, n, L, L, 4);
+		B(e, n, I, I, 4);
 	},
 	villa(e, t, n) {
-		e.fillStyle = "#ece8e0", e.fillRect(0, 0, L, L), z(e, L, L, 6e3, n, .1);
+		e.fillStyle = "#ece8e0", e.fillRect(0, 0, I, I), R(e, I, I, 6e3, n, .1);
 		for (let t = 0; t < 4; t++) {
 			let t = n() * 196, r = n() * 206, i = 25 + n() * 45, a = 15 + n() * 30;
 			e.save(), e.beginPath(), e.moveTo(t, r + a * n());
 			for (let o = 0; o < 7; o++) e.lineTo(t + i * n(), r + a * n());
-			e.closePath(), e.clip(), U(e, n, t, r, i, a), e.restore();
+			e.closePath(), e.clip(), H(e, n, t, r, i, a), e.restore();
 		}
-		for (let t of [L / 2 - 8, 248]) e.fillStyle = "rgba(0,0,0,0.12)", e.fillRect(0, t, L, 8);
+		for (let t of [I / 2 - 8, 248]) e.fillStyle = "rgba(0,0,0,0.12)", e.fillRect(0, t, I, 8);
 		for (let r = 0; r < 2; r++) for (let i = 0; i < 2; i++) {
 			let a = i * 128, o = r * 128;
 			if (r === 1 && i === 1) {
@@ -1924,34 +1929,34 @@ var me = {
 				for (let t = o + 44; t < o + 120; t += 6) e.fillRect(a + 44, t, 38, 1);
 				continue;
 			}
-			n() < .2 || q(e, t, n, a + 36 + n() * 20, o + 38, 40 + n() * 10, 36, { persiana: n() < .3 });
+			n() < .2 || K(e, t, n, a + 36 + n() * 20, o + 38, 40 + n() * 10, 36, { persiana: n() < .3 });
 		}
-		for (let t of [L / 2, L]) {
+		for (let t of [I / 2, I]) {
 			let n = e.createLinearGradient(0, t - 26, 0, t);
-			n.addColorStop(0, "rgba(90,70,45,0)"), n.addColorStop(1, "rgba(90,70,45,0.45)"), e.fillStyle = n, e.fillRect(0, t - 26, L, 26);
+			n.addColorStop(0, "rgba(90,70,45,0)"), n.addColorStop(1, "rgba(90,70,45,0.45)"), e.fillStyle = n, e.fillRect(0, t - 26, I, 26);
 		}
-		V(e, n, L, L, 3);
+		B(e, n, I, I, 3);
 	},
-	muro0: (e, t, n) => le(e, n, 2),
-	muro1: (e, t, n) => le(e, n, 1),
-	muro2: (e, t, n) => le(e, n, 0),
+	muro0: (e, t, n) => fe(e, n, 2),
+	muro1: (e, t, n) => fe(e, n, 1),
+	muro2: (e, t, n) => fe(e, n, 0),
 	revoque(e, t, n) {
-		e.fillStyle = "#efe9de", e.fillRect(0, 0, L, L);
-		for (let t = 0; t < 6; t++) B(e, n, n() * L, n() * L, 30 + n() * 60, `rgba(${n() < .5 ? "255,255,255" : "180,170,150"},0.12)`);
-		z(e, L, L, 7e3, n, .05);
+		e.fillStyle = "#efe9de", e.fillRect(0, 0, I, I);
+		for (let t = 0; t < 6; t++) z(e, n, n() * I, n() * I, 30 + n() * 60, `rgba(${n() < .5 ? "255,255,255" : "180,170,150"},0.12)`);
+		R(e, I, I, 7e3, n, .05);
 		for (let t = 0; t < 4; t++) {
-			let t = n() * L, r = 20 + n() * 50, i = e.createLinearGradient(0, L * .3, 0, L * .3 + r);
-			i.addColorStop(0, "rgba(60,55,45,0.1)"), i.addColorStop(1, "rgba(60,55,45,0)"), e.fillStyle = i, e.fillRect(t, L * .3, 2 + n() * 3, r);
+			let t = n() * I, r = 20 + n() * 50, i = e.createLinearGradient(0, I * .3, 0, I * .3 + r);
+			i.addColorStop(0, "rgba(60,55,45,0.1)"), i.addColorStop(1, "rgba(60,55,45,0)"), e.fillStyle = i, e.fillRect(t, I * .3, 2 + n() * 3, r);
 		}
-		let r = e.createLinearGradient(0, 226, 0, L);
-		r.addColorStop(0, "rgba(80,70,50,0)"), r.addColorStop(1, "rgba(80,70,50,0.25)"), e.fillStyle = r, e.fillRect(0, 226, L, 30);
+		let r = e.createLinearGradient(0, 226, 0, I);
+		r.addColorStop(0, "rgba(80,70,50,0)"), r.addColorStop(1, "rgba(80,70,50,0.25)"), e.fillStyle = r, e.fillRect(0, 226, I, 30);
 	},
-	ventana: (e, t, n) => fe(e, t, n, "open"),
-	ventanaCortina: (e, t, n) => fe(e, t, n, "closed"),
-	ventanaPersiana: (e, t, n) => fe(e, t, n, "persiana"),
+	ventana: (e, t, n) => he(e, t, n, "open"),
+	ventanaCortina: (e, t, n) => he(e, t, n, "closed"),
+	ventanaPersiana: (e, t, n) => he(e, t, n, "persiana"),
 	puerta0(e, t, n) {
-		e.fillStyle = "#5e3a22", e.fillRect(0, 0, L, L);
-		for (let t = 0; t < L; t += 4) e.fillStyle = `rgba(${n() < .5 ? "255,220,180" : "30,15,5"},${.04 + n() * .06})`, e.fillRect(t, 0, 2 + n() * 3, L);
+		e.fillStyle = "#5e3a22", e.fillRect(0, 0, I, I);
+		for (let t = 0; t < I; t += 4) e.fillStyle = `rgba(${n() < .5 ? "255,220,180" : "30,15,5"},${.04 + n() * .06})`, e.fillRect(t, 0, 2 + n() * 3, I);
 		e.strokeStyle = "rgba(25,12,4,0.6)", e.lineWidth = 3;
 		for (let [t, n, r, i] of [
 			[
@@ -1973,10 +1978,10 @@ var me = {
 				120
 			]
 		]) e.strokeRect(t, n, r, i);
-		G(e, 44, 34, 168, 50, !1, n), G(t, 44, 34, 168, 50, !0, n), K(e, 44, 34, 168, 50, 14, "#20180f"), e.fillStyle = "#c9a646", e.fillRect(196, 128, 18, 6), e.fillRect(204, 140, 5, 10), de(e, "#3a2414");
+		W(e, 44, 34, 168, 50, !1, n), W(t, 44, 34, 168, 50, !0, n), G(e, 44, 34, 168, 50, 14, "#20180f"), e.fillStyle = "#c9a646", e.fillRect(196, 128, 18, 6), e.fillRect(204, 140, 5, 10), me(e, "#3a2414");
 	},
 	puerta1(e, t, n) {
-		e.fillStyle = "#e8e8e8", e.fillRect(0, 0, L, L);
+		e.fillStyle = "#e8e8e8", e.fillRect(0, 0, I, I);
 		for (let [t, n, r, i] of [[
 			26,
 			140,
@@ -1991,26 +1996,26 @@ var me = {
 			let a = e.createLinearGradient(t, n, t + r, n + i);
 			a.addColorStop(0, "rgba(255,255,255,0.5)"), a.addColorStop(1, "rgba(0,0,0,0.25)"), e.fillStyle = a, e.fillRect(t, n, r, i);
 		}
-		G(e, 30, 20, 196, 100, !1, n), G(t, 30, 20, 196, 100, !0, n), e.strokeStyle = "#1b1b1b", e.lineWidth = 3;
+		W(e, 30, 20, 196, 100, !1, n), W(t, 30, 20, 196, 100, !0, n), e.strokeStyle = "#1b1b1b", e.lineWidth = 3;
 		for (let t = 40; t < 226; t += 16) e.beginPath(), e.moveTo(t, 20), e.lineTo(t, 120), e.stroke();
 		for (let t = 48; t < 220; t += 32) e.beginPath(), e.arc(t, 70, 9, 0, Math.PI * 2), e.stroke();
-		e.fillStyle = "#777", e.fillRect(200, 132, 16, 8), z(e, L, L, 1500, n, .05);
-		for (let t = 0; t < 4; t++) B(e, n, n() * L, L - n() * 30, 10 + n() * 14, "rgba(110,70,30,0.3)");
-		de(e, "#2a2a2a");
+		e.fillStyle = "#777", e.fillRect(200, 132, 16, 8), R(e, I, I, 1500, n, .05);
+		for (let t = 0; t < 4; t++) z(e, n, n() * I, I - n() * 30, 10 + n() * 14, "rgba(110,70,30,0.3)");
+		me(e, "#2a2a2a");
 	},
 	portal(e, t, n) {
-		e.fillStyle = "#4a3a28", e.fillRect(0, 0, L, L), t.fillStyle = "#000", t.fillRect(0, 0, L, L);
+		e.fillStyle = "#4a3a28", e.fillRect(0, 0, I, I), t.fillStyle = "#000", t.fillRect(0, 0, I, I);
 		for (let n of [14, 132]) {
-			let r = e.createLinearGradient(n, 14, n + 60, L);
-			r.addColorStop(0, "#7f93a3"), r.addColorStop(.5, "#3a4752"), r.addColorStop(1, "#232b31"), e.fillStyle = r, e.fillRect(n, 14, L / 2 - 18, 216), t.fillStyle = "#e8d2a0", t.fillRect(n, 14, L / 2 - 18, 216), e.fillStyle = "rgba(255,255,255,0.12)", e.fillRect(n + 10, 14, 18, 216), e.fillStyle = "rgba(30,25,20,0.5)", e.fillRect(n + 20, 166, 40, 64);
+			let r = e.createLinearGradient(n, 14, n + 60, I);
+			r.addColorStop(0, "#7f93a3"), r.addColorStop(.5, "#3a4752"), r.addColorStop(1, "#232b31"), e.fillStyle = r, e.fillRect(n, 14, I / 2 - 18, 216), t.fillStyle = "#e8d2a0", t.fillRect(n, 14, I / 2 - 18, 216), e.fillStyle = "rgba(255,255,255,0.12)", e.fillRect(n + 10, 14, 18, 216), e.fillStyle = "rgba(30,25,20,0.5)", e.fillRect(n + 20, 166, 40, 64);
 		}
-		e.fillStyle = "#c9a646", e.fillRect(L / 2 - 16, L / 2, 6, 40), e.fillRect(138, L / 2, 6, 40), e.fillStyle = "#3a2c1e", e.fillRect(0, 230, L, 26);
+		e.fillStyle = "#c9a646", e.fillRect(I / 2 - 16, I / 2, 6, 40), e.fillRect(138, I / 2, 6, 40), e.fillStyle = "#3a2c1e", e.fillRect(0, 230, I, 26);
 	},
-	pub0: (e, t, n) => pe(e, n, "#c62828", "#fff4d6", "MUDANZAS", "Y FLETES · 4253-1180"),
-	pub1: (e, t, n) => pe(e, n, "#1f4e8c", "#ffffff", "PINTURERÍA", "EL PINCEL · DESDE 1978"),
-	pub2: (e, t, n) => pe(e, n, "#f2c200", "#1b1b1b", "GOMERÍA", "24 HS · AUXILIO"),
+	pub0: (e, t, n) => ge(e, n, "#c62828", "#fff4d6", "MUDANZAS", "Y FLETES · 4253-1180"),
+	pub1: (e, t, n) => ge(e, n, "#1f4e8c", "#ffffff", "PINTURERÍA", "EL PINCEL · DESDE 1978"),
+	pub2: (e, t, n) => ge(e, n, "#f2c200", "#1b1b1b", "GOMERÍA", "24 HS · AUXILIO"),
 	huella(e, t, n) {
-		e.fillStyle = "#e2dacb", e.fillRect(0, 0, L, L), z(e, L, L, 5e3, n, .07);
+		e.fillStyle = "#e2dacb", e.fillRect(0, 0, I, I), R(e, I, I, 5e3, n, .07);
 		let r = [
 			"#c9d6c2",
 			"#e8c9a8",
@@ -2022,103 +2027,103 @@ var me = {
 		for (let t = 170; t < 236; t += 9) for (let n = 140; n < 230; n += 9) e.fillStyle = (n + t) % 18 ? "#f4f6f6" : "#9cc7d8", e.fillRect(n, t, 8, 8);
 		e.strokeStyle = "rgba(70,60,50,0.5)", e.lineWidth = 7, e.beginPath(), e.moveTo(4, 120), e.lineTo(128, 60), e.lineTo(252, 120), e.stroke(), e.lineWidth = 5, e.beginPath(), e.moveTo(20, 256);
 		for (let t = 0; t < 8; t++) e.lineTo(20 + t * 12, 256 - t * 14), e.lineTo(32 + t * 12, 256 - t * 14);
-		e.stroke(), V(e, n, L, L, 4), H(e, n, L, L, 3);
+		e.stroke(), B(e, n, I, I, 4), V(e, n, I, I, 3);
 	},
 	porton(e, t, n) {
-		e.fillStyle = "#9a9a98", e.fillRect(0, 0, L, L);
-		for (let t = 0; t < L; t += 10) {
+		e.fillStyle = "#9a9a98", e.fillRect(0, 0, I, I);
+		for (let t = 0; t < I; t += 10) {
 			let n = e.createLinearGradient(t, 0, t + 10, 0);
-			n.addColorStop(0, "rgba(255,255,255,0.18)"), n.addColorStop(.5, "rgba(0,0,0,0.05)"), n.addColorStop(1, "rgba(0,0,0,0.22)"), e.fillStyle = n, e.fillRect(t, 0, 10, L);
+			n.addColorStop(0, "rgba(255,255,255,0.18)"), n.addColorStop(.5, "rgba(0,0,0,0.05)"), n.addColorStop(1, "rgba(0,0,0,0.22)"), e.fillStyle = n, e.fillRect(t, 0, 10, I);
 		}
-		e.strokeStyle = "#3a3a3a", e.lineWidth = 8, e.strokeRect(4, 4, 248, 248), e.fillRect(L / 2 - 2, 0, 4, L), e.fillStyle = "#3a3a3a", e.fillRect(L / 2 - 3, 0, 6, L), e.fillStyle = "#d8c070", e.fillRect(136, L / 2, 10, 5);
-		for (let t = 0; t < 8; t++) B(e, n, n() * L, L - n() * 50, 8 + n() * 16, "rgba(120,65,25,0.35)");
-		n() < .6 && ce(e, n, 30 + n() * 60, 100 + n() * 60, 100 + n() * 60, 40);
+		e.strokeStyle = "#3a3a3a", e.lineWidth = 8, e.strokeRect(4, 4, 248, 248), e.fillRect(I / 2 - 2, 0, 4, I), e.fillStyle = "#3a3a3a", e.fillRect(I / 2 - 3, 0, 6, I), e.fillStyle = "#d8c070", e.fillRect(136, I / 2, 10, 5);
+		for (let t = 0; t < 8; t++) z(e, n, n() * I, I - n() * 50, 8 + n() * 16, "rgba(120,65,25,0.35)");
+		n() < .6 && de(e, n, 30 + n() * 60, 100 + n() * 60, 100 + n() * 60, 40);
 	},
 	roofMembrana(e, t, n) {
-		e.fillStyle = "#b9bbb8", e.fillRect(0, 0, L, L);
-		for (let t = 0; t < L; t += 43) e.fillStyle = `rgba(${200 + n() * 30},${200 + n() * 30},${200 + n() * 30},0.5)`, e.fillRect(0, t, L, 40), e.fillStyle = "rgba(0,0,0,0.25)", e.fillRect(0, t + 40, L, 3);
-		z(e, L, L, 6e3, n, .1);
-		for (let t = 0; t < 6; t++) e.fillStyle = `rgba(40,40,40,${.2 + n() * .3})`, e.fillRect(n() * L, n() * L, 15 + n() * 40, 10 + n() * 30);
-		for (let t = 0; t < 5; t++) B(e, n, n() * L, n() * L, 20 + n() * 30, "rgba(80,70,50,0.25)");
+		e.fillStyle = "#b9bbb8", e.fillRect(0, 0, I, I);
+		for (let t = 0; t < I; t += 43) e.fillStyle = `rgba(${200 + n() * 30},${200 + n() * 30},${200 + n() * 30},0.5)`, e.fillRect(0, t, I, 40), e.fillStyle = "rgba(0,0,0,0.25)", e.fillRect(0, t + 40, I, 3);
+		R(e, I, I, 6e3, n, .1);
+		for (let t = 0; t < 6; t++) e.fillStyle = `rgba(40,40,40,${.2 + n() * .3})`, e.fillRect(n() * I, n() * I, 15 + n() * 40, 10 + n() * 30);
+		for (let t = 0; t < 5; t++) z(e, n, n() * I, n() * I, 20 + n() * 30, "rgba(80,70,50,0.25)");
 	},
 	roofBaldosa(e, t, n) {
-		e.fillStyle = "#c9b9a8", e.fillRect(0, 0, L, L);
-		for (let t = 0; t < L; t += 8) for (let r = 0; r < L; r += 8) e.fillStyle = `hsl(${12 + n() * 8},${45 + n() * 15}%,${40 + n() * 10}%)`, e.fillRect(r + 1, t + 1, 7, 7);
-		for (let t = 0; t < 6; t++) B(e, n, n() * L, n() * L, 20 + n() * 40, "rgba(50,50,40,0.25)");
+		e.fillStyle = "#c9b9a8", e.fillRect(0, 0, I, I);
+		for (let t = 0; t < I; t += 8) for (let r = 0; r < I; r += 8) e.fillStyle = `hsl(${12 + n() * 8},${45 + n() * 15}%,${40 + n() * 10}%)`, e.fillRect(r + 1, t + 1, 7, 7);
+		for (let t = 0; t < 6; t++) z(e, n, n() * I, n() * I, 20 + n() * 40, "rgba(50,50,40,0.25)");
 	},
 	chapa(e, t, n) {
-		e.fillStyle = "#a7aaac", e.fillRect(0, 0, L, L);
-		for (let t = 0; t < L; t += 4) e.fillStyle = "rgba(255,255,255,0.22)", e.fillRect(t, 0, 1, L), e.fillStyle = "rgba(0,0,0,0.22)", e.fillRect(t + 2, 0, 1.5, L);
-		for (let t = 60; t < L; t += 64 + n() * 20) e.fillStyle = "rgba(0,0,0,0.35)", e.fillRect(0, t, L, 2);
-		for (let t = 0; t < 10; t++) B(e, n, n() * L, n() * L, 15 + n() * 45, `rgba(${130 + n() * 40},${60 + n() * 20},20,${.25 + n() * .3})`);
+		e.fillStyle = "#a7aaac", e.fillRect(0, 0, I, I);
+		for (let t = 0; t < I; t += 4) e.fillStyle = "rgba(255,255,255,0.22)", e.fillRect(t, 0, 1, I), e.fillStyle = "rgba(0,0,0,0.22)", e.fillRect(t + 2, 0, 1.5, I);
+		for (let t = 60; t < I; t += 64 + n() * 20) e.fillStyle = "rgba(0,0,0,0.35)", e.fillRect(0, t, I, 2);
+		for (let t = 0; t < 10; t++) z(e, n, n() * I, n() * I, 15 + n() * 45, `rgba(${130 + n() * 40},${60 + n() * 20},20,${.25 + n() * .3})`);
 		for (let t = 0; t < 20; t++) {
-			let t = n() * L, r = n() * L, i = 20 + n() * 60, a = e.createLinearGradient(t, r, t, r + i);
+			let t = n() * I, r = n() * I, i = 20 + n() * 60, a = e.createLinearGradient(t, r, t, r + i);
 			a.addColorStop(0, "rgba(120,60,20,0.4)"), a.addColorStop(1, "rgba(120,60,20,0)"), e.fillStyle = a, e.fillRect(t, r, 2 + n() * 3, i);
 		}
 	}
 };
-function he(e, t, n, r) {
-	if (e.save(), t.save(), e.scale(1, 2), t.scale(1, 2), e.fillStyle = "#efe9dd", e.fillRect(0, 0, L, 128), z(e, L, 128, 3500, n, .08), e.fillStyle = "rgba(0,0,0,0.1)", e.fillRect(0, 0, L, 5), r === 3) for (let t = 0; t < L; t += 16) for (let r = 110; r < 128; r += 6) e.fillStyle = `hsl(35,${10 + n() * 10}%,${45 + n() * 15}%)`, e.fillRect(t + r / 6 % 2 * 8, r, 15, 5);
-	else e.fillStyle = `hsl(40,5%,${45 + n() * 15}%)`, e.fillRect(0, 111, L, 17);
-	r === 0 ? (J(e, t, n, 18, 23, 38, 88), q(e, t, n, 76, 32, 50, 46), se(e, n, 146, 15, 100, 96)) : r === 1 ? (q(e, t, n, 22, 32, 52, 46), J(e, t, n, 108, 23, 38, 88), q(e, t, n, 178, 32, 52, 46)) : r === 2 ? (se(e, n, 14, 15, 118, 96, !0), J(e, t, n, 162, 23, 38, 88), e.fillStyle = "#333", e.fillRect(214, 50, 22, 14)) : (q(e, t, n, 16, 30, 56, 50, { persiana: !0 }), J(e, t, n, 104, 21, 40, 90), q(e, t, n, 170, 30, 56, 50)), V(e, n, L, 128, 5), e.restore(), t.restore();
+function ve(e, t, n, r) {
+	if (e.save(), t.save(), e.scale(1, 2), t.scale(1, 2), e.fillStyle = "#efe9dd", e.fillRect(0, 0, I, 128), R(e, I, 128, 3500, n, .08), e.fillStyle = "rgba(0,0,0,0.1)", e.fillRect(0, 0, I, 5), r === 3) for (let t = 0; t < I; t += 16) for (let r = 110; r < 128; r += 6) e.fillStyle = `hsl(35,${10 + n() * 10}%,${45 + n() * 15}%)`, e.fillRect(t + r / 6 % 2 * 8, r, 15, 5);
+	else e.fillStyle = `hsl(40,5%,${45 + n() * 15}%)`, e.fillRect(0, 111, I, 17);
+	r === 0 ? (le(e, t, n, 18, 23, 38, 88), K(e, t, n, 76, 32, 50, 46), ue(e, n, 146, 15, 100, 96)) : r === 1 ? (K(e, t, n, 22, 32, 52, 46), le(e, t, n, 108, 23, 38, 88), K(e, t, n, 178, 32, 52, 46)) : r === 2 ? (ue(e, n, 14, 15, 118, 96, !0), le(e, t, n, 162, 23, 38, 88), e.fillStyle = "#333", e.fillRect(214, 50, 22, 14)) : (K(e, t, n, 16, 30, 56, 50, { persiana: !0 }), le(e, t, n, 104, 21, 40, 90), K(e, t, n, 170, 30, 56, 50)), B(e, n, I, 128, 5), e.restore(), t.restore();
 }
-function ge(e, t) {
+function ye(e, t) {
 	let r = {};
 	{
-		let i = n(31), [a, o] = R();
-		o.fillStyle = "#7b6650", o.fillRect(0, 0, L, L);
-		for (let e = 0; e < 14; e++) B(o, i, i() * L, i() * L, 20 + i() * 40, i() < .5 ? "rgba(60,48,36,0.35)" : "rgba(150,130,100,0.3)");
+		let i = n(31), [a, o] = L();
+		o.fillStyle = "#7b6650", o.fillRect(0, 0, I, I);
+		for (let e = 0; e < 14; e++) z(o, i, i() * I, i() * I, 20 + i() * 40, i() < .5 ? "rgba(60,48,36,0.35)" : "rgba(150,130,100,0.3)");
 		for (let e = 0; e < 9e3; e++) {
 			let e = 70 + i() * 80;
-			o.fillStyle = `rgba(${e + 20},${e},${e - 20},0.35)`, o.fillRect(i() * L, i() * L, 1 + i() * 2, 1 + i() * 2);
+			o.fillStyle = `rgba(${e + 20},${e},${e - 20},0.35)`, o.fillRect(i() * I, i() * I, 1 + i() * 2, 1 + i() * 2);
 		}
-		for (let e = 0; e < 25; e++) o.fillStyle = `hsl(${i() * 360},${20 + i() * 30}%,${45 + i() * 35}%)`, o.fillRect(i() * L, i() * L, 2 + i() * 2, 1 + i() * 2);
+		for (let e = 0; e < 25; e++) o.fillStyle = `hsl(${i() * 360},${20 + i() * 30}%,${45 + i() * 35}%)`, o.fillRect(i() * I, i() * I, 2 + i() * 2, 1 + i() * 2);
 		for (let e = 0; e < 5; e++) {
 			o.fillStyle = "rgba(70,90,40,0.5)";
-			for (let e = 0; e < 60; e++) o.fillRect(i() * L, i() * L, 1, 3);
+			for (let e = 0; e < 60; e++) o.fillRect(i() * I, i() * I, 1, 3);
 		}
 		r.dirt = t(a, e);
 	}
 	{
-		let i = n(32), [a, o] = R();
-		o.fillStyle = "#8f8a55", o.fillRect(0, 0, L, L);
-		for (let e = 0; e < 12; e++) B(o, i, i() * L, i() * L, 25 + i() * 45, i() < .4 ? "rgba(120,100,70,0.45)" : "rgba(90,110,50,0.35)");
-		for (let e = 0; e < 12e3; e++) o.fillStyle = `hsl(${40 + i() * 35},${25 + i() * 25}%,${28 + i() * 30}%)`, o.fillRect(i() * L, i() * L, 1, 2 + i() * 5);
-		for (let e = 0; e < 18; e++) o.fillStyle = `hsl(${i() * 360},${20 + i() * 30}%,${50 + i() * 35}%)`, o.fillRect(i() * L, i() * L, 2 + i() * 2, 1 + i() * 2);
+		let i = n(32), [a, o] = L();
+		o.fillStyle = "#8f8a55", o.fillRect(0, 0, I, I);
+		for (let e = 0; e < 12; e++) z(o, i, i() * I, i() * I, 25 + i() * 45, i() < .4 ? "rgba(120,100,70,0.45)" : "rgba(90,110,50,0.35)");
+		for (let e = 0; e < 12e3; e++) o.fillStyle = `hsl(${40 + i() * 35},${25 + i() * 25}%,${28 + i() * 30}%)`, o.fillRect(i() * I, i() * I, 1, 2 + i() * 5);
+		for (let e = 0; e < 18; e++) o.fillStyle = `hsl(${i() * 360},${20 + i() * 30}%,${50 + i() * 35}%)`, o.fillRect(i() * I, i() * I, 2 + i() * 2, 1 + i() * 2);
 		r.dryGrass = t(a, e);
 	}
 	{
-		let i = n(33), [a, o] = R();
-		o.fillStyle = "#9d978c", o.fillRect(0, 0, L, L), z(o, L, L, 7e3, i, .14);
-		for (let e = 0; e < 6; e++) B(o, i, i() * L, i() * L, 20 + i() * 30, "rgba(90,75,55,0.4)");
-		H(o, i, L, L, 8);
+		let i = n(33), [a, o] = L();
+		o.fillStyle = "#9d978c", o.fillRect(0, 0, I, I), R(o, I, I, 7e3, i, .14);
+		for (let e = 0; e < 6; e++) z(o, i, i() * I, i() * I, 20 + i() * 30, "rgba(90,75,55,0.4)");
+		V(o, i, I, I, 8);
 		for (let e of [0, 216]) {
 			let t = o.createLinearGradient(e, 0, e + 40, 0), n = "rgba(100,80,58,0.85)", r = "rgba(100,80,58,0)";
-			t.addColorStop(0, e ? r : n), t.addColorStop(1, e ? n : r), o.fillStyle = t, o.fillRect(e, 0, 40, L);
+			t.addColorStop(0, e ? r : n), t.addColorStop(1, e ? n : r), o.fillStyle = t, o.fillRect(e, 0, 40, I);
 		}
-		o.fillStyle = "rgba(40,50,60,0.35)", o.fillRect(L / 2 - 3, 0, 6, L), r.pasillo = t(a, e);
+		o.fillStyle = "rgba(40,50,60,0.35)", o.fillRect(I / 2 - 3, 0, 6, I), r.pasillo = t(a, e);
 	}
 	{
-		let i = n(35), [a, o] = R();
-		o.fillStyle = "#8f8d87", o.fillRect(0, 0, L, L);
-		for (let e = 0; e < L; e += L / 3) for (let t of [0, L / 2]) o.fillStyle = `hsl(40,${3 + i() * 4}%,${50 + i() * 8}%)`, o.fillRect(t + 1, e + 1, L / 2 - 2, L / 3 - 2);
-		z(o, L, L, 9e3, i, .12);
-		for (let e = 0; e < 8; e++) B(o, i, i() * L, i() * L, 10 + i() * 25, "rgba(40,40,40,0.25)");
-		H(o, i, L, L, 6), o.fillStyle = "rgba(30,30,30,0.55)";
-		for (let e = 0; e < L; e += L / 3) o.fillRect(0, e, L, 2);
-		o.fillRect(L / 2 - 1, 0, 2, L), o.fillStyle = "rgba(200,198,190,0.6)", o.fillRect(0, 0, 10, L), o.fillRect(246, 0, 10, L), r.concrete = t(a, e);
+		let i = n(35), [a, o] = L();
+		o.fillStyle = "#8f8d87", o.fillRect(0, 0, I, I);
+		for (let e = 0; e < I; e += I / 3) for (let t of [0, I / 2]) o.fillStyle = `hsl(40,${3 + i() * 4}%,${50 + i() * 8}%)`, o.fillRect(t + 1, e + 1, I / 2 - 2, I / 3 - 2);
+		R(o, I, I, 9e3, i, .12);
+		for (let e = 0; e < 8; e++) z(o, i, i() * I, i() * I, 10 + i() * 25, "rgba(40,40,40,0.25)");
+		V(o, i, I, I, 6), o.fillStyle = "rgba(30,30,30,0.55)";
+		for (let e = 0; e < I; e += I / 3) o.fillRect(0, e, I, 2);
+		o.fillRect(I / 2 - 1, 0, 2, I), o.fillStyle = "rgba(200,198,190,0.6)", o.fillRect(0, 0, 10, I), o.fillRect(246, 0, 10, I), r.concrete = t(a, e);
 	}
 	{
-		let i = n(34), [a, o] = R();
-		o.fillStyle = "#56603a", o.fillRect(0, 0, L, L);
-		for (let e = 0; e < 9; e++) B(o, i, i() * L, i() * L, 18 + i() * 30, "rgba(70,80,70,0.6)");
-		for (let e = 0; e < 1e4; e++) o.fillStyle = `hsl(${60 + i() * 40},${25 + i() * 25}%,${20 + i() * 25}%)`, o.fillRect(i() * L, i() * L, 1, 2 + i() * 6);
+		let i = n(34), [a, o] = L();
+		o.fillStyle = "#56603a", o.fillRect(0, 0, I, I);
+		for (let e = 0; e < 9; e++) z(o, i, i() * I, i() * I, 18 + i() * 30, "rgba(70,80,70,0.6)");
+		for (let e = 0; e < 1e4; e++) o.fillStyle = `hsl(${60 + i() * 40},${25 + i() * 25}%,${20 + i() * 25}%)`, o.fillRect(i() * I, i() * I, 1, 2 + i() * 6);
 		r.wetland = t(a, e);
 	}
 	return r;
 }
-function _e(t) {
-	let r = n(41), [i, a] = R(512, 512);
+function be(t) {
+	let r = n(41), [i, a] = L(512, 512);
 	a.clearRect(0, 0, 512, 512), a.fillStyle = "#1e1e1e";
 	for (let e = 4; e < 256; e += 11) a.fillRect(e, 10, 3, 114), a.beginPath(), a.moveTo(e - 2, 11), a.lineTo(e + 1.5, 2), a.lineTo(e + 5, 11), a.fill();
 	a.fillRect(0, 14, 256, 4), a.fillRect(0, 70, 256, 3), a.fillRect(0, 120, 256, 6), a.save(), a.beginPath(), a.rect(256, 0, 256, 128), a.clip(), a.strokeStyle = "rgba(150,155,158,0.95)", a.lineWidth = 1.2;
@@ -2160,16 +2165,16 @@ function _e(t) {
 	let c = new e.CanvasTexture(i);
 	return c.colorSpace = e.SRGBColorSpace, c.anisotropy = 4, c;
 }
-function ve(t) {
-	let n = t.length, r = L * L * 4, i = new Uint8Array(r * n), a = new Uint8Array(r * n), o = (e, t, n) => {
-		let r = e.getContext("2d").getImageData(0, 0, L, L).data;
-		for (let e = 0; e < L; e++) t.set(r.subarray((255 - e) * L * 4, (L - e) * L * 4), n + e * L * 4);
+function xe(t) {
+	let n = t.length, r = I * I * 4, i = new Uint8Array(r * n), a = new Uint8Array(r * n), o = (e, t, n) => {
+		let r = e.getContext("2d").getImageData(0, 0, I, I).data;
+		for (let e = 0; e < I; e++) t.set(r.subarray((255 - e) * I * 4, (I - e) * I * 4), n + e * I * 4);
 	};
 	t.forEach((e, t) => {
 		o(e.canvas, i, t * r), e.ecanvas && o(e.ecanvas, a, t * r);
 	});
 	let s = (t) => {
-		let r = new e.DataArrayTexture(t, L, L, n);
+		let r = new e.DataArrayTexture(t, I, I, n);
 		return r.wrapS = r.wrapT = e.RepeatWrapping, r.magFilter = e.LinearFilter, r.minFilter = e.LinearMipmapLinearFilter, r.generateMipmaps = !0, r.anisotropy = 4, r.colorSpace = e.SRGBColorSpace, r.needsUpdate = !0, r;
 	};
 	return {
@@ -2180,16 +2185,327 @@ function ve(t) {
 		metal: t.map((e) => e.metal ?? 0)
 	};
 }
-function ye(e, t) {
-	let r = n(t), [i, a] = R(), [o, s] = R();
-	return s.fillStyle = "#000", s.fillRect(0, 0, L, L), e(a, s, r), {
+function Se(e, t) {
+	let r = n(t), [i, a] = L(), [o, s] = L();
+	return s.fillStyle = "#000", s.fillRect(0, 0, I, I), e(a, s, r), {
 		canvas: i,
 		ecanvas: o
 	};
 }
+[
+	"#2f4a35",
+	"#3b3b3b",
+	"#7a2e22",
+	"#e8e8e8",
+	"#5a4632",
+	"#1f3550"
+].map((t) => new e.Color(t)), [
+	"#3b3b3b",
+	"#2f4a35",
+	"#e8e8e8",
+	"#5a5a5a",
+	"#6b3a22",
+	"#1f3550",
+	"#9a9a98"
+].map((t) => new e.Color(t)), [
+	"#8f8a82",
+	"#5d5a56",
+	"#a4553a",
+	"#c9c2b4",
+	"#3f3f3f"
+].map((t) => new e.Color(t)), new e.Color(1, 1, 1), new e.Color(.62, .62, .6), new e.Color(.93, .74, .12), new e.Color(.7, .68, .64), ((t, n, r, i = n / 2) => D(new e.BoxGeometry(t, n, r).translate(0, i, 0)))(1, 1, 1), D(new e.CylinderGeometry(.34, .34, .2, 7).translate(0, .1, 0)), D(new e.OctahedronGeometry(.2, 0).scale(1, .6, 1)), D(new e.CylinderGeometry(.55, .5, 1.1, 8, 1, !0).translate(0, .55, 0)), D(new e.CylinderGeometry(.3, .55, .18, 8).translate(0, 1.19, 0)), D(new e.CylinderGeometry(.5, .5, 1, 6).translate(0, .5, 0)), D(new e.ConeGeometry(.5, .4, 6).translate(0, .2, 0)), D(new e.CylinderGeometry(.42, .3, .08, 10).rotateX(1.1).translate(0, .75, 0)), new e.Matrix4(), new e.Quaternion(), new e.Euler(), new e.Vector3(), new e.Vector3();
+var q = (t) => new e.Color(t);
+q("#9d988e"), q("#5b3b28"), q("#1d1d1d"), q("#8a857c"), q("#b5603c"), q("#6d6f70"), q("#b8bcbf"), q("#c9c3b6"), q("#8e9396"), q("#7a4a2c"), q("#202020"), q("#d6cba2"), q("#2d5f9a"), q("#e8e8e4");
 //#endregion
-//#region src/world/textures.js
-var Y = 256;
+//#region src/world/corridors.js
+var Ce = 6.2, we = -5.6, Te = 42, Ee = 11.5, De = 3.6, Oe = 7.95;
+function ke(e, t, n, r) {
+	let i = t[0] - e[0], a = t[1] - e[1], o = r[0] - n[0], s = r[1] - n[1], c = i * s - a * o;
+	if (Math.abs(c) < 1e-9) return null;
+	let l = ((n[0] - e[0]) * s - (n[1] - e[1]) * o) / c, u = ((n[0] - e[0]) * a - (n[1] - e[1]) * i) / c;
+	return l >= 0 && l < 1 && u >= 0 && u <= 1 ? l : null;
+}
+var Ae = (e, t, n) => {
+	let r = Infinity;
+	for (let a = 0; a < n.length - 1; a++) r = Math.min(r, i(e, t, n[a][0], n[a][1], n[a + 1][0], n[a + 1][1])[3]);
+	return Math.sqrt(r);
+};
+function je(e, t, n, r) {
+	let i = (n) => {
+		let r = 1;
+		for (; r < t.length - 1 && t[r] < n;) r++;
+		let i = (n - t[r - 1]) / (t[r] - t[r - 1] || 1);
+		return [e[r - 1][0] + (e[r][0] - e[r - 1][0]) * i, e[r - 1][1] + (e[r][1] - e[r - 1][1]) * i];
+	}, a = [i(n)];
+	for (let i = 0; i < e.length; i++) t[i] > n && t[i] < r && a.push(e[i]);
+	return a.push(i(r)), a;
+}
+function Me(e) {
+	let t = {
+		decks: [],
+		levels: [],
+		obstacles: []
+	};
+	if (!e.decks) return t;
+	let n = e.roads.filter((e) => e.motorway), r = e.roads.filter((e) => e.ramp);
+	e.roads = e.roads.filter((e) => !(e.kind === "primary" && e.w >= 24 && e.oneway && !e.motorway && e.pts.filter(([e, t]) => r.some((n) => Ae(e, t, n.pts) < 5)).length >= e.pts.length * .6));
+	for (let e of n) e.w = Ee;
+	let s = new o(60), c = (e, n, r) => {
+		for (let i = 0; i < e.length - 1; i++) {
+			let o = {
+				a: e[i],
+				b: e[i + 1],
+				type: n,
+				half: r
+			};
+			s.insert(o, a([e[i], e[i + 1]])), t.obstacles.push(o);
+		}
+	};
+	for (let t of e.rails || []) c(t.pts, "rail", De);
+	for (let e of n) c(e.pts, "mw", Oe);
+	let l = (t, n, r, i, a) => e.decks.find((e) => {
+		if ((a ? e.rail || e.highway === "motorway" : !(e.rail || e.highway === "motorway")) || Ae(t, n, e.pts) > (a ? 8 : 30)) return !1;
+		if (!a) return !0;
+		let [o, s] = [e.pts[0], e.pts[e.pts.length - 1]], c = Math.hypot(s[0] - o[0], s[1] - o[1]) || 1;
+		return Math.abs(((s[0] - o[0]) * r + (s[1] - o[1]) * i) / c) > .6;
+	}), u = (t, n) => e.levelCrossings.some((e) => Math.hypot(e.x - t, e.z - n) < 16), d = new o(40);
+	for (let t of e.roads) if (!(t.kind === "footway" || t.motorway)) for (let e = 0; e < t.pts.length - 1; e++) d.insert([
+		t.pts[e],
+		t.pts[e + 1],
+		t.w
+	], a([t.pts[e], t.pts[e + 1]]));
+	let f = (e) => {
+		let t = 0, n = 0;
+		for (let r = e.span + 2; r < e.span + e.ramp; r += 3) for (let a of [-1, 1]) {
+			let o = e.x + e.ux * r * a, s = e.z + e.uz * r * a;
+			n++;
+			for (let [n, r, a] of d.query(o, s, o, s)) {
+				let c = Math.hypot(r[0] - n[0], r[1] - n[1]) || 1;
+				if (Math.abs(((r[0] - n[0]) * e.ux + (r[1] - n[1]) * e.uz) / c) > .8 && i(o, s, n[0], n[1], r[0], r[1])[3] < (a / 2) ** 2) {
+					t++;
+					break;
+				}
+			}
+		}
+		return t >= n * .45;
+	}, p = [];
+	for (let n of e.roads) {
+		if (n.motorway || n.pasillo) {
+			p.push(n);
+			continue;
+		}
+		let e = [0];
+		for (let t = 1; t < n.pts.length; t++) e.push(e[t - 1] + Math.hypot(n.pts[t][0] - n.pts[t - 1][0], n.pts[t][1] - n.pts[t - 1][1]));
+		let r = [];
+		for (let t = 0; t < n.pts.length - 1; t++) {
+			let i = n.pts[t], a = n.pts[t + 1];
+			for (let o of s.query(Math.min(i[0], a[0]), Math.min(i[1], a[1]), Math.max(i[0], a[0]), Math.max(i[1], a[1]))) {
+				if (n.ramp && o.type === "mw") continue;
+				let s = ke(i, a, o.a, o.b);
+				if (s === null) continue;
+				let c = Math.hypot(o.b[0] - o.a[0], o.b[1] - o.a[1]) || 1, l = e[t + 1] - e[t] || 1, u = Math.abs(((a[0] - i[0]) * (o.b[1] - o.a[1]) - (a[1] - i[1]) * (o.b[0] - o.a[0])) / (c * l));
+				r.push({
+					s: e[t] + l * s,
+					half: o.half / Math.max(.35, u),
+					type: o.type
+				});
+			}
+		}
+		if (!r.length) {
+			p.push(n);
+			continue;
+		}
+		r.sort((e, t) => e.s - t.s);
+		let i = [];
+		for (let e of r) {
+			let t = i[i.length - 1];
+			t && e.s - e.half - t.s1 < 30 ? (t.s1 = Math.max(t.s1, e.s + e.half), t.types.add(e.type)) : i.push({
+				s0: e.s - e.half,
+				s1: e.s + e.half,
+				types: /* @__PURE__ */ new Set([e.type])
+			});
+		}
+		let a = [];
+		for (let r of i) {
+			let i = (r.s0 + r.s1) / 2, [o, s] = je(n.pts, e, i, i)[0], [c, d] = je(n.pts, e, Math.max(0, i - 5), Math.min(e[e.length - 1], i + 5)), p = Math.hypot(d[0] - c[0], d[1] - c[1]) || 1, m = (d[0] - c[0]) / p, h = (d[1] - c[1]) / p, g = l(o, s, m, h, !0), _ = g ? g.type === "bridge" ? "over" : "under" : l(o, s, m, h, !1) ? "under" : null;
+			if (!_ && !r.types.has("mw") && u(o, s) && (_ = "level"), _ === "level") {
+				t.levels.push({
+					x: o,
+					z: s,
+					ux: m,
+					uz: h,
+					w: n.w,
+					half: (r.s1 - r.s0) / 2,
+					ped: n.kind === "footway" || n.kind === "pedestrian" || n.kind === "steps"
+				});
+				continue;
+			}
+			if (!_) {
+				a.push([r.s0 - 3, r.s1 + 3]);
+				continue;
+			}
+			let v = (r.s1 - r.s0) / 2 + 1.5, y = n.kind === "footway" || n.kind === "pedestrian";
+			if (t.decks.find((e) => Math.hypot(e.x - o, e.z - s) < 10)) continue;
+			let b = {
+				x: o,
+				z: s,
+				ux: m,
+				uz: h,
+				span: v,
+				ramp: y ? 26 : Te,
+				half: y ? n.w / 2 + .6 : n.w / 2 + 2.2,
+				h: _ === "over" ? y ? 5.4 : Ce : we,
+				mode: _,
+				rail: r.types.has("rail"),
+				mw: r.types.has("mw"),
+				ped: y,
+				name: n.name
+			};
+			f(b) ? t.decks.push(b) : a.push([r.s0 - 3, r.s1 + 3]);
+		}
+		if (!a.length) {
+			p.push(n);
+			continue;
+		}
+		let o = 0, c = e[e.length - 1];
+		for (let [t, r] of a) t - o > 4 && p.push({
+			...n,
+			pts: je(n.pts, e, o, t)
+		}), o = r;
+		c - o > 4 && p.push({
+			...n,
+			pts: je(n.pts, e, o, c)
+		});
+	}
+	e.roads = p;
+	for (let e of t.decks) e.len = e.span + e.ramp;
+	return t;
+}
+//#endregion
+//#region src/entities/train.js
+var J = 20, Ne = 6, Pe = 2.9, Fe = 17, Ie = 18;
+function Le(n) {
+	let r = new e.MeshStandardMaterial({
+		color: 15922421,
+		roughness: .4,
+		metalness: .3
+	}), i = new e.MeshStandardMaterial({
+		color: 1920928,
+		roughness: .4
+	}), a = new e.MeshStandardMaterial({
+		color: 3057888,
+		roughness: .4
+	}), o = new e.MeshStandardMaterial({
+		color: 1581611,
+		roughness: .1,
+		metalness: .6
+	}), s = new e.MeshStandardMaterial({
+		color: 2829099,
+		roughness: .8
+	}), c = /* @__PURE__ */ new Map(), l = (t, n, r, i, a, o, s) => {
+		let l = new e.BoxGeometry(n, r, i);
+		l.translate(a, o, s), c.has(t) || c.set(t, []), c.get(t).push(l);
+	};
+	l(r, Pe, 2.9, J, 0, 2.55, 0), l(o, 2.94, .9, 17, 0, 2.9, 0), l(i, 2.9499999999999997, .28, J, 0, 2.2, 0), l(a, 2.9499999999999997, .12, J, 0, 1.95, 0), l(s, 2.6, .5, 19, 0, .85, 0);
+	for (let e of [-7, J / 2 - 3]) for (let t of [-1, 1]) l(s, .08, 2.1, 1.3, t * 1.47, 2.25, e);
+	l(s, .3, .4, .3, 0, 4.2, 0), n && (l(o, 2.6, 1.2, .1, 0, 3.1, 10.02), l(i, Pe, .6, .12, 0, 1.9, 10.03), l(new e.MeshStandardMaterial({
+		color: 16777215,
+		emissive: 16773836,
+		emissiveIntensity: 1
+	}), .4, .2, .08, -.9, 1.6, 10.06), l(new e.MeshStandardMaterial({
+		color: 16777215,
+		emissive: 16773836,
+		emissiveIntensity: 1
+	}), .4, .2, .08, .9, 1.6, 10.06));
+	let u = new e.Group();
+	for (let [n, r] of c) {
+		let i = new e.Mesh(t(r), n);
+		i.castShadow = !0, u.add(i);
+	}
+	return u;
+}
+var Re = class {
+	constructor(e) {
+		this.pts = e, this.cum = [0];
+		for (let t = 1; t < e.length; t++) this.cum.push(this.cum[t - 1] + Math.hypot(e[t][0] - e[t - 1][0], e[t][1] - e[t - 1][1]));
+		this.length = this.cum[this.cum.length - 1];
+	}
+	at(e) {
+		e = Math.max(0, Math.min(this.length, e));
+		let t = 0, n = this.cum.length - 1;
+		for (; n - t > 1;) {
+			let r = t + n >> 1;
+			this.cum[r] <= e ? t = r : n = r;
+		}
+		let r = this.pts[t], i = this.pts[n], a = this.cum[n] - this.cum[t] || 1, o = (e - this.cum[t]) / a;
+		return {
+			x: r[0] + (i[0] - r[0]) * o,
+			z: r[1] + (i[1] - r[1]) * o,
+			dx: (i[0] - r[0]) / a,
+			dz: (i[1] - r[1]) / a
+		};
+	}
+	project(e, t) {
+		let n = Infinity, r = 0;
+		for (let i = 0; i < this.pts.length - 1; i++) {
+			let [a, o] = this.pts[i], [s, c] = this.pts[i + 1], l = s - a, u = c - o, d = l * l + u * u || 1, f = Math.max(0, Math.min(1, ((e - a) * l + (t - o) * u) / d)), p = (a + l * f - e) ** 2 + (o + u * f - t) ** 2;
+			p < n && (n = p, r = this.cum[i] + Math.sqrt(d) * f);
+		}
+		return {
+			s: r,
+			d: Math.sqrt(n)
+		};
+	}
+}, ze = class {
+	constructor(t, n) {
+		this.trains = [];
+		let r = (n.rails || []).map((e) => new Re(e.pts)).filter((e) => e.length > 800).sort((e, t) => t.length - e.length).slice(0, 2), i = (n.specials || []).filter((e) => e.type === "station");
+		r.forEach((n, r) => {
+			let a = i.map((e) => n.project(e.cx, e.cz)).filter((e) => e.d < 25).map((e) => e.s).sort((e, t) => e - t), o = [];
+			for (let n = 0; n < Ne; n++) {
+				let r = Le(n === 0 || n === 5);
+				n === 5 && (r.rotation.y = Math.PI);
+				let i = new e.Group();
+				i.add(r), t.add(i), o.push(i);
+			}
+			let s = r % 2 ? -1 : 1;
+			this.trains.push({
+				track: n,
+				stops: a,
+				cars: o,
+				dir: s,
+				s: r % 2 ? n.length * .7 : n.length * .2,
+				v: Fe,
+				wait: 0
+			});
+		});
+	}
+	update(e) {
+		let t = [];
+		for (let n of this.trains) {
+			let r = Ne * 20.8;
+			if (n.wait > 0) n.wait -= e, n.v = 0;
+			else {
+				let t = n.stops.map((e) => (e - n.s) * n.dir).filter((e) => e > 1).sort((e, t) => e - t)[0], i = n.dir > 0 ? n.track.length - n.s : n.s - r, a = Math.min(t ?? Infinity, i), o = a < 120 ? Math.max(1.5, Math.sqrt(2.2 * Math.max(0, a))) : Fe;
+				n.v += Math.sign(o - n.v) * Math.min(Math.abs(o - n.v), 1.1 * e), n.s += n.dir * n.v * e, t !== void 0 && t < 1.5 && (n.wait = Ie, n.s = n.stops.find((e) => Math.abs(e - n.s) < 2) ?? n.s), i < 1 && (n.dir = -n.dir, n.s = n.dir > 0 ? n.s - r : n.s + r, n.wait = Ie);
+			}
+			n.cars.forEach((e, r) => {
+				let i = n.s - n.dir * (r * 20.8 + J / 2), a = n.track.at(i), o = a.dx * n.dir, s = a.dz * n.dir;
+				e.position.set(a.x, 0, a.z), e.rotation.y = Math.atan2(o, s), t.push({
+					x: a.x,
+					z: a.z,
+					dx: o,
+					dz: s,
+					hl: J / 2,
+					hw: Pe / 2,
+					vx: o * n.v,
+					vz: s * n.v
+				});
+			});
+		}
+		return t;
+	}
+}, Y = 256;
 function X(e = Y, t = Y) {
 	let n = document.createElement("canvas");
 	return n.width = e, n.height = t, [n, n.getContext("2d", { willReadFrequently: !0 })];
@@ -2219,7 +2535,7 @@ function $(e, { base: t, drawWall: r, drawWindow: i, seed: a }) {
 		ecanvas: l
 	};
 }
-function be(e, t, n, r, i, a, o) {
+function Be(e, t, n, r, i, a, o) {
 	if (a) e.fillStyle = o() < .75 ? `hsl(${38 + o() * 10},90%,${55 + o() * 15}%)` : `hsl(200,60%,${60 + o() * 15}%)`;
 	else {
 		let a = e.createLinearGradient(t, n, t + r, n + i);
@@ -2227,7 +2543,7 @@ function be(e, t, n, r, i, a, o) {
 	}
 	e.fillRect(t, n, r, i);
 }
-function xe(e) {
+function Ve(e) {
 	let t = {};
 	t.house = $(e, {
 		seed: 1,
@@ -2239,7 +2555,7 @@ function xe(e) {
 			let s = t + r * .22, c = n + i * .22, l = r * .56, u = i * .52;
 			o || (e.fillStyle = "rgba(0,0,0,0.25)", e.fillRect(s - 5, c - 5, l + 10, u + 12));
 			let d = a();
-			if (be(e, s, c, l, u, o, a), !o) {
+			if (Be(e, s, c, l, u, o, a), !o) {
 				if (d < .45) {
 					let t = u * (.3 + a() * .7);
 					e.fillStyle = "#b8b2a4", e.fillRect(s, c, l, t), e.fillStyle = "rgba(0,0,0,0.25)";
@@ -2265,14 +2581,14 @@ function xe(e) {
 		},
 		drawWindow(e, t, n, r, i, a, o) {
 			let s = t + r * .18, c = n + i * .2, l = r * .64, u = i * .55;
-			be(e, s, c, l, u, o, a), !o && (e.strokeStyle = "#e8e6e0", e.lineWidth = 3, e.strokeRect(s, c, l, u), e.beginPath(), e.moveTo(s + l / 2, c), e.lineTo(s + l / 2, c + u), e.stroke());
+			Be(e, s, c, l, u, o, a), !o && (e.strokeStyle = "#e8e6e0", e.lineWidth = 3, e.strokeRect(s, c, l, u), e.beginPath(), e.moveTo(s + l / 2, c), e.lineTo(s + l / 2, c + u), e.stroke());
 		}
 	}), t.apartments = $(e, {
 		seed: 3,
 		base: "#e4e0d8",
 		drawWindow(e, t, n, r, i, a, o) {
 			let s = t + r * .1, c = n + i * .12, l = r * .8, u = i * .62;
-			if (be(e, s, c, l, u, o, a), !o) {
+			if (Be(e, s, c, l, u, o, a), !o) {
 				a() < .5 && (e.fillStyle = "#9d9a90", e.fillRect(s, c, l, u * (.2 + a() * .6))), e.fillStyle = "#cfcac0", e.fillRect(t, n + i * .74, r, i * .06), e.fillStyle = "rgba(40,40,40,0.85)", e.fillRect(t + 2, n + i * .55, r - 4, 3);
 				for (let a = t + 4; a < t + r; a += 7) e.fillRect(a, n + i * .55, 2, i * .19);
 				e.fillStyle = "rgba(0,0,0,0.25)", e.fillRect(t, n + i * .8, r, i * .04);
@@ -2403,7 +2719,7 @@ function xe(e) {
 		let r = n(17), [i, a] = X();
 		a.fillStyle = "#6b8a3c", a.fillRect(0, 0, Y, Y), Q(a, Y, Y, 6e3, r, .1), t.pitch = Z(i, e);
 	}
-	return Object.assign(t, ge(e, Z)), t.atlas = _e(e), t.facades = ve([
+	return Object.assign(t, ye(e, Z)), t.atlas = be(e), t.facades = xe([
 		{
 			name: "house",
 			...t.house
@@ -2433,7 +2749,7 @@ function xe(e) {
 			3
 		].map((e) => ({
 			name: `ground${e}`,
-			...ye((t, n, r) => he(t, n, r, e), 50 + e)
+			...Se((t, n, r) => ve(t, n, r, e), 50 + e)
 		})),
 		...[
 			"medianera",
@@ -2449,7 +2765,7 @@ function xe(e) {
 			"chapa"
 		].map((e, t) => ({
 			name: e,
-			...ye(me[e], 60 + t),
+			...Se(_e[e], 60 + t),
 			rough: e === "chapa" ? .55 : e === "porton" ? .6 : .9,
 			metal: e === "chapa" ? .45 : e === "porton" ? .3 : 0
 		})),
@@ -2467,7 +2783,7 @@ function xe(e) {
 			"huella"
 		].map((e, t) => ({
 			name: e,
-			...ye(me[e], 80 + t),
+			...Se(_e[e], 80 + t),
 			rough: e.startsWith("ventana") || e === "portal" ? .15 : e === "puerta1" ? .5 : .85,
 			metal: e.startsWith("ventana") || e === "portal" ? .35 : e === "puerta1" ? .3 : 0
 		})),
@@ -2485,7 +2801,7 @@ function xe(e) {
 }
 //#endregion
 //#region src/slop/gtaWorld.js
-var Se = class {
+var He = class {
 	constructor() {
 		this.hash = new o(24), this.solids = [];
 	}
@@ -2525,8 +2841,8 @@ var Se = class {
 		}
 		return !1;
 	}
-}, Ce = new e.Color(1, 1, 1);
-function we(e, t, n, r, i) {
+}, Ue = new e.Color(1, 1, 1);
+function We(e, t, n, r, i) {
 	let a = t.length, o = [], s = [];
 	for (let e = 0; e < a; e++) {
 		let i = t[e], c = t[Math.max(0, e - 1)], l = t[Math.min(a - 1, e + 1)], u = i[0] - c[0], d = i[1] - c[1], f = l[0] - i[0], p = l[1] - i[1], m = Math.hypot(u, d) || 1, h = Math.hypot(f, p) || 1;
@@ -2547,19 +2863,19 @@ function we(e, t, n, r, i) {
 	let c = 0;
 	for (let n = 0; n < a - 1; n++) {
 		let r = Math.hypot(t[n + 1][0] - t[n][0], t[n + 1][1] - t[n][1]), a = c * i, l = (c + r) * i;
-		e.quad(o[n], s[n], s[n + 1], o[n + 1], [0, a], [1, a], [1, l], [0, l], Ce, [
+		e.quad(o[n], s[n], s[n + 1], o[n + 1], [0, a], [1, a], [1, l], [0, l], Ue, [
 			0,
 			1,
 			0
 		]), c += r;
 	}
 }
-async function Te(t, { dataUrl: n, frame: r, lift: i = .2 }) {
-	let a = await (await fetch(n)).json(), o = xe({ capabilities: { getMaxAnisotropy: () => 8 } }), s = new Se();
-	j(a);
-	let c = new oe(a.roads), l = new e.Group();
-	l.name = "GtaQuilmesPlaces", l.rotation.y = r.theta, l.position.set(r.x, i, r.z);
-	let u = (t, n = 16777215, r = {}) => new e.MeshStandardMaterial({
+async function Ge(t, { dataUrl: n, frame: r, lift: i = .2 }) {
+	let a = await (await fetch(n)).json(), o = Ve({ capabilities: { getMaxAnisotropy: () => 8 } }), s = new He();
+	te(a);
+	let c = Me(a), l = new F(a.roads), u = new e.Group();
+	u.name = "GtaQuilmesPlaces", u.rotation.y = r.theta, u.position.set(r.x, i, r.z);
+	let d = (t, n = 16777215, r = {}) => new e.MeshStandardMaterial({
 		map: t,
 		color: n,
 		roughness: .95,
@@ -2567,30 +2883,35 @@ async function Te(t, { dataUrl: n, frame: r, lift: i = .2 }) {
 		polygonOffset: !0,
 		polygonOffsetFactor: -2,
 		...r
-	}), d = b(a, {
-		root: l,
+	}), f = b(a, {
+		root: u,
 		collision: s,
-		graph: c,
+		graph: l,
 		tex: o
-	}), f = I(a, {
-		root: l,
-		graph: c,
+	}), p = ce(a, {
+		root: u,
+		graph: l,
 		collision: s,
-		ribbon: we,
-		flatMat: u,
-		keepOut: d.keepOut,
+		ribbon: We,
+		flatMat: d,
+		keepOut: f.keepOut,
 		GeoBuf: E
+	}), m = Ke(a, c, {
+		root: u,
+		tex: o,
+		flatMat: d,
+		collision: s
 	});
-	l.traverse((e) => {
+	u.traverse((e) => {
 		e.isMesh && (e.castShadow = e.castShadow || !e.material?.transparent, e.receiveShadow = !0);
-	}), t.add(l), l.updateMatrixWorld(!0);
-	let p = Math.cos(r.theta), m = Math.sin(r.theta), h = (e, t) => ({
-		x: e * p + t * m + r.x,
-		z: -e * m + t * p + r.z
-	}), g = [];
+	}), t.add(u), u.updateMatrixWorld(!0);
+	let h = Math.cos(r.theta), g = Math.sin(r.theta), _ = (e, t) => ({
+		x: e * h + t * g + r.x,
+		z: -e * g + t * h + r.z
+	}), v = [];
 	for (let e of s.solids) {
-		let t = e.type === "poly" ? e.pts.map(([e, t]) => h(e, t)) : Array.from({ length: 8 }, (t, n) => h(e.x + Math.cos(n * Math.PI / 4) * e.r, e.z + Math.sin(n * Math.PI / 4) * e.r)), n = t.map((e) => e.x), r = t.map((e) => e.z);
-		g.push({
+		let t = e.type === "poly" ? e.pts.map(([e, t]) => _(e, t)) : Array.from({ length: 8 }, (t, n) => _(e.x + Math.cos(n * Math.PI / 4) * e.r, e.z + Math.sin(n * Math.PI / 4) * e.r)), n = t.map((e) => e.x), r = t.map((e) => e.z);
+		v.push({
 			minX: Math.min(...n),
 			maxX: Math.max(...n),
 			minZ: Math.min(...r),
@@ -2605,10 +2926,10 @@ async function Te(t, { dataUrl: n, frame: r, lift: i = .2 }) {
 		});
 	}
 	return {
-		root: l,
-		colliders: g,
-		keepOut: d.keepOut.map(([e, t, n]) => {
-			let r = h(e, t);
+		root: u,
+		colliders: v,
+		keepOut: f.keepOut.map(([e, t, n]) => {
+			let r = _(e, t);
 			return [
 				r.x,
 				r.z,
@@ -2616,9 +2937,139 @@ async function Te(t, { dataUrl: n, frame: r, lift: i = .2 }) {
 			];
 		}),
 		setNight(e) {
-			d.setNight(e), f.setNight(e);
+			f.setNight(e), p.setNight(e);
+		},
+		dynamic: m.dynamic || null,
+		update(e) {
+			m.update(Math.min(e, .1));
+		}
+	};
+}
+function Ke(n, r, { root: i, tex: a, flatMat: o, collision: s }) {
+	let c = { update() {} };
+	if (!n.rails?.length) return c;
+	let l = new E(), u = new E();
+	for (let e of n.rails) We(l, e.pts, 3.6, .05, 1 / 4);
+	let d = new e.Mesh(l.geometry(), o(a.gravel));
+	d.receiveShadow = !0, i.add(d);
+	let f = new e.Color(.55, .55, .58), p = [];
+	for (let e of n.rails) for (let t = 0; t < e.pts.length - 1; t++) {
+		let [n, r] = e.pts[t], [i, a] = e.pts[t + 1], o = Math.hypot(i - n, a - r);
+		if (o < .01) continue;
+		let s = (i - n) / o, c = (a - r) / o, l = -c, d = s;
+		for (let e of [-.72, .72]) {
+			let t = .18, o = .05, s = [
+				n + l * (e - o),
+				t,
+				r + d * (e - o)
+			], c = [
+				n + l * (e + o),
+				t,
+				r + d * (e + o)
+			], p = [
+				i + l * (e - o),
+				t,
+				a + d * (e - o)
+			], m = [
+				i + l * (e + o),
+				t,
+				a + d * (e + o)
+			];
+			u.quad(s, c, m, p, [0, 0], [1, 0], [1, 1], [0, 1], f, [
+				0,
+				1,
+				0
+			]);
+		}
+		for (let e = 0; e < o; e += .7) p.push([
+			n + s * e,
+			r + c * e,
+			Math.atan2(s, c)
+		]);
+	}
+	i.add(new e.Mesh(u.geometry(), new e.MeshStandardMaterial({
+		vertexColors: !0,
+		metalness: .8,
+		roughness: .35
+	})));
+	{
+		let t = new e.InstancedMesh(new e.BoxGeometry(2.4, .14, .24), new e.MeshStandardMaterial({
+			color: 5917242,
+			roughness: 1
+		}), p.length), n = new e.Matrix4(), r = new e.Quaternion(), a = new e.Vector3(0, 1, 0), o = new e.Vector3(1, 1, 1), s = new e.Vector3();
+		p.forEach(([e, i, c], l) => t.setMatrixAt(l, n.compose(s.set(e, .08, i), r.setFromAxisAngle(a, c), o))), t.receiveShadow = !0, t.computeBoundingSphere(), i.add(t);
+	}
+	let m = r.levels || [], h = [];
+	for (let e of m) if (!e.ped) for (let t of [-1, 1]) {
+		let n = t * (e.half + 2.2), r = -t * (e.w / 2 + .6), i = e.x + e.ux * n - e.uz * r, a = e.z + e.uz * n + e.ux * r, o = -t * e.uz, c = t * e.ux;
+		h.push({
+			x: i,
+			z: a,
+			ry: Math.atan2(-c, o),
+			Dx: o,
+			Dz: c,
+			len: e.w / 2 + .2,
+			l: e,
+			a: Math.PI / 2
+		}), s.addCircle(i, a, .2, "pole");
+	}
+	let g = null, _ = new e.Matrix4(), v = new e.Euler(), y = new e.Quaternion(), b = new e.Vector3(), x = new e.Vector3(), S = () => {
+		h.forEach((e, t) => {
+			v.set(0, e.ry, e.a, "YXZ"), y.setFromEuler(v), g.setMatrixAt(t, _.compose(b.set(e.x, 1.05, e.z), y, x.set(e.len, 1, 1)));
+		}), g.instanceMatrix.needsUpdate = !0;
+	};
+	if (h.length) {
+		let n = document.createElement("canvas");
+		n.width = 64, n.height = 4;
+		let r = n.getContext("2d");
+		for (let e = 0; e < 8; e++) r.fillStyle = e % 2 ? "#f4f4f4" : "#d11f1f", r.fillRect(e * 8, 0, 8, 4);
+		let a = new e.CanvasTexture(n);
+		a.colorSpace = e.SRGBColorSpace, g = new e.InstancedMesh(new e.BoxGeometry(1, .12, .12).translate(.5, 0, 0), new e.MeshStandardMaterial({
+			map: a,
+			roughness: .6
+		}), h.length), g.castShadow = !0, g.frustumCulled = !1, i.add(g);
+		let o = [], s = [];
+		for (let t of h) {
+			o.push(new e.CylinderGeometry(.1, .12, 1.2, 6).translate(t.x, .6, t.z), new e.BoxGeometry(.35, .5, .35).translate(t.x, 1, t.z));
+			let n = new e.CylinderGeometry(.06, .06, 3.2, 5).translate(0, 1.6, 0), r = (t) => new e.BoxGeometry(1.4, .22, .04).rotateZ(t).translate(0, 2.9, .06);
+			for (let i of [
+				n,
+				r(.6),
+				r(-.6)
+			]) s.push(i.applyMatrix4(new e.Matrix4().makeRotationY(t.ry + Math.PI / 2).setPosition(t.x - t.Dx * .7, 0, t.z - t.Dz * .7)));
+		}
+		let c = (n, r) => {
+			let a = new e.Mesh(t(n.map((e) => e.index ? e.toNonIndexed() : e)), r);
+			a.castShadow = !0, i.add(a);
+		};
+		c(o, new e.MeshStandardMaterial({
+			color: 15263976,
+			roughness: .6
+		})), c(s, new e.MeshStandardMaterial({
+			color: 16053492,
+			roughness: .6
+		})), S();
+	}
+	let C = new e.Group();
+	C.name = "GtaQuilmesTrains", i.add(C);
+	let w = new ze(C, n), T = null;
+	return {
+		trains: w,
+		dynamic: C,
+		update(e) {
+			if (w.update(e), !g || !w.trains.length) return;
+			T ||= m.map((e) => w.trains.map((t) => {
+				let n = t.track.project(e.x, e.z);
+				return n.d < 20 ? n.s : null;
+			}));
+			let t = m.map((e, t) => w.trains.some((e, n) => T[t][n] !== null && Math.abs(e.s - T[t][n]) < 250)), n = !1;
+			for (let r of h) {
+				let i = t[m.indexOf(r.l)] ? 0 : Math.PI / 2 - .05, a = r.a + Math.sign(i - r.a) * Math.min(Math.abs(i - r.a), e * .9);
+				a !== r.a && (r.a = a, n = !0);
+			}
+			n && S();
 		}
 	};
 }
 //#endregion
-export { Te as buildGtaWorld };
+export { Ge as buildGtaWorld };

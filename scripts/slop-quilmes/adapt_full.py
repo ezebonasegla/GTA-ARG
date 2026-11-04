@@ -500,6 +500,10 @@ rep(p, """    lightingSystem.applyPreset(timeId);
     colorGrade.applyPreset(lightingSystem.activePresetId);
     if (gtaPlaces) gtaPlaces.setNight(lightingSystem.uNightFactor.value);""")
 
+rep('js/main.js', "    if (boroughs.update) boroughs.update(elapsed);", "    if (gtaPlaces) gtaPlaces.update(dt); // trains and barreras\n    if (boroughs.update) boroughs.update(elapsed);")
+
+rep('js/main.js', "    controllerManager.entities.cyclist.helmet\n  ];", "    controllerManager.entities.cyclist.helmet,\n    ...(gtaPlaces && gtaPlaces.dynamic ? [gtaPlaces.dynamic] : [])\n  ];")
+
 for p, s in _files.items():
     open(f'{S}/{p}', 'w').write(s)
 print('ok', len(_files), 'files')

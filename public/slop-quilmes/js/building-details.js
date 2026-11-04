@@ -1,4 +1,4 @@
-import { polygonContains, polygonBoxOverlaps } from './building-collision.js?v=q5';
+import { polygonContains, polygonBoxOverlaps } from './building-collision.js?v=q6';
 
 function boxCorners(x, z, w, d, cs, sn) {
   return [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]].map(([u, v]) =>

@@ -69,6 +69,7 @@ export const GAME_FRAME = ${JSON.stringify({ theta, x: ox, z: oz })};
 // what the game's landmarks.js / zones.js read
 const world = {
   roads: game.roads, specials: game.specials, shops: game.shops,
+  rails: game.rails, decks: game.decks, levelCrossings: game.levelCrossings,
   buildings: game.buildings.filter((b) => b.special).map((b) => ({ pts: b.pts, h: b.h, levels: b.levels, special: b.special, name: b.name })),
   bounds: game.bounds,
 };
