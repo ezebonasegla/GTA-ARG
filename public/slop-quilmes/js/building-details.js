@@ -1,4 +1,4 @@
-import { polygonContains, polygonBoxOverlaps } from './building-collision.js?v=q6';
+import { polygonContains, polygonBoxOverlaps } from './building-collision.js?v=q7';
 
 function boxCorners(x, z, w, d, cs, sn) {
   return [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]].map(([u, v]) =>
@@ -89,7 +89,7 @@ function addBuildingDetails(b, detail, { masonry, rand, neighbours }) {
   for (const e of edges) {
     const segments = Math.floor(e.length / 10);
     for (let i = 0; i < segments && count < 4; i++) {
-      if (rand() > (b.shops ? 0.75 : 0.22)) continue;
+      if (b.shops || rand() > 0.22) continue;
       const u = ((i + 0.5) / segments - 0.5) * e.length, d = Math.min(8.5, e.length / segments - 1.6);
       const x = e.x - e.nz * u, z = e.z + e.nx * u, cs = e.nx, sn = -e.nz;
       // Keep storefronts out of courtyards and away from neighbouring walls or fire escapes.

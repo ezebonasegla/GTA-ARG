@@ -1,7 +1,7 @@
-import { createSynthResources, createMotorVoice, setControlRate } from './audio-synthesis.js?v=q6';
-import { createEventResources, playEvent, createWindVoice } from './audio-events.js?v=q6';
-import { CityAudioSources } from './audio-sources.js?v=q6';
-import { CityAcoustics } from './audio-acoustics.js?v=q6';
+import { createSynthResources, createMotorVoice, setControlRate } from './audio-synthesis.js?v=q7';
+import { createEventResources, playEvent, createWindVoice } from './audio-events.js?v=q7';
+import { CityAudioSources } from './audio-sources.js?v=q7';
+import { CityAcoustics } from './audio-acoustics.js?v=q7';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const smooth = (param, value, now, time = 0.035, immediate = false) => {

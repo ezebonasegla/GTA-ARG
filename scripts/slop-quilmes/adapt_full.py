@@ -347,7 +347,8 @@ if 'SIGN_COLS' not in s:
         assert need in s, need
     _files[p] = s
 # storefronts on low buildings too, more of them on the buildings that hold real shops
-rep('js/building-details.js', "      if (rand() > 0.22) continue;", "      if (rand() > (b.shops ? 0.75 : 0.22)) continue;")
+# the real shops get the game's shopfronts (gta-world.js): no slop awning or sign on their buildings
+rep('js/building-details.js', "      if (rand() > 0.22) continue;", "      if (b.shops || rand() > 0.22) continue;")
 rep('js/building-details.js', "        item = { x: x + e.nx, y: 3.8, z: z + e.nz, w: 1.8, d, colorIdx: Math.floor(rand() * 5), ry };",
     """        const sign = b.shops ? b.shops[detail.awnings.length % b.shops.length] : Math.floor(rand() * b.genericSigns);
         item = { x: x + e.nx, y: Math.min(3.8, b.height - 1.35), z: z + e.nz, w: 1.8, d, colorIdx: Math.floor(rand() * 5), ry, sign };""")

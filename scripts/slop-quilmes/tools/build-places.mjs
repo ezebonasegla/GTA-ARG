@@ -50,6 +50,29 @@ let theta = 0, ox = 0, oz = 0, resid = 0;
   oz = gz - (-mx * s + mz * c);
   for (const [x, z, u, v] of P) resid = Math.max(resid, Math.hypot(x * c + z * s + ox - u, -x * s + z * c + oz - v));
 }
+// exact enough for facades: a quadratic in (x, z) / 1000 per grid coordinate, least squares
+const basis = (x, z) => { const a = x / 1000, b = z / 1000; return [1, a, b, a * a, a * b, b * b]; };
+function fit(k) {
+  const N = 6, M = Array.from({ length: N }, () => new Array(N + 1).fill(0));
+  for (let x = -4600; x <= 5900; x += 150) for (let z = -4000; z <= 6500; z += 150) {
+    const f = basis(x, z), g = gridExact(x, z)[k];
+    for (let i = 0; i < N; i++) { for (let j = 0; j < N; j++) M[i][j] += f[i] * f[j]; M[i][N] += f[i] * g; }
+  }
+  for (let i = 0; i < N; i++) { // Gauss-Jordan
+    let piv = i;
+    for (let r = i + 1; r < N; r++) if (Math.abs(M[r][i]) > Math.abs(M[piv][i])) piv = r;
+    [M[i], M[piv]] = [M[piv], M[i]];
+    for (let r = 0; r < N; r++) if (r !== i) { const f = M[r][i] / M[i][i]; for (let c = i; c <= N; c++) M[r][c] -= f * M[i][c]; }
+  }
+  return M.map((row, i) => row[N] / row[i]);
+}
+const polyU = fit(0), polyV = fit(1);
+let presid = 0;
+for (let x = -4400; x <= 5700; x += 97) for (let z = -3800; z <= 6300; z += 97) {
+  const f = basis(x, z), [u, v] = gridExact(x, z);
+  presid = Math.max(presid, Math.hypot(f.reduce((t, c, i) => t + c * polyU[i], 0) - u, f.reduce((t, c, i) => t + c * polyV[i], 0) - v));
+}
+log(`game frame -> grid, quadratic: max error ${presid.toFixed(3)} m`);
 log(`game frame -> grid: theta ${(theta * 180 / Math.PI).toFixed(4)}°, offset ${ox.toFixed(2)}, ${oz.toFixed(2)}, max error ${resid.toFixed(2)} m`);
 
 const shops = game.shops.filter((s) => s.name).map((s) => [s.name, s.kind || '', ...grid(s.x, s.z)]);
@@ -63,14 +86,28 @@ export const SHOPS = ${JSON.stringify(shops)};
 // [name, x, z]
 export const LANDMARKS = ${JSON.stringify(landmarks)};
 export const STATIONS = ${JSON.stringify(stations)};
-// game metres -> grid: grid = R(theta) * game + (x, z), theta about +y
-export const GAME_FRAME = ${JSON.stringify({ theta, x: ox, z: oz })};
+// game metres -> grid: grid = R(theta) * game + (x, z), theta about +y (rigid, within ~3 m); exact (cm): u, v are\n// quadratics in (x / 1000, z / 1000): [1, x, z, x², xz, z²]
+export const GAME_FRAME = ${JSON.stringify({ theta, x: ox, z: oz, u: polyU, v: polyV })};
 `);
-// what the game's landmarks.js / zones.js read
+const shopCells = new Map();
+for (const s of game.shops) {
+  const k = `${Math.floor(s.x / 40)},${Math.floor(s.z / 40)}`;
+  if (!shopCells.has(k)) shopCells.set(k, []);
+  shopCells.get(k).push(s);
+}
+// what the game's landmarks.js / zones.js / shops.js read
 const world = {
   roads: game.roads, specials: game.specials, shops: game.shops,
   rails: game.rails, decks: game.decks, levelCrossings: game.levelCrossings,
-  buildings: game.buildings.filter((b) => b.special).map((b) => ({ pts: b.pts, h: b.h, levels: b.levels, special: b.special, name: b.name })),
+  // the landmarks' buildings, and the ones a shop may hang its front on
+  buildings: game.buildings.filter((b) => {
+    if (b.special) return true;
+    const [x, z] = b.pts[0];
+    for (let a = -1; a <= 1; a++) for (let c = -1; c <= 1; c++) {
+      for (const s of shopCells.get(`${Math.floor(x / 40) + a},${Math.floor(z / 40) + c}`) || []) if (Math.hypot(s.x - x, s.z - z) < 45) return true;
+    }
+    return false;
+  }).map((b) => ({ pts: b.pts, h: b.h, levels: b.levels, special: b.special, name: b.name, style: b.style, shop: b.shop })),
   bounds: game.bounds,
 };
 const wout = path.join(path.dirname(out), 'gta-world.json');

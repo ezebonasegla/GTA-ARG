@@ -5,6 +5,7 @@
 // Bundled by vite.slop.config.js into public/slop-quilmes/js/gta-world.js ('three' is the page's three/webgpu).
 import * as THREE from 'three';
 import { buildLandmarks } from '../world/landmarks.js';
+import { buildShops } from '../world/shops.js';
 import { markZones, buildZones } from '../world/zones.js';
 import { RoadGraph } from '../world/roadGraph.js';
 import { planCorridors } from '../world/corridors.js';
@@ -81,6 +82,69 @@ function ribbon(buf, pts, w, y, vScale) {
   }
 }
 
+// game metres -> slop grid metres: the quadratic fit of build-places.mjs (mm), or the rigid turn
+function gridMapper(F) {
+  if (F.u && F.v) {
+    const U = F.u, V = F.v;
+    return (x, z) => {
+      const a = x / 1000, b = z / 1000, aa = a * a, ab = a * b, bb = b * b;
+      return [U[0] + U[1] * a + U[2] * b + U[3] * aa + U[4] * ab + U[5] * bb, V[0] + V[1] * a + V[2] * b + V[3] * aa + V[4] * ab + V[5] * bb];
+    };
+  }
+  const c = Math.cos(F.theta), s = Math.sin(F.theta);
+  return (x, z) => [x * c + z * s + F.x, -x * s + z * c + F.z];
+}
+
+// Bakes every mesh under root into the slop frame: vertices through the mapping, normals turned by theta, instances
+// moved and turned; root ends with identity transforms throughout
+function warp(root, toGrid, theta, lift) {
+  root.updateMatrixWorld(true);
+  const meshes = [];
+  root.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  const turnQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), theta);
+  const nm = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationY(theta));
+  const m4 = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+  for (const m of meshes) {
+    if (m.isInstancedMesh) {
+      for (let i = 0; i < m.count; i++) {
+        m.getMatrixAt(i, m4);
+        m4.premultiply(m.matrixWorld).decompose(p, q, sc);
+        const [u, v] = toGrid(p.x, p.z);
+        m.setMatrixAt(i, m4.compose(p.set(u, p.y + lift, v), q.premultiply(turnQ), sc));
+      }
+      m.instanceMatrix.needsUpdate = true;
+      // later writes (persianas at night...) are given in the game's frame too
+      const base = m.matrixWorld.clone(), set = m.setMatrixAt.bind(m), w4 = new THREE.Matrix4();
+      const wp = new THREE.Vector3(), wq = new THREE.Quaternion(), ws = new THREE.Vector3();
+      m.setMatrixAt = (i, mat) => {
+        w4.copy(mat).premultiply(base).decompose(wp, wq, ws);
+        const [u, v] = toGrid(wp.x, wp.z);
+        set(i, w4.compose(wp.set(u, wp.y + lift, v), wq.premultiply(turnQ), ws));
+      };
+    } else {
+      const g = m.geometry.clone();
+      g.applyMatrix4(m.matrixWorld);
+      const pos = g.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const [u, v] = toGrid(pos.getX(i), pos.getZ(i));
+        pos.setXYZ(i, u, pos.getY(i) + lift, v);
+      }
+      if (g.attributes.normal) g.attributes.normal.applyMatrix3(nm);
+      g.computeBoundingSphere();
+      g.computeBoundingBox();
+      m.geometry = g;
+    }
+    m.position.set(0, 0, 0);
+    m.quaternion.identity();
+    m.scale.set(1, 1, 1);
+    if (m.parent !== root) root.add(m);
+    if (m.isInstancedMesh) m.computeBoundingSphere();
+  }
+  for (const c of [...root.children]) if (!c.isMesh) root.remove(c);
+  root.position.set(0, 0, 0);
+  root.quaternion.identity();
+}
+
 /**
  * Builds the places into `scene`. `frame` turns game metres into the slop grid frame:
  * grid = R(theta) * game + offset (theta about +y, as Object3D.rotation.y). Returns the slop-style colliders
@@ -96,32 +160,40 @@ export async function buildGtaWorld(scene, { dataUrl, frame, lift = 0.2 }) {
   const graph = new RoadGraph(data.roads);
   const root = new THREE.Group();
   root.name = 'GtaQuilmesPlaces';
-  root.rotation.y = frame.theta;
-  // sidewalks and lots of the slop city are 0.2 m up; the game's are at ground level
-  root.position.set(frame.x, lift, frame.z);
+  // built in the game's frame, then every vertex is carried into the slop frame (warp below)
+  const toGrid = gridMapper(frame);
   const flatMat = (map, color = 0xffffff, extra = {}) =>
     new THREE.MeshStandardMaterial({ map, color, roughness: 0.95, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, ...extra });
 
   const landmarks = buildLandmarks(data, { root, collision, graph, tex });
+  // the businesses: shopfronts with persiana, cajón and lit sign, kits per rubro, supermarkets (shops.js)
+  const nightMaterials = [];
+  const shops = buildShops(data, { root, graph, collision, nightMaterials });
   const zones = buildZones(data, { root, graph, collision, ribbon, flatMat, keepOut: landmarks.keepOut, GeoBuf });
-  const rail = buildRails(data, plan, { root, tex, flatMat, collision });
+  // trains and barreras move: they live outside the warped group, placed through the mapping every frame
+  const live = new THREE.Group();
+  live.name = 'GtaQuilmesTrains';
+  live.position.y = lift;
+  const rail = buildRails(data, plan, { root, live, tex, flatMat, collision, toGrid, theta: frame.theta });
   root.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = o.castShadow || !o.material?.transparent;
       o.receiveShadow = true;
     }
   });
+  warp(root, toGrid, frame.theta, lift);
   scene.add(root);
+  scene.add(live);
   root.updateMatrixWorld(true);
+  live.updateMatrixWorld(true);
 
   // footprints into the slop frame
-  const c = Math.cos(frame.theta), s = Math.sin(frame.theta);
-  const toGrid = (x, z) => ({ x: x * c + z * s + frame.x, z: -x * s + z * c + frame.z });
   const colliders = [];
   for (const sd of collision.solids) {
-    const outer = sd.type === 'poly'
+    const outer = (sd.type === 'poly'
       ? sd.pts.map(([x, z]) => toGrid(x, z))
-      : Array.from({ length: 8 }, (_, i) => toGrid(sd.x + Math.cos(i * Math.PI / 4) * sd.r, sd.z + Math.sin(i * Math.PI / 4) * sd.r));
+      : Array.from({ length: 8 }, (_, i) => toGrid(sd.x + Math.cos(i * Math.PI / 4) * sd.r, sd.z + Math.sin(i * Math.PI / 4) * sd.r)))
+      .map(([x, z]) => ({ x, z }));
     const xs = outer.map((p) => p.x), zs = outer.map((p) => p.z);
     colliders.push({
       minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs),
@@ -131,12 +203,14 @@ export async function buildGtaWorld(scene, { dataUrl, frame, lift = 0.2 }) {
   return {
     root,
     colliders,
-    keepOut: landmarks.keepOut.map(([x, z, r]) => { const p = toGrid(x, z); return [p.x, p.z, r]; }),
+    keepOut: landmarks.keepOut.map(([x, z, r]) => [...toGrid(x, z), r]),
+    shops: shops.count,
     setNight(n) {
       landmarks.setNight(n);
       zones.setNight(n);
+      shops.setNight(n);
     },
-    dynamic: rail.dynamic || null, // moving trains: their matrices are updated every frame
+    dynamic: live, // moving trains: their matrices are updated every frame
     update(dt) {
       rail.update(Math.min(dt, 0.1));
     }
@@ -145,7 +219,7 @@ export async function buildGtaWorld(scene, { dataUrl, frame, lift = 0.2 }) {
 
 // The Línea Roca as in the game: ballast, rails and sleepers (builder.js), barreras with cruces de San Andrés at the
 // level crossings (corridors.js) and the trains running between the stations (entities/train.js)
-function buildRails(data, plan, { root, tex, flatMat, collision }) {
+function buildRails(data, plan, { root, live, tex, flatMat, collision, toGrid, theta }) {
   const none = { update() {} };
   if (!data.rails?.length) return none;
   const ballast = new GeoBuf(), railBuf = new GeoBuf();
@@ -189,7 +263,8 @@ function buildRails(data, plan, { root, tex, flatMat, collision }) {
       const s = sg * (l.half + 2.2), t = -sg * (l.w / 2 + 0.6);
       const x = l.x + l.ux * s - l.uz * t, z = l.z + l.uz * s + l.ux * t;
       const Dx = -sg * l.uz, Dz = sg * l.ux;
-      gates.push({ x, z, ry: Math.atan2(-Dz, Dx), Dx, Dz, len: l.w / 2 + 0.2, l, a: Math.PI / 2 });
+      const [gx, gz] = toGrid(x, z);
+      gates.push({ x, z, gx, gz, ry: Math.atan2(-Dz, Dx), Dx, Dz, len: l.w / 2 + 0.2, l, a: Math.PI / 2 });
       collision.addCircle(x, z, 0.2, 'pole');
     }
   }
@@ -199,7 +274,9 @@ function buildRails(data, plan, { root, tex, flatMat, collision }) {
     gates.forEach((g, i) => {
       _e.set(0, g.ry, g.a, 'YXZ');
       gateQ.setFromEuler(_e);
-      gateMesh.setMatrixAt(i, _gm.compose(_p.set(g.x, 1.05, g.z), gateQ, _s.set(g.len, 1, 1)));
+      _e.set(0, g.ry + theta, g.a, 'YXZ');
+      gateQ.setFromEuler(_e);
+      gateMesh.setMatrixAt(i, _gm.compose(_p.set(g.gx, 1.05, g.gz), gateQ, _s.set(g.len, 1, 1)));
     });
     gateMesh.instanceMatrix.needsUpdate = true;
   };
@@ -217,7 +294,7 @@ function buildRails(data, plan, { root, tex, flatMat, collision }) {
     gateMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.12, 0.12).translate(0.5, 0, 0), new THREE.MeshStandardMaterial({ map, roughness: 0.6 }), gates.length);
     gateMesh.castShadow = true;
     gateMesh.frustumCulled = false;
-    root.add(gateMesh);
+    live.add(gateMesh);
     const postG = [], crossG = [];
     for (const g of gates) {
       postG.push(new THREE.CylinderGeometry(0.1, 0.12, 1.2, 6).translate(g.x, 0.6, g.z), new THREE.BoxGeometry(0.35, 0.5, 0.35).translate(g.x, 1.0, g.z));
@@ -235,16 +312,20 @@ function buildRails(data, plan, { root, tex, flatMat, collision }) {
     drawGates();
   }
 
-  const trainsRoot = new THREE.Group();
-  trainsRoot.name = 'GtaQuilmesTrains';
-  root.add(trainsRoot);
-  const trains = new Trains(trainsRoot, data);
+  const trains = new Trains(live, data);
   let trackPos = null;
   return {
     trains,
-    dynamic: trainsRoot,
     update(dt) {
       trains.update(dt);
+      for (const tr of trains.trains) {
+        for (const car of tr.cars) {
+          const [u, v] = toGrid(car.position.x, car.position.z);
+          car.position.x = u;
+          car.position.z = v;
+          car.rotation.y += theta;
+        }
+      }
       if (!gateMesh || !trains.trains.length) return;
       if (!trackPos) {
         trackPos = levels.map((l) => trains.trains.map((tr) => {

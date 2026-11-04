@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { SURROUNDING_POLYGONS, ISLAND_BOUNDS } from './city-config.js?v=q6';
+import { SURROUNDING_POLYGONS, ISLAND_BOUNDS } from './city-config.js?v=q7';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // The low-detail land around the detailed city: the rest of Santa Fe north and west of it, Santo Tomé across the
