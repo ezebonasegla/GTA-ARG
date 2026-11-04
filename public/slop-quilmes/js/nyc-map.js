@@ -1,4 +1,4 @@
-import { GEO } from './nyc-geodata.js?v=q2';
+import { GEO } from './nyc-geodata.js?v=q3';
 import {
   ROADS,
   BLOCKS,
@@ -26,7 +26,7 @@ import {
   OUTER_BRIDGES,
   getLocationLabel,
   isTypingInField
-} from './city-config.js?v=q2';
+} from './city-config.js?v=q3';
 
 // Minimap and full-screen map drawn from the same geography and building footprints as the 3D city.
 // World frame: 1 unit = 1 m, x = Manhattan-grid east, z = grid south. Both maps face grid north,
@@ -36,7 +36,10 @@ const FONT = 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 const MIN_ZOOM = 0.015; // full map, pixels per metre: the whole harbour, Staten Island to the Bronx
 const MAX_ZOOM = 3.0; // single lots
 const RADAR_SCALE = 0.32; // radar pixels per metre on the ground (zooms out with altitude)
-const GRID_BEARING = (GEO.frame && GEO.frame.bearingDeg) || 29.02; // Manhattan's grid north, degrees east of true north
+const GRID_BEARING = (GEO.frame && GEO.frame.bearingDeg) || 29.02; // the street grid's north, degrees east of true north
+// Quilmes: both maps are drawn true north up, like the game's: the grid frame turned clockwise by the bearing
+const MAP_ROT = (GRID_BEARING * Math.PI) / 180;
+const RC = Math.cos(MAP_ROT), RS = Math.sin(MAP_ROT);
 
 // Map palette, shared by the radar & the atlas (in step with css/style.css): graphite ground with the streets a shade
 // lighter than the blocks they run between, muted parks & water; a taxi-yellow GPS route, white landmarks & player,
@@ -80,22 +83,12 @@ const MODELLED_LANDMARKS = [
 
 // Borough (0), waterway (1) & neighbourhood (2) names at their real places (world metres)
 const AREA_LABELS = [
-  ['MANHATTAN', 120, -1500, 0], ['NEW JERSEY', -7000, 2000, 0], ['BROOKLYN', 7850, 8780, 0], ['QUEENS', 8810, -1680, 0],
-  ['THE BRONX', 1010, -9640, 0], ['STATEN ISLAND', -1800, 19220, 0],
-  ['HUDSON RIVER', -2680, -300, 1], ['HUDSON RIVER', -2650, -5600, 1], ['EAST RIVER', 1700, 800, 1],
-  ['HARLEM RIVER', 220, -7930, 1], ['UPPER NEW YORK BAY', 130, 10530, 1],
-  ['HARLEM', -320, -6750, 2], ['MORNINGSIDE HEIGHTS', -1600, -6160, 2], ['EAST HARLEM', 830, -5820, 2],
-  ['UPPER WEST SIDE', -1410, -3070, 2], ['CENTRAL PARK', -430, -3280, 2], ['UPPER EAST SIDE', 590, -2680, 2],
-  ['ROOSEVELT ISLAND', 1810, -2030, 2], ["HELL'S KITCHEN", -1350, -590, 2], ['MIDTOWN', 100, -500, 2],
-  ['MURRAY HILL', 680, 330, 2], ['HUDSON YARDS', -1510, 770, 2], ['CHELSEA', -1030, 1650, 2],
-  ['FLATIRON · GRAMERCY', 330, 1660, 2], ['GREENWICH VILLAGE', -540, 2830, 2], ['EAST VILLAGE', 1250, 2800, 2],
-  ['SOHO', 200, 3560, 2], ['LOWER EAST SIDE', 1690, 3760, 2], ['TRIBECA', -140, 4460, 2], ['CHINATOWN', 850, 4420, 2],
-  ['BATTERY PARK CITY', -370, 5540, 2], ['FINANCIAL DISTRICT', 455, 5715, 2], ['GOVERNORS ISLAND', 795, 7685, 2],
-  ['LIBERTY ISLAND', -1234, 8849, 2], ['ELLIS ISLAND', -1427, 7648, 2], ["RANDALL'S ISLAND", 2268, -6301, 2],
-  ['WASHINGTON HEIGHTS', -1690, -10270, 2], ['DOWNTOWN BROOKLYN', 2570, 6280, 2], ['WILLIAMSBURG', 3670, 2980, 2],
-  ['GREENPOINT', 3305, 1277, 2], ['LONG ISLAND CITY', 2865, -473, 2], ['ASTORIA', 3345, -3699, 2],
-  ['HOBOKEN', -3293, 3032, 2], ['JERSEY CITY', -2671, 6014, 2], ['WEEHAWKEN', -3670, 193, 2], ['FORT LEE', -4456, -9911, 2],
-  ['RED HOOK', 2005, 8855, 2], ['BAYONNE', -5284, 13699, 2]
+  // [label, x, z, kind: 0 town, 1 water, 2 barrio], grid frame metres
+  ['RÍO DE LA PLATA', -300, -3900, 1], ['RÍO DE LA PLATA', 3200, -3300, 1], ['RÍO DE LA PLATA', -3800, -2200, 1],
+  ['QUILMES', 600, 1500, 0], ['BERNAL', -2600, 1500, 0],
+  ['QUILMES CENTRO', 330, 320, 2], ['LA RIBERA', -350, -2450, 2], ['QUILMES ESTE', 1300, -900, 2],
+  ['QUILMES OESTE', 1300, 2900, 2], ['EZPELETA', 4100, 650, 2], ['BERNAL ESTE', -2500, 200, 2],
+  ['BERNAL OESTE', -1900, 2700, 2], ['DON BOSCO', -3600, 2600, 2], ['LA CERVECERÍA', 900, 1150, 2]
 ];
 
 // Shorter map names for a few real street names
@@ -345,21 +338,30 @@ class MapView {
     this.w = w;
     this.h = h;
     this.dpr = dpr;
-    this.minX = cx - w / (2 * s);
-    this.maxX = cx + w / (2 * s);
-    this.minZ = cz - h / (2 * s);
-    this.maxZ = cz + h / (2 * s);
+    const half = Math.hypot(w, h) / (2 * s); // the turned view's extent in the grid frame
+    this.minX = cx - half;
+    this.maxX = cx + half;
+    this.minZ = cz - half;
+    this.maxZ = cz + half;
   }
 
   /** Canvas transform for world metres */
   world(ctx) {
     const { s, dpr } = this;
-    ctx.setTransform(s * dpr, 0, 0, s * dpr, dpr * (this.w * 0.5 - this.cx * s), dpr * (this.h * 0.5 - this.cz * s));
+    const k = s * dpr;
+    ctx.setTransform(k * RC, k * RS, -k * RS, k * RC, dpr * (this.w * 0.5 - s * (RC * this.cx - RS * this.cz)),
+      dpr * (this.h * 0.5 - s * (RS * this.cx + RC * this.cz)));
   }
 
   /** Canvas transform for CSS pixels from the canvas centre (what toX / toY return) */
   screen(ctx) {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, this.dpr * this.w * 0.5, this.dpr * this.h * 0.5);
+  }
+
+  /** CSS pixels from the canvas centre of a grid point */
+  pt(x, z) {
+    const dx = x - this.cx, dz = z - this.cz;
+    return [(RC * dx - RS * dz) * this.s, (RS * dx + RC * dz) * this.s];
   }
 
   toX(x) {
@@ -440,11 +442,11 @@ class NYCMapSystem {
     this.miniScale = RADAR_SCALE;
     this.miniCache = null; // { canvas, cx, cz, s, version }: the radar's ground layers, twice the radar's size
     const elCounts = document.getElementById('fullmap-counts');
-    if (elCounts) elCounts.textContent = `${ROAD_NAME_COUNT} streets · ${BLOCKS.length.toLocaleString('en-US')} blocks`;
+    if (elCounts) elCounts.textContent = `${ROAD_NAME_COUNT} calles · ${BLOCKS.length.toLocaleString('es-AR')} manzanas`;
 
     // The map is drawn grid north up; the compass needle points to true north, 29° to its left
     const needle = document.getElementById('map-compass-needle');
-    if (needle) needle.setAttribute('transform', `rotate(${-GRID_BEARING} 22 22)`);
+    if (needle) needle.setAttribute('transform', 'rotate(0 22 22)'); // true north up
 
     this.modal = document.getElementById('fullmap-modal');
     this.fullCanvas = document.getElementById('fullmap-canvas');
@@ -456,7 +458,7 @@ class NYCMapSystem {
     this.elHoverInfo = document.getElementById('fullmap-hover-info');
     this.elPlayerInfo = document.getElementById('fullmap-player-info');
     this.elSearchInput = document.getElementById('fullmap-search');
-    if (this.elSearchInput) this.elSearchInput.placeholder = `Search ${ROAD_NAME_COUNT} streets & landmarks…`;
+    if (this.elSearchInput) this.elSearchInput.placeholder = `Buscar entre ${ROAD_NAME_COUNT} calles y lugares…`;
 
     this.isFullMapOpen = false;
     // Full map viewport state (world metres; zoom in CSS pixels per metre)
@@ -575,8 +577,8 @@ class NYCMapSystem {
           const dx = e.clientX - this.panStart.x;
           const dy = e.clientY - this.panStart.y;
           if (Math.hypot(dx, dy) > 5) this.dragMoved = true;
-          this.viewCenterX = this.panStart.cx - dx / this.viewZoom;
-          this.viewCenterZ = this.panStart.cz - dy / this.viewZoom;
+          this.viewCenterX = this.panStart.cx - (RC * dx + RS * dy) / this.viewZoom;
+          this.viewCenterZ = this.panStart.cz - (-RS * dx + RC * dy) / this.viewZoom;
           this.renderFullMap();
           return;
         }
@@ -584,7 +586,7 @@ class NYCMapSystem {
         if (mx >= 0 && mx <= rect.width && my >= 0 && my <= rect.height) {
           const wPos = this.screenToWorld(mx, my, rect.width, rect.height);
           if (this.elHoverInfo) {
-            this.elHoverInfo.textContent = `${getLocationLabel(wPos.x, wPos.z)} · Click to teleport here`;
+            this.elHoverInfo.textContent = `${getLocationLabel(wPos.x, wPos.z)} · Clic para ir acá`;
           }
         }
       });
@@ -630,8 +632,9 @@ class NYCMapSystem {
         const before = this.screenToWorld(mx, my, rect.width, rect.height);
         const factor = e.deltaY < 0 ? 1.18 : 1 / 1.18;
         this.viewZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.viewZoom * factor));
-        this.viewCenterX = before.x - (mx - rect.width * 0.5) / this.viewZoom;
-        this.viewCenterZ = before.z - (my - rect.height * 0.5) / this.viewZoom;
+        const ux = mx - rect.width * 0.5, uy = my - rect.height * 0.5;
+        this.viewCenterX = before.x - (RC * ux + RS * uy) / this.viewZoom;
+        this.viewCenterZ = before.z - (-RS * ux + RC * uy) / this.viewZoom;
         this.renderFullMap();
       }, { passive: false });
     }
@@ -723,8 +726,8 @@ class NYCMapSystem {
 
   screenToWorld(sx, sy, width, height) {
     return {
-      x: this.viewCenterX + (sx - width * 0.5) / this.viewZoom,
-      z: this.viewCenterZ + (sy - height * 0.5) / this.viewZoom
+      x: this.viewCenterX + (RC * (sx - width * 0.5) + RS * (sy - height * 0.5)) / this.viewZoom,
+      z: this.viewCenterZ + (-RS * (sx - width * 0.5) + RC * (sy - height * 0.5)) / this.viewZoom
     };
   }
 
@@ -908,14 +911,16 @@ class NYCMapSystem {
     let n = 0;
     for (const c of cands) {
       if (n >= maxLabels) break;
-      const X = v.toX(c.a.x);
-      const Y = v.toY(c.a.z);
+      const [X, Y] = v.pt(c.a.x, c.a.z);
+      let ang = c.a.ang + MAP_ROT; // upright text
+      if (ang > Math.PI / 2) ang -= Math.PI;
+      if (ang < -Math.PI / 2) ang += Math.PI;
       const same = byName.get(c.l.text);
       if (same && same.some(([x, y]) => Math.hypot(x - X, y - Y) < sameNameGap)) continue;
       const hw = c.width * 0.5 + 3;
       const hh = fontPx * 0.5 + 2;
-      const ca = Math.abs(Math.cos(c.a.ang));
-      const sa = Math.abs(Math.sin(c.a.ang));
+      const ca = Math.abs(Math.cos(ang));
+      const sa = Math.abs(Math.sin(ang));
       const bx = hw * ca + hh * sa;
       const by = hw * sa + hh * ca;
       const box = [X - bx, Y - by, X + bx, Y + by];
@@ -925,7 +930,7 @@ class NYCMapSystem {
       else byName.set(c.l.text, [[X, Y]]);
       ctx.save();
       ctx.translate(X, Y);
-      ctx.rotate(c.a.ang);
+      ctx.rotate(ang);
       ctx.fillStyle = c.hit ? MAP.search : c.l.highway ? '#e3a857' : c.l.major ? '#e8ebf0' : '#9ba5b3';
       ctx.strokeText(c.l.text, 0, 0);
       ctx.fillText(c.l.text, 0, 0);
@@ -986,8 +991,7 @@ class NYCMapSystem {
     const version = fp ? fp.version : 0;
     let c = this.miniCache;
     if (!c || c.version !== version || Math.abs(scale / c.s - 1) > 0.12 ||
-      Math.abs(px - c.cx) > w / c.s - w / (2 * scale) - 8 / scale ||
-      Math.abs(pz - c.cz) > h / c.s - h / (2 * scale) - 8 / scale) {
+      Math.hypot(px - c.cx, pz - c.cz) > Math.min(w, h) / c.s - Math.hypot(w, h) / (2 * scale) - 8 / scale) {
       if (!c) {
         c = this.miniCache = { canvas: document.createElement('canvas') };
         c.canvas.width = bw * 2;
@@ -1013,7 +1017,8 @@ class NYCMapSystem {
     ctx.fillStyle = MAP.water;
     ctx.fillRect(0, 0, bw, bh);
     const k = scale / c.s;
-    ctx.drawImage(c.canvas, dpr * ((c.cx - w / c.s - px) * scale + w * 0.5), dpr * ((c.cz - h / c.s - pz) * scale + h * 0.5),
+    const ox = (RC * (c.cx - px) - RS * (c.cz - pz)) * scale, oz = (RS * (c.cx - px) + RC * (c.cz - pz)) * scale;
+    ctx.drawImage(c.canvas, dpr * (ox - w * k + w * 0.5), dpr * (oz - h * k + h * 0.5),
       dpr * w * 2 * k, dpr * h * 2 * k);
 
     v.screen(ctx);
@@ -1022,16 +1027,14 @@ class NYCMapSystem {
 
     // GPS route to the active waypoint
     if (this.waypoint) {
-      const wx = toX(this.waypoint.x);
-      const wy = toY(this.waypoint.z);
+      const [wx, wy] = v.pt(this.waypoint.x, this.waypoint.z);
       drawRoute(ctx, 0, 0, wx, wy, 3);
       drawWaypoint(ctx, wx, wy, 4.5);
     }
 
     // Landmark blips
     for (const lm of NYC_LANDMARKS) {
-      const lx = toX(lm.x);
-      const ly = toY(lm.z);
+      const [lx, ly] = v.pt(lm.x, lm.z);
       if (Math.abs(lx) < w * 0.48 && Math.abs(ly) < h * 0.48) {
         ctx.fillStyle = MAP.halo;
         ctx.beginPath();
@@ -1049,7 +1052,7 @@ class NYCMapSystem {
     const camAngle = Math.atan2(camDir.x, camDir.z);
 
     ctx.save();
-    ctx.rotate(-camAngle + Math.PI);
+    ctx.rotate(-camAngle + Math.PI + MAP_ROT);
     const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, 58);
     grad.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
     grad.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
@@ -1063,7 +1066,7 @@ class NYCMapSystem {
 
     // Player heading arrow
     ctx.save();
-    ctx.rotate(-ent.heading + Math.PI);
+    ctx.rotate(-ent.heading + Math.PI + MAP_ROT);
     drawPlayerArrow(ctx, -9, 6.5, 7);
     ctx.restore();
 
@@ -1082,7 +1085,7 @@ class NYCMapSystem {
 
     const ent = this.controllerManager.getActiveEntity();
     if (this.elPlayerInfo) {
-      const text = `You are at ${getLocationLabel(ent.position.x, ent.position.z)}`;
+      const text = `Estás en ${getLocationLabel(ent.position.x, ent.position.z)}`;
       if (text !== this.playerInfoText) {
         this.playerInfoText = text;
         this.elPlayerInfo.textContent = text;
@@ -1112,15 +1115,13 @@ class NYCMapSystem {
 
     // GPS route on the full map
     if (this.waypoint) {
-      const wx = toX(this.waypoint.x);
-      const wy = toY(this.waypoint.z);
-      drawRoute(ctx, toX(ent.position.x), toY(ent.position.z), wx, wy, 4);
+      const [wx, wy] = v.pt(this.waypoint.x, this.waypoint.z);
+      drawRoute(ctx, ...v.pt(ent.position.x, ent.position.z), wx, wy, 4);
       drawWaypoint(ctx, wx, wy, 7);
     }
 
     // Live Player Blip & Heading Arrow, with a slow pulse to find it at a glance
-    const px = toX(ent.position.x);
-    const py = toY(ent.position.z);
+    const [px, py] = v.pt(ent.position.x, ent.position.z);
 
     ctx.save();
     ctx.translate(px, py);
@@ -1133,7 +1134,7 @@ class NYCMapSystem {
     ctx.beginPath();
     ctx.arc(0, 0, 13, 0, Math.PI * 2);
     ctx.fill();
-    ctx.rotate(-ent.heading + Math.PI);
+    ctx.rotate(-ent.heading + Math.PI + MAP_ROT);
     drawPlayerArrow(ctx, -11, 7.5, 8);
     ctx.restore();
 
@@ -1160,8 +1161,7 @@ class NYCMapSystem {
     const placed = [];
     const pins = [];
     for (const lm of NYC_LANDMARKS) {
-      const lx = toX(lm.x);
-      const ly = toY(lm.z);
+      const [lx, ly] = v.pt(lm.x, lm.z);
       if (Math.abs(lx) > w * 0.48 || Math.abs(ly) > h * 0.48) continue;
       const labelW = this.textWidth(ctx, lm.short) + 6;
       const box = [lx + 6, ly - 8, lx + 8 + labelW, ly + 7];
@@ -1178,8 +1178,7 @@ class NYCMapSystem {
     for (const [label, x, z, kind] of AREA_LABELS) {
       if (kind === 0 && s > 0.07) continue;
       if (kind === 2 && (s < 0.035 || s > 1.2)) continue;
-      const dx = toX(x);
-      const dy = toY(z);
+      const [dx, dy] = v.pt(x, z);
       if (Math.abs(dx) > w * 0.47 || Math.abs(dy) > h * 0.47) continue;
       if (kind === 0) {
         ctx.font = `700 15px ${FONT}`;

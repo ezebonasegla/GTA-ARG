@@ -18,9 +18,9 @@ def src(p):
 
 def rep(p, old, new, count=1):
     s = src(p)
+    if new in s:
+        return  # already applied
     if old not in s:
-        if new in s:
-            return  # already applied
         raise SystemExit(f'{p}: not found: {old[:80]!r}')
     _files[p] = s.replace(old, new, count if count else -1)
 
@@ -377,6 +377,105 @@ rep(p, """    <button id="tp-estacion" """, """    <button id="tp-bernal" class=
     <button id="tp-ezpeleta" class="pop-item tp-btn" data-teleport="ezpeleta" type="button"><span class="pop-name">Ezpeleta</span><span class="pop-sub">Estación Ezpeleta</span></button>
     <button id="tp-estacion" """)
 rep(p, '<link rel="modulepreload" href="./js/subway-geodata.js" />', '<link rel="modulepreload" href="./js/quilmes-places.js" />\n  <link rel="modulepreload" href="./js/subway-geodata.js" />')
+
+# ------------------------------------------------------------------ the maps: north up, Quilmes barrios
+p = 'js/nyc-map.js'
+s = src(p)
+if 'MAP_ROT' not in s:
+    def sub(old, new, n=1):
+        global s
+        assert s.count(old) >= n, old
+        s = s.replace(old, new)
+    a = s.index('const AREA_LABELS = [')
+    b = s.index('];', a) + 2
+    s = s[:a] + """const AREA_LABELS = [
+  // [label, x, z, kind: 0 town, 1 water, 2 barrio], grid frame metres
+  ['RÍO DE LA PLATA', -300, -3900, 1], ['RÍO DE LA PLATA', 3200, -3300, 1], ['RÍO DE LA PLATA', -3800, -2200, 1],
+  ['QUILMES', 600, 1500, 0], ['BERNAL', -2600, 1500, 0],
+  ['QUILMES CENTRO', 330, 320, 2], ['LA RIBERA', -350, -2450, 2], ['QUILMES ESTE', 1300, -900, 2],
+  ['QUILMES OESTE', 1300, 2900, 2], ['EZPELETA', 4100, 650, 2], ['BERNAL ESTE', -2500, 200, 2],
+  ['BERNAL OESTE', -1900, 2700, 2], ['DON BOSCO', -3600, 2600, 2], ['LA CERVECERÍA', 900, 1150, 2]
+];""" + s[b:]
+    sub("const GRID_BEARING = (GEO.frame && GEO.frame.bearingDeg) || 29.02; // Manhattan's grid north, degrees east of true north",
+        """const GRID_BEARING = (GEO.frame && GEO.frame.bearingDeg) || 29.02; // the street grid's north, degrees east of true north
+// Quilmes: both maps are drawn true north up, like the game's: the grid frame turned clockwise by the bearing
+const MAP_ROT = (GRID_BEARING * Math.PI) / 180;
+const RC = Math.cos(MAP_ROT), RS = Math.sin(MAP_ROT);""")
+    sub("""    this.minX = cx - w / (2 * s);
+    this.maxX = cx + w / (2 * s);
+    this.minZ = cz - h / (2 * s);
+    this.maxZ = cz + h / (2 * s);
+  }""", """    const half = Math.hypot(w, h) / (2 * s); // the turned view's extent in the grid frame
+    this.minX = cx - half;
+    this.maxX = cx + half;
+    this.minZ = cz - half;
+    this.maxZ = cz + half;
+  }""")
+    sub("""    ctx.setTransform(s * dpr, 0, 0, s * dpr, dpr * (this.w * 0.5 - this.cx * s), dpr * (this.h * 0.5 - this.cz * s));""",
+        """    const k = s * dpr;
+    ctx.setTransform(k * RC, k * RS, -k * RS, k * RC, dpr * (this.w * 0.5 - s * (RC * this.cx - RS * this.cz)),
+      dpr * (this.h * 0.5 - s * (RS * this.cx + RC * this.cz)));""")
+    sub("""  toX(x) {""", """  /** CSS pixels from the canvas centre of a grid point */
+  pt(x, z) {
+    const dx = x - this.cx, dz = z - this.cz;
+    return [(RC * dx - RS * dz) * this.s, (RS * dx + RC * dz) * this.s];
+  }
+
+  toX(x) {""")
+    sub("""      const X = v.toX(c.a.x);
+      const Y = v.toY(c.a.z);""", """      const [X, Y] = v.pt(c.a.x, c.a.z);
+      let ang = c.a.ang + MAP_ROT; // upright text
+      if (ang > Math.PI / 2) ang -= Math.PI;
+      if (ang < -Math.PI / 2) ang += Math.PI;""")
+    sub("""      const ca = Math.abs(Math.cos(c.a.ang));
+      const sa = Math.abs(Math.sin(c.a.ang));""", """      const ca = Math.abs(Math.cos(ang));
+      const sa = Math.abs(Math.sin(ang));""")
+    sub("      ctx.rotate(c.a.ang);", "      ctx.rotate(ang);")
+    s = re.sub(r'const (\w+) = toX\(([\w.]+)\.x\);\n(\s*)const (\w+) = toY\(\2\.z\);', r'const [\1, \4] = v.pt(\2.x, \2.z);', s)
+    sub("""      const dx = toX(x);
+      const dy = toY(z);""", """      const [dx, dy] = v.pt(x, z);""")
+    sub("drawRoute(ctx, toX(ent.position.x), toY(ent.position.z), wx, wy, 4);", "drawRoute(ctx, ...v.pt(ent.position.x, ent.position.z), wx, wy, 4);")
+    sub("ctx.rotate(-ent.heading + Math.PI);", "ctx.rotate(-ent.heading + Math.PI + MAP_ROT);", 2)
+    sub("ctx.rotate(-camAngle + Math.PI);", "ctx.rotate(-camAngle + Math.PI + MAP_ROT);")
+    # the radar's cached ground: redraw when the player nears its edge, placed turned like the view
+    sub("""      Math.abs(px - c.cx) > w / c.s - w / (2 * scale) - 8 / scale ||
+      Math.abs(pz - c.cz) > h / c.s - h / (2 * scale) - 8 / scale) {""",
+        """      Math.hypot(px - c.cx, pz - c.cz) > Math.min(w, h) / c.s - Math.hypot(w, h) / (2 * scale) - 8 / scale) {""")
+    sub("""    ctx.drawImage(c.canvas, dpr * ((c.cx - w / c.s - px) * scale + w * 0.5), dpr * ((c.cz - h / c.s - pz) * scale + h * 0.5),""",
+        """    const ox = (RC * (c.cx - px) - RS * (c.cz - pz)) * scale, oz = (RS * (c.cx - px) + RC * (c.cz - pz)) * scale;
+    ctx.drawImage(c.canvas, dpr * (ox - w * k + w * 0.5), dpr * (oz - h * k + h * 0.5),""")
+    # pan, zoom and clicks: screen offsets back to the grid frame
+    sub("""          this.viewCenterX = this.panStart.cx - dx / this.viewZoom;
+          this.viewCenterZ = this.panStart.cz - dy / this.viewZoom;""",
+        """          this.viewCenterX = this.panStart.cx - (RC * dx + RS * dy) / this.viewZoom;
+          this.viewCenterZ = this.panStart.cz - (-RS * dx + RC * dy) / this.viewZoom;""")
+    sub("""        this.viewCenterX = before.x - (mx - rect.width * 0.5) / this.viewZoom;
+        this.viewCenterZ = before.z - (my - rect.height * 0.5) / this.viewZoom;""",
+        """        const ux = mx - rect.width * 0.5, uy = my - rect.height * 0.5;
+        this.viewCenterX = before.x - (RC * ux + RS * uy) / this.viewZoom;
+        this.viewCenterZ = before.z - (-RS * ux + RC * uy) / this.viewZoom;""")
+    sub("""      x: this.viewCenterX + (sx - width * 0.5) / this.viewZoom,
+      z: this.viewCenterZ + (sy - height * 0.5) / this.viewZoom""",
+        """      x: this.viewCenterX + (RC * (sx - width * 0.5) + RS * (sy - height * 0.5)) / this.viewZoom,
+      z: this.viewCenterZ + (-RS * (sx - width * 0.5) + RC * (sy - height * 0.5)) / this.viewZoom""")
+    sub("if (needle) needle.setAttribute('transform', `rotate(${-GRID_BEARING} 22 22)`);", "if (needle) needle.setAttribute('transform', 'rotate(0 22 22)'); // true north up")
+    left = [l for l in s.split('\n') if re.search(r'\btoX\(|\btoY\(', l) and 'v.toX(wx)' not in l and 'v.toY(wz)' not in l and '  toX(x) {' not in l and '  toY(z) {' not in l]
+    assert not left, left
+    _files[p] = s
+rep('index.html', 'title="Norte · la cuadrícula de Quilmes está girada 58°"', 'title="Norte arriba"')
+for old, new in [
+    ("`${ROAD_NAME_COUNT} streets · ${BLOCKS.length.toLocaleString('en-US')} blocks`", "`${ROAD_NAME_COUNT} calles · ${BLOCKS.length.toLocaleString('es-AR')} manzanas`"),
+    ("`Search ${ROAD_NAME_COUNT} streets & landmarks…`", "`Buscar entre ${ROAD_NAME_COUNT} calles y lugares…`"),
+    ("· Click to teleport here`", "· Clic para ir acá`"),
+    ("`You are at ${getLocationLabel(", "`Estás en ${getLocationLabel("),
+]:
+    rep('js/nyc-map.js', old, new)
+for old, new in [
+    ('>You are at 5th Ave &amp; 35th St<', '>Estás en Plaza San Martín<'),
+    ('<span class="tool-label">Close</span><kbd>Esc</kbd>', '<span class="tool-label">Cerrar</span><kbd>Esc</kbd>'),
+    ('>Click anywhere to teleport &amp; set your GPS route · Drag to pan · Scroll to zoom<', '>Clic para ir a un lugar y marcar la ruta · Arrastrá para mover · Rueda para acercar<'),
+]:
+    rep('index.html', old, new)
 
 for p, s in _files.items():
     open(f'{S}/{p}', 'w').write(s)

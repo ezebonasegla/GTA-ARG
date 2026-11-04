@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { cityUniforms } from './tsl-materials.js?v=q2';
+import { cityUniforms } from './tsl-materials.js?v=q3';
 import {
   Fn,
   If,
@@ -36,7 +36,7 @@ import {
 } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LoftGeometry } from 'three/addons/geometries/LoftGeometry.js';
-import { part, mirrorSection, roundedRectShape, roundedBox } from './vehicles.js?v=q2';
+import { part, mirrorSection, roundedRectShape, roundedBox } from './vehicles.js?v=q3';
 
 // Car geometry and materials, lofted with LoftGeometry and adapted from Three.js CarGenerator. The bus (bus.js) lofts
 // its body with the same machinery; the pieces every vehicle uses are in vehicles.js.
@@ -1584,16 +1584,6 @@ function createLoftedCarMaterial(spec, fixedColorHex = null) {
         bCol.assign(mix(bCol, color(0x16191d), bedTop));
       }
       const grime = smoothstep(sillY + 0.16, sillY - 0.01, p.y).mul(0.2);
-      if (spec.sign) {
-        // taxi porteño: black body, yellow roof
-        const roof = smoothstep(0.55, 0.8, n.y).mul(smoothstep(0.2, 0.26, p.y.sub(belt)));
-        bCol.assign(mix(bCol, color(0xf2b316).mul(ao), roof));
-      }
-      if (spec.sign) {
-        // taxi porteño: black body, yellow roof
-        const roof = smoothstep(0.55, 0.8, n.y).mul(smoothstep(0.2, 0.26, p.y.sub(belt)));
-        bCol.assign(mix(bCol, color(0xf2b316).mul(ao), roof));
-      }
       if (spec.sign) {
         // taxi porteño: black body, yellow roof
         const roof = smoothstep(0.55, 0.8, n.y).mul(smoothstep(0.2, 0.26, p.y.sub(belt)));

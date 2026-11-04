@@ -42,6 +42,6 @@ node <dir>/app/tools/build-trees.mjs
 node <dir>/app/tools/build-places.mjs public/data/quilmes.json
 python3 scripts/slop-quilmes/adapt_quilmes.py <dir>/app
 python3 scripts/slop-quilmes/adapt_full.py <dir>/app
-# copiar <dir>/app/{index.html,css,js} a public/slop-quilmes/ y marcar la versión en cada import (?v=...) para que
+scripts/slop-quilmes/publish.sh <dir>/app   # copia a public/slop-quilmes/ y marca la versión en cada import (?v=...) para que
 # los navegadores no sigan usando los módulos viejos de la caché
 ```
