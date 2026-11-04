@@ -13,15 +13,15 @@ import {
   CENTRAL_PARK_BOUNDS as CPB,
   BLOCKS,
   LANDMARK_SITES
-} from './city-config.js?v=q4';
-import { cityUniforms, createSteamMaterial, createTreeGrateMaterial, createGodRayMaterial } from './tsl-materials.js?v=q4';
-import { createTreeField } from './trees.js?v=q4';
-import { REAL_TREES } from './tree-geodata.js?v=q4';
-import { placeStreetTrees } from './tree-placements.js?v=q4';
-import { createSubwayEntranceParts, createFoodCartParts } from './street-props.js?v=q4';
-import { createSubwayEntrances } from './subway-entrances.js?v=q4';
-import { pavedPlazaRects, centralParkClearings, parkTreeSites, parkLampSites } from './city-grid.js?v=q4';
-import { bryantParkLawn } from './landmarks.js?v=q4';
+} from './city-config.js?v=q5';
+import { cityUniforms, createSteamMaterial, createTreeGrateMaterial, createGodRayMaterial } from './tsl-materials.js?v=q5';
+import { createTreeField } from './trees.js?v=q5';
+import { REAL_TREES } from './tree-geodata.js?v=q5';
+import { placeStreetTrees } from './tree-placements.js?v=q5';
+import { createSubwayEntranceParts, createFoodCartParts } from './street-props.js?v=q5';
+import { createSubwayEntrances } from './subway-entrances.js?v=q5';
+import { pavedPlazaRects, centralParkClearings, parkTreeSites, parkLampSites } from './city-grid.js?v=q5';
+import { bryantParkLawn } from './landmarks.js?v=q5';
 
 // Instanced street furniture, traffic signals, trees and nearby light pools.
 
@@ -123,7 +123,7 @@ function buildStreetDetails(scene, colliders = []) {
     metalness: 0.78
   });
   const signalHousingMat = new THREE.MeshStandardNodeMaterial({
-    color: 0xe6a817, // Authentic NYC DOT school-bus/marigold yellow housing
+    color: 0x24282a, // Quilmes: dark grey signal housings
     roughness: 0.38,
     metalness: 0.35,
     side: THREE.DoubleSide // the tunnel visors are open half-tubes

@@ -477,6 +477,9 @@ for old, new in [
 ]:
     rep('index.html', old, new)
 
+# semáforos: dark grey housings like Quilmes's, not New York's yellow
+rep('js/street-details.js', "    color: 0xe6a817, // Authentic NYC DOT school-bus/marigold yellow housing", "    color: 0x24282a, // Quilmes: dark grey signal housings")
+
 # ------------------------------------------------------------------ the game's hand-made places (gta-world.js)
 p = 'js/main.js'
 rep(p, "import { buildLandmarks } from './landmarks.js';", "import { buildLandmarks } from './landmarks.js';\nimport { buildGtaWorld } from './gta-world.js';\nimport { GAME_FRAME } from './quilmes-places.js';")

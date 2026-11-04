@@ -3,7 +3,7 @@
 // Snapshot SHA-256: cd4927243ecf77c5fcb984eda00f13dbfc8879fcdb464bf5ba1635ffe51a8e54
 // 97,931 buildings. Coordinates: 0.5 m; roof heights: 1 m (97,931 measured by Open Buildings
 // 2.5D Temporal 2023, CC BY-4.0 / ODbL; 0 from OSM tags; the rest estimated); construction years: unknown (0).
-const response = await fetch(new URL('./building-geodata.bin.gz?v=q4', import.meta.url));
+const response = await fetch(new URL('./building-geodata.bin.gz?v=q5', import.meta.url));
 if (!response.ok) throw new Error(`Building data request failed: ${response.status}`);
 // Servers that send .gz files as Content-Encoding: gzip hand over bytes the browser has already inflated
 const body = new Uint8Array(await response.arrayBuffer());
