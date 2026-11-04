@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { cityUniforms } from './tsl-materials.js?v=q10';
+import { cityUniforms } from './tsl-materials.js?v=q11';
 import {
   float,
   vec2,
@@ -23,8 +23,8 @@ import {
 } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LoftGeometry } from 'three/addons/geometries/LoftGeometry.js';
-import { part, mirrorSection, roundedBox } from './vehicles.js?v=q10';
-import { CAR_PARTS, buildBodyLoft, carBodyHalfWidthAt } from './cars.js?v=q10';
+import { part, mirrorSection, roundedBox } from './vehicles.js?v=q11';
+import { CAR_PARTS, buildBodyLoft, carBodyHalfWidthAt } from './cars.js?v=q11';
 
 // A 40-ft low-floor MTA bus lofted with the car body machinery: rounded plan-view corners, a raked windshield, a
 // tight roof radius and arches over the wheels; bumpers, the folded front bike rack, stalk mirrors and the roof AC &

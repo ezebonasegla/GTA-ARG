@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
-import { WALL_KINDS } from './tsl-materials.js?v=q10';
-import { polygonContains } from './building-collision.js?v=q10';
+import { WALL_KINDS } from './tsl-materials.js?v=q11';
+import { polygonContains } from './building-collision.js?v=q11';
 
 function partyWallHeight(record, a, b, neighbours) {
   const dx = b.x - a.x, dz = b.y - a.y, length = Math.hypot(dx, dz);

@@ -39,7 +39,7 @@ import {
   blockAt,
   EAST_RIVER_BRIDGES,
   CUT_Z
-} from './city-config.js?v=q10';
+} from './city-config.js?v=q11';
 import {
   createRoadSurfaceMaterial,
   createSidewalkMaterial,
@@ -55,9 +55,9 @@ import {
   createParkWallMaterial,
   createParkLampPoolMaterial,
   createTunnelShadeMaterial
-} from './tsl-materials.js?v=q10';
-import { createRoadPaintChunkBuilder } from './road-paint.js?v=q10';
-import { GEO } from './nyc-geodata.js?v=q10';
+} from './tsl-materials.js?v=q11';
+import { createRoadPaintChunkBuilder } from './road-paint.js?v=q11';
+import { GEO } from './nyc-geodata.js?v=q11';
 
 // Live construction data consumed by the building and street-detail builders after buildCityGrid().
 let centralParkClearings;

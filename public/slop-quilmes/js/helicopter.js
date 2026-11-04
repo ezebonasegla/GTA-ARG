@@ -18,7 +18,7 @@ import {
 } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LoftGeometry } from 'three/addons/geometries/LoftGeometry.js';
-import { part } from './vehicles.js?v=q10';
+import { part } from './vehicles.js?v=q11';
 
 // The player's Manhattan sightseeing helicopter: a lofted fuselage with tube skids, rotors and its TSL material.
 

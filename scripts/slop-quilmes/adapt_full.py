@@ -512,6 +512,178 @@ rep('js/main.js', "    if (boroughs.update) boroughs.update(elapsed);", "    if 
 
 rep('js/main.js', "    controllerManager.entities.cyclist.helmet\n  ];", "    controllerManager.entities.cyclist.helmet,\n    ...(gtaPlaces && gtaPlaces.dynamic ? [gtaPlaces.dynamic] : [])\n  ];")
 
+# ------------------------------------------------------------------ colectivos on their real routes (traffic.js)
+p = 'js/traffic.js'
+rep(p, "const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));", """const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+
+// GTA Quilmes: the real colectivo lines (quilmes-buses.js). A bus is put on a line that passes near the camera, takes
+// at every intersection the move that keeps to its route and stops at the line's paradas.
+const ROUTES = BUS_ROUTES.map((r) => {
+  const n = r.pts.length / 2, cum = new Float32Array(n);
+  for (let i = 1; i < n; i++) cum[i] = cum[i - 1] + Math.hypot(r.pts[2 * i] - r.pts[2 * i - 2], r.pts[2 * i + 1] - r.pts[2 * i - 1]);
+  return { ...r, n, cum, len: cum[n - 1] };
+});
+// Nearest point of route R to (x, z) between distances s0 and s1 along it: { s, d }
+function routeProject(R, x, z, s0, s1) {
+  let best = Infinity, bs = s0;
+  for (let i = 0; i < R.n - 1; i++) {
+    if (R.cum[i + 1] < s0 || R.cum[i] > s1) continue;
+    const ax = R.pts[2 * i], az = R.pts[2 * i + 1], dx = R.pts[2 * i + 2] - ax, dz = R.pts[2 * i + 3] - az;
+    const l2 = dx * dx + dz * dz || 1;
+    const t = clamp(((x - ax) * dx + (z - az) * dz) / l2, 0, 1);
+    const d = Math.hypot(ax + dx * t - x, az + dz * t - z);
+    if (d < best) { best = d; bs = R.cum[i] + t * Math.sqrt(l2); }
+  }
+  return { s: bs, d: best };
+}""")
+rep(p, "import {\n  BUS_SPEC,", "import { BUS_ROUTES } from './quilmes-buses.js';\nimport {\n  BUS_SPEC,")
+# destination signs: one row per bus, drawn when it takes a line
+a = src(p).index('function createBusDestinationTexture() {')
+b = src(p).index('const clamp = (x, lo, hi)')
+_files[p] = src(p)[:a] + """// LED destination signs: one 64 px row per bus (16 rows), redrawn with its line and destination
+function createBusDestinationTexture() {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 1024;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#090b10';
+  ctx.fillRect(0, 0, 512, 1024);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 16;
+  tex.draw = (row, line, dest) => {
+    const y0 = row * 64;
+    ctx.fillStyle = '#090b10';
+    ctx.fillRect(0, y0, 512, 64);
+    ctx.fillStyle = '#0b0e14';
+    ctx.fillRect(6, y0 + 8, 500, 48);
+    ctx.fillStyle = '#ffb000';
+    ctx.font = '900 34px Inter, Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(line, 64, y0 + 33);
+    ctx.font = '800 22px JetBrains Mono, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(dest.toUpperCase(), 130, y0 + 33, 370);
+    tex.needsUpdate = true;
+  };
+  for (let i = 0; i < 16; i++) tex.draw(i, '', 'QUILMES');
+  return tex;
+}
+
+""" + src(p)[b:]
+rep(p, "    const vRow = varying(vertexStage(mod(floor(max(float(0.0), state.w.sub(1.0)).add(0.5)), 8.0)));\n    const signUV = vec2(uv().x, uv().y.mul(0.095).add(0.015).add(float(7.0).sub(vRow).mul(0.125)));",
+    "    const vRow = varying(vertexStage(mod(floor(max(float(0.0), state.w.sub(1.0)).add(0.5)), 16.0)));\n    const signUV = vec2(uv().x, uv().y.mul(0.0475).add(0.0075).add(float(15.0).sub(vRow).mul(0.0625)));")
+# route-following moves
+rep(p, """  function chooseMove(v, fromLane) {
+    const e = v.edge;""", """  function chooseMove(v, fromLane) {
+    if (v.bus && v.route) {
+      const m = routeMove(v, fromLane);
+      if (m) return m;
+      v.route = null; // off its line: an ordinary bus until it is recycled
+    }
+    const e = v.edge;""")
+rep(p, """  // Could the vehicle of lane entry o, approaching the end of edge a""", """  // The move out of v's edge that keeps closest to its line ahead (null if none stays within ~30 m of it)
+  function routeMove(v, fromLane) {
+    const R = v.route, e = v.edge;
+    let best = null, bd = 30, any = null, ad = 30;
+    for (const m of e.moves) {
+      const f = m.to;
+      const t = Math.min(f.len, 50);
+      const q = routeProject(R, f.sx + f.dx * t, f.sz + f.dz * t, v.rs - 10, v.rs + 260);
+      const q0 = routeProject(R, f.sx + f.dx * Math.min(f.len, 12), f.sz + f.dz * Math.min(f.len, 12), v.rs - 10, v.rs + 200);
+      const d = Math.max(q.d, q0.d) + (q.s < q0.s ? 40 : 0); // and along the line, not back
+      if (d < ad) { ad = d; any = m; }
+      if (fromLane && m.out[v.lane] < 0) continue;
+      if (d < bd) { bd = d; best = m; }
+    }
+    return best || any;
+  }
+
+  // Paradas: brake for the next stop of v's line, wait there a few seconds
+  function busStopAcc(v) {
+    const R = v.route;
+    const q = routeProject(R, v.x, v.z, v.rs - 15, v.rs + 60);
+    if (q.d < 25) v.rs = Math.max(v.rs, q.s);
+    while (v.stop < R.stops.length && R.stops[v.stop] < v.rs - 4) v.stop++;
+    if (clock < v.dwellUntil) return stopAt(v, 0.05, 0.1);
+    if (v.stop >= R.stops.length) {
+      if (v.rs > R.len - 30) v.route = null; // end of the line
+      return 0;
+    }
+    const d = R.stops[v.stop] - v.rs - v.half + 2;
+    if (d > LOOKAHEAD) return 0;
+    // held up short of the parada (a queue, a red): after a while it lets this one go
+    if (v.speed > 0.5) v.slowSince = clock;
+    else if (clock - (v.slowSince ?? clock) > 20) {
+      v.stop++;
+      v.slowSince = clock;
+      return 0;
+    }
+    if (d < 1.5 && v.speed < 0.6) {
+      v.dwellUntil = clock + 6 + Math.random() * 6;
+      v.stop++;
+      return stopAt(v, 0.05, 0.1);
+    }
+    return stopAt(v, Math.max(0.05, d), 0.5);
+  }
+
+  // Could the vehicle of lane entry o, approaching the end of edge a""")
+rep(p, """    const acc = Math.min(freeAcc(v) + worst, (cap - v.speed) * 2);
+    v.acc = clamp(acc, -9, v.driver.a);""", """    if (v.bus && v.route) worst = Math.min(worst, busStopAcc(v));
+    const acc = Math.min(freeAcc(v) + worst, (cap - v.speed) * 2);
+    v.acc = clamp(acc, -9, v.driver.a);""")
+# spawning on a line near the camera
+rep(p, """  function spawnVehicle(v, rMin, rMax, protectView) {
+    for (let attempt = 0; attempt < 12; attempt++) {""", """  function spawnBusOnRoute(v, rMin, rMax, protectView) {
+    const near = ROUTES.filter((R) => {
+      for (let i = 0; i < R.n; i += 2) if (Math.hypot(R.pts[2 * i] - focusX, R.pts[2 * i + 1] - focusZ) < rMax) return true;
+      return false;
+    });
+    if (!near.length) return false;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const R = near[Math.floor(Math.random() * near.length)];
+      const cand = [];
+      for (let i = 0; i < R.n - 1; i++) {
+        const d = Math.hypot(R.pts[2 * i] - focusX, R.pts[2 * i + 1] - focusZ);
+        if (d > rMin && d < rMax) cand.push(i);
+      }
+      if (!cand.length) continue;
+      const i = cand[Math.floor(Math.random() * cand.length)];
+      const ax = R.pts[2 * i], az = R.pts[2 * i + 1];
+      const L = R.cum[i + 1] - R.cum[i] || 1;
+      const ux = (R.pts[2 * i + 2] - ax) / L, uz = (R.pts[2 * i + 3] - az) / L;
+      for (const e of nearEdges) {
+        if (e.len < 2 * v.half + 10 || e.dx * ux + e.dz * uz < 0.9) continue;
+        const s = (ax - e.sx) * e.dx + (az - e.sz) * e.dz;
+        if (s < v.half + 5 || s > e.len - v.half - 5) continue;
+        if (Math.abs((ax - e.sx) * e.rx + (az - e.sz) * e.rz) > 8) continue;
+        const lane = e.lanes.length - 1; // the curb lane
+        const x = e.sx + e.dx * s + e.rx * e.lanes[lane], z = e.sz + e.dz * s + e.rz * e.lanes[lane];
+        if (protectView && nearView(x, z, v.half + 4, VEHICLE_SPAWN_DISTANCE)) continue;
+        if (player.active && Math.hypot(x - player.x, z - player.z) < 25) continue;
+        if (!laneClear(e.occ[lane], s, v.half + 8)) continue;
+        v.route = R;
+        v.rs = R.cum[i];
+        v.stop = 0;
+        v.dwellUntil = 0;
+        place(v, e, lane, s);
+        busDestTex.draw(v.variant, R.line, R.dest);
+        return true;
+      }
+    }
+    v.route = null;
+    return false;
+  }
+
+  function spawnVehicle(v, rMin, rMax, protectView) {
+    // colectivos only run on their lines: none where no line passes
+    if (v.bus && ROUTES.length) return spawnBusOnRoute(v, rMin, rMax, protectView);
+    for (let attempt = 0; attempt < 12; attempt++) {""")
+rep(p, "      if (d <= (jump ? NEAR_RADIUS : VEHICLE_RADIUS)) continue;",
+    "      // a colectivo that left its line goes back to one as soon as it is out of sight\n      const offLine = v.bus && !v.route && v.edge && ROUTES.length && !nearView(v.x, v.z, v.half + 4, VEHICLE_SPAWN_DISTANCE);\n      if (d <= (jump ? NEAR_RADIUS : VEHICLE_RADIUS) && !offLine) continue;")
+rep(p, "const NUM_BUSES = 12;", "const NUM_BUSES = 14; // colectivos (one LED sign row each, 16 at most)")
+
 for p, s in _files.items():
     open(f'{S}/{p}', 'w').write(s)
 print('ok', len(_files), 'files')

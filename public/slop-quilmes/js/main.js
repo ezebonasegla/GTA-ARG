@@ -1,28 +1,28 @@
 import * as THREE from 'three/webgpu';
 import { pass, mrt, output, normalView, positionView, metalness, roughness, vec2, smoothstep } from 'three/tsl';
 import { ssr } from 'three/addons/tsl/display/SSRNode.js';
-import { createPostProcessing } from './post-processing.js?v=q10';
+import { createPostProcessing } from './post-processing.js?v=q11';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
-import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js?v=q10';
+import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js?v=q11';
 
 const PLAYER_STATE_KEY = 'santafe-player-state';
-import { buildCityGrid } from './city-grid.js?v=q10';
-import { buildBoroughs } from './boroughs.js?v=q10';
-import { buildLandmarks } from './landmarks.js?v=q10';
-import { buildGtaWorld, buildHouses } from './gta-world.js?v=q10';
-import { GAME_FRAME } from './quilmes-places.js?v=q10';
-import { buildCityBlocks } from './buildings.js?v=q10';
-import { buildStreetDetails } from './street-details.js?v=q10';
-import { createTrafficSystem, createHighwayTraffic } from './traffic.js?v=q10';
-import { buildRoadPaint } from './road-paint.js?v=q10';
-import { ThirdPersonControllerManager } from './controllers.js?v=q10';
-import { TouchControls } from './touch-controls.js?v=q10';
-import { GamepadControls } from './gamepad-controls.js?v=q10';
-import { CameraSystem, CAMERA_PRESETS } from './cameras.js?v=q10';
-import { LightingSystem } from './lighting.js?v=q10';
-import { NYCMapSystem } from './nyc-map.js?v=q10';
-import { setupSceneCulling, updateSceneCulling } from './scene-culling.js?v=q10';
-import { CityAudioSystem } from './audio-system.js?v=q10';
+import { buildCityGrid } from './city-grid.js?v=q11';
+import { buildBoroughs } from './boroughs.js?v=q11';
+import { buildLandmarks } from './landmarks.js?v=q11';
+import { buildGtaWorld, buildHouses } from './gta-world.js?v=q11';
+import { GAME_FRAME } from './quilmes-places.js?v=q11';
+import { buildCityBlocks } from './buildings.js?v=q11';
+import { buildStreetDetails } from './street-details.js?v=q11';
+import { createTrafficSystem, createHighwayTraffic } from './traffic.js?v=q11';
+import { buildRoadPaint } from './road-paint.js?v=q11';
+import { ThirdPersonControllerManager } from './controllers.js?v=q11';
+import { TouchControls } from './touch-controls.js?v=q11';
+import { GamepadControls } from './gamepad-controls.js?v=q11';
+import { CameraSystem, CAMERA_PRESETS } from './cameras.js?v=q11';
+import { LightingSystem } from './lighting.js?v=q11';
+import { NYCMapSystem } from './nyc-map.js?v=q11';
+import { setupSceneCulling, updateSceneCulling } from './scene-culling.js?v=q11';
+import { CityAudioSystem } from './audio-system.js?v=q11';
 
 // Application setup, shader warm-up and frame loop.
 
@@ -97,13 +97,13 @@ async function initApp() {
   // GTA Quilmes: the game's cathedral, churches, stations, stadiums, brewery, plazas and peatonal (src/slop/gtaWorld.js)
   let gtaPlaces = null;
   try {
-    gtaPlaces = await buildGtaWorld(scene, { dataUrl: new URL('./gta-world.json?v=q10', import.meta.url), frame: GAME_FRAME });
+    gtaPlaces = await buildGtaWorld(scene, { dataUrl: new URL('./gta-world.json?v=q11', import.meta.url), frame: GAME_FRAME });
   } catch (err) {
     console.error('[gta-world]', err);
   }
   let gtaHouses = null;
   try {
-    gtaHouses = await buildHouses(scene, { dataUrl: new URL('./gta-houses.json?v=q10', import.meta.url), frame: GAME_FRAME });
+    gtaHouses = await buildHouses(scene, { dataUrl: new URL('./gta-houses.json?v=q11', import.meta.url), frame: GAME_FRAME });
   } catch (err) {
     console.error('[gta-houses]', err);
   }
