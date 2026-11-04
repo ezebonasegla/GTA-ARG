@@ -477,6 +477,26 @@ for old, new in [
 ]:
     rep('index.html', old, new)
 
+# ------------------------------------------------------------------ the game's hand-made places (gta-world.js)
+p = 'js/main.js'
+rep(p, "import { buildLandmarks } from './landmarks.js';", "import { buildLandmarks } from './landmarks.js';\nimport { buildGtaWorld } from './gta-world.js';\nimport { GAME_FRAME } from './quilmes-places.js';")
+rep(p, """  const { colliders: landmarkColliders } = buildLandmarks(scene);
+  markInit('landmarks');""", """  const { colliders: landmarkColliders } = buildLandmarks(scene);
+  // GTA Quilmes: the game's cathedral, churches, stations, stadiums, brewery, plazas and peatonal (src/slop/gtaWorld.js)
+  let gtaPlaces = null;
+  try {
+    gtaPlaces = await buildGtaWorld(scene, { dataUrl: new URL('./gta-world.json', import.meta.url), frame: GAME_FRAME });
+  } catch (err) {
+    console.error('[gta-world]', err);
+  }
+  markInit('landmarks');""")
+rep(p, "  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...boroughs.colliders, ...(cityGrid.colliders || [])];",
+    "  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...boroughs.colliders, ...(cityGrid.colliders || []), ...(gtaPlaces ? gtaPlaces.colliders : [])];")
+rep(p, """    lightingSystem.applyPreset(timeId);
+    colorGrade.applyPreset(lightingSystem.activePresetId);""", """    lightingSystem.applyPreset(timeId);
+    colorGrade.applyPreset(lightingSystem.activePresetId);
+    if (gtaPlaces) gtaPlaces.setNight(lightingSystem.uNightFactor.value);""")
+
 for p, s in _files.items():
     open(f'{S}/{p}', 'w').write(s)
 print('ok', len(_files), 'files')

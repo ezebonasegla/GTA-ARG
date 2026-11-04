@@ -28,6 +28,10 @@ Todo sale del mapa del juego (`public/data/quilmes.json`), así las dos versione
   - km/h y metros, cámaras en lugares de Quilmes, menús en castellano;
   - los negocios reales en los carteles de las fachadas;
   - los lugares del juego en el mapa y en "Ir a".
+- `src/slop/gtaWorld.js` (empaquetado con `vite.slop.config.js` en `js/gta-world.js`): el mismo código del juego
+  (`src/world/landmarks.js`, `zones.js`) arma la Catedral, las iglesias, municipalidad y hospitales, las estaciones,
+  los estadios, la cervecería, las plazas, las canchas y la peatonal sobre `js/gta-world.json`, y los gira al marco
+  del motor (`GAME_FRAME` en `js/quilmes-places.js`).
 - `tools/geo-base.mjs`: el marco de Quilmes (origen en Alsina y Av. Mitre, cuadrícula girada 58°). La zona detallada
   cubre todas las calles del mapa.
 
@@ -41,6 +45,7 @@ node <dir>/app/tools/build-buildings.mjs tools/data/cache/gob_quilmes.csv
 node <dir>/app/tools/build-trees.mjs
 node <dir>/app/tools/build-places.mjs public/data/quilmes.json
 python3 scripts/slop-quilmes/adapt_quilmes.py <dir>/app
+npx vite build -c vite.slop.config.js && cp scripts/slop-quilmes/build/gta-world.js <dir>/app/js/   # los lugares hechos a mano del juego
 python3 scripts/slop-quilmes/adapt_full.py <dir>/app
 scripts/slop-quilmes/publish.sh <dir>/app   # copia a public/slop-quilmes/ y marca la versión en cada import (?v=...) para que
 # los navegadores no sigan usando los módulos viejos de la caché

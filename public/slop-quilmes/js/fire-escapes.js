@@ -5,7 +5,7 @@ import {
   positionGeometry, positionLocal, normalGeometry,
   abs, floor, fract, mod, round, step, fwidth, max, min, mix, clamp
 } from 'three/tsl';
-import { filteredPulse } from './tsl-materials.js?v=q3';
+import { filteredPulse } from './tsl-materials.js?v=q4';
 
 const MAX_ESCAPES = 2400;
 const MAX_LANDINGS = 7; // (buildings.js addSurveyedFireEscapes)

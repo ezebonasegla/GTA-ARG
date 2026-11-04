@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { toWorld, log } from './geo-base.mjs';
+import path from 'node:path';
 
 const game = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const { lat: LAT0, lon: LON0 } = game.origin;
@@ -11,7 +12,45 @@ const A = 6378137.0, E2 = 6.69437999014e-3;
 const PHI0 = (LAT0 * Math.PI) / 180, S0 = Math.sin(PHI0);
 const KX = (Math.PI / 180) * (A / Math.sqrt(1 - E2 * S0 * S0)) * Math.cos(PHI0);
 const KY = (Math.PI / 180) * ((A * (1 - E2)) / Math.pow(1 - E2 * S0 * S0, 1.5));
-const grid = (x, z) => toWorld(LON0 + x / KX, LAT0 - z / KY).map((v) => Math.round(v * 10) / 10);
+// game metres -> lon/lat exactly as prepare.py does (local tangent plane through ECEF)
+const lo0 = (LON0 * Math.PI) / 180, la0 = (LAT0 * Math.PI) / 180;
+const N0 = A / Math.sqrt(1 - E2 * Math.sin(la0) ** 2);
+const X0 = N0 * Math.cos(la0) * Math.cos(lo0), Y0 = N0 * Math.cos(la0) * Math.sin(lo0), Z0 = N0 * (1 - E2) * Math.sin(la0);
+const [sl, cl, sp, cp] = [Math.sin(lo0), Math.cos(lo0), Math.sin(la0), Math.cos(la0)];
+function lonLat(x, z) {
+  const e = x, n = -z;
+  const X = X0 - sl * e - sp * cl * n, Y = Y0 + cl * e - sp * sl * n, Z = Z0 + cp * n;
+  const p = Math.hypot(X, Y);
+  let lat = Math.atan2(Z, p * (1 - E2));
+  for (let i = 0; i < 6; i++) {
+    const N = A / Math.sqrt(1 - E2 * Math.sin(lat) ** 2);
+    lat = Math.atan2(Z + E2 * N * Math.sin(lat), p);
+  }
+  return [(Math.atan2(Y, X) * 180) / Math.PI, (lat * 180) / Math.PI];
+}
+const gridExact = (x, z) => toWorld(...lonLat(x, z));
+const grid = (x, z) => gridExact(x, z).map((v) => Math.round(v * 10) / 10);
+// the game's frame as one rigid turn + offset (for the hand-made places): least squares over the map
+let theta = 0, ox = 0, oz = 0, resid = 0;
+{
+  const P = [];
+  for (let x = -4400; x <= 5700; x += 400) for (let z = -3800; z <= 6300; z += 400) P.push([x, z, ...gridExact(x, z)]);
+  const n = P.length;
+  const mx = P.reduce((t, p) => t + p[0], 0) / n, mz = P.reduce((t, p) => t + p[1], 0) / n;
+  const gx = P.reduce((t, p) => t + p[2], 0) / n, gz = P.reduce((t, p) => t + p[3], 0) / n;
+  let sxx = 0, sxz = 0;
+  for (const [x, z, u, v] of P) {
+    const a = x - mx, b = z - mz, c = u - gx, d = v - gz;
+    sxx += a * c + b * d; // grid = R(theta) game: u = x cos + z sin, v = -x sin + z cos
+    sxz += b * c - a * d;
+  }
+  theta = Math.atan2(sxz, sxx);
+  const c = Math.cos(theta), s = Math.sin(theta);
+  ox = gx - (mx * c + mz * s);
+  oz = gz - (-mx * s + mz * c);
+  for (const [x, z, u, v] of P) resid = Math.max(resid, Math.hypot(x * c + z * s + ox - u, -x * s + z * c + oz - v));
+}
+log(`game frame -> grid: theta ${(theta * 180 / Math.PI).toFixed(4)}°, offset ${ox.toFixed(2)}, ${oz.toFixed(2)}, max error ${resid.toFixed(2)} m`);
 
 const shops = game.shops.filter((s) => s.name).map((s) => [s.name, s.kind || '', ...grid(s.x, s.z)]);
 const landmarks = game.landmarks.map((l) => [l.name, ...grid(l.pos[0], l.pos[1])]);
@@ -24,5 +63,16 @@ export const SHOPS = ${JSON.stringify(shops)};
 // [name, x, z]
 export const LANDMARKS = ${JSON.stringify(landmarks)};
 export const STATIONS = ${JSON.stringify(stations)};
+// game metres -> grid: grid = R(theta) * game + (x, z), theta about +y
+export const GAME_FRAME = ${JSON.stringify({ theta, x: ox, z: oz })};
 `);
+// what the game's landmarks.js / zones.js read
+const world = {
+  roads: game.roads, specials: game.specials, shops: game.shops,
+  buildings: game.buildings.filter((b) => b.special).map((b) => ({ pts: b.pts, h: b.h, levels: b.levels, special: b.special, name: b.name })),
+  bounds: game.bounds,
+};
+const wout = path.join(path.dirname(out), 'gta-world.json');
+fs.writeFileSync(wout, JSON.stringify(world));
+log(`wrote ${wout} (${(fs.statSync(wout).size / 1024).toFixed(0)} KB)`);
 log(`wrote ${out}: ${shops.length} shops, ${landmarks.length} landmarks, ${stations.length} stations`);

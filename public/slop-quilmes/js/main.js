@@ -1,26 +1,28 @@
 import * as THREE from 'three/webgpu';
 import { pass, mrt, output, normalView, positionView, metalness, roughness, vec2, smoothstep } from 'three/tsl';
 import { ssr } from 'three/addons/tsl/display/SSRNode.js';
-import { createPostProcessing } from './post-processing.js?v=q3';
+import { createPostProcessing } from './post-processing.js?v=q4';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
-import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js?v=q3';
+import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js?v=q4';
 
 const PLAYER_STATE_KEY = 'santafe-player-state';
-import { buildCityGrid } from './city-grid.js?v=q3';
-import { buildBoroughs } from './boroughs.js?v=q3';
-import { buildLandmarks } from './landmarks.js?v=q3';
-import { buildCityBlocks } from './buildings.js?v=q3';
-import { buildStreetDetails } from './street-details.js?v=q3';
-import { createTrafficSystem, createHighwayTraffic } from './traffic.js?v=q3';
-import { buildRoadPaint } from './road-paint.js?v=q3';
-import { ThirdPersonControllerManager } from './controllers.js?v=q3';
-import { TouchControls } from './touch-controls.js?v=q3';
-import { GamepadControls } from './gamepad-controls.js?v=q3';
-import { CameraSystem, CAMERA_PRESETS } from './cameras.js?v=q3';
-import { LightingSystem } from './lighting.js?v=q3';
-import { NYCMapSystem } from './nyc-map.js?v=q3';
-import { setupSceneCulling, updateSceneCulling } from './scene-culling.js?v=q3';
-import { CityAudioSystem } from './audio-system.js?v=q3';
+import { buildCityGrid } from './city-grid.js?v=q4';
+import { buildBoroughs } from './boroughs.js?v=q4';
+import { buildLandmarks } from './landmarks.js?v=q4';
+import { buildGtaWorld } from './gta-world.js?v=q4';
+import { GAME_FRAME } from './quilmes-places.js?v=q4';
+import { buildCityBlocks } from './buildings.js?v=q4';
+import { buildStreetDetails } from './street-details.js?v=q4';
+import { createTrafficSystem, createHighwayTraffic } from './traffic.js?v=q4';
+import { buildRoadPaint } from './road-paint.js?v=q4';
+import { ThirdPersonControllerManager } from './controllers.js?v=q4';
+import { TouchControls } from './touch-controls.js?v=q4';
+import { GamepadControls } from './gamepad-controls.js?v=q4';
+import { CameraSystem, CAMERA_PRESETS } from './cameras.js?v=q4';
+import { LightingSystem } from './lighting.js?v=q4';
+import { NYCMapSystem } from './nyc-map.js?v=q4';
+import { setupSceneCulling, updateSceneCulling } from './scene-culling.js?v=q4';
+import { CityAudioSystem } from './audio-system.js?v=q4';
 
 // Application setup, shader warm-up and frame loop.
 
@@ -92,11 +94,18 @@ async function initApp() {
   markInit('boroughs');
   await showLoadingStage('Building landmarks...');
   const { colliders: landmarkColliders } = buildLandmarks(scene);
+  // GTA Quilmes: the game's cathedral, churches, stations, stadiums, brewery, plazas and peatonal (src/slop/gtaWorld.js)
+  let gtaPlaces = null;
+  try {
+    gtaPlaces = await buildGtaWorld(scene, { dataUrl: new URL('./gta-world.json?v=q4', import.meta.url), frame: GAME_FRAME });
+  } catch (err) {
+    console.error('[gta-world]', err);
+  }
   markInit('landmarks');
   await showLoadingStage('Generating building footprints and facades...');
   const cityBlocks = buildCityBlocks(scene, landmarkColliders);
   markInit('blocks');
-  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...boroughs.colliders, ...(cityGrid.colliders || [])];
+  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...boroughs.colliders, ...(cityGrid.colliders || []), ...(gtaPlaces ? gtaPlaces.colliders : [])];
 
   await showLoadingStage('Placing trees, streetlights and street furniture...');
   const streetDetails = buildStreetDetails(scene, allColliders);
@@ -347,6 +356,7 @@ async function initApp() {
   function selectTime(timeId) {
     lightingSystem.applyPreset(timeId);
     colorGrade.applyPreset(lightingSystem.activePresetId);
+    if (gtaPlaces) gtaPlaces.setNight(lightingSystem.uNightFactor.value);
     timeButtons.forEach((btn) => {
       btn.classList.toggle('active', btn.getAttribute('data-time') === timeId);
     });

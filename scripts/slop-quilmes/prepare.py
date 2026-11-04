@@ -88,10 +88,27 @@ json.dump({'version': 0.6, 'elements': els}, open(f'{S}/app/tools/data/osm_quilm
 print('osm elements', len(els), 'nodes', len(ids))
 
 # ---------------------------------------------------------------- buildings -> Open Buildings-style CSV
+# as in the game: churches are modelled whole by its landmarks.js, stadium stands replace what is under them
+stands = [(s['box'], 3 + max(s.get('depth') or 0, 12)) for s in g['specials'] if s['type'] == 'stadium']
+
+
+def under_stand(x, z):
+    for o, r in stands:
+        dx, dz = x - o['cx'], z - o['cz']
+        if abs(dx * o['ux'] + dz * o['uz']) < o['hu'] + r and abs(dx * o['vx'] + dz * o['vz']) < o['hv'] + r:
+            return True
+    return False
+
+
 rows, heights = ['latitude,longitude,area_in_meters,confidence,geometry,full_plus_code'], ['0,0,0']
 for b in g['buildings']:
     p = np.asarray(b['pts'], float)
     if len(p) < 3:
+        continue
+    spec = b.get('special')
+    if spec and spec['type'] in ('cathedral', 'church'):
+        continue
+    if not spec and under_stand(*b['pts'][0]):
         continue
     x, z = p[:, 0], p[:, 1]
     area = abs(np.dot(x, np.roll(z, 1)) - np.dot(z, np.roll(x, 1))) / 2

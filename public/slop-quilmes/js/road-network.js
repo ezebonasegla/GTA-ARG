@@ -4,9 +4,9 @@ import {
   ISLAND_BOUNDS,
   getIslandBoundsAtZ,
   BLOCKS
-} from './city-config.js?v=q3';
-import { GEO } from './nyc-geodata.js?v=q3';
-import { polygonBoxOverlaps } from './building-collision.js?v=q3';
+} from './city-config.js?v=q4';
+import { GEO } from './nyc-geodata.js?v=q4';
+import { polygonBoxOverlaps } from './building-collision.js?v=q4';
 
 // Drivable road graph derived from the ground layout that city-grid.js actually builds: avenue corridors
 // between the raised curbs, cross-street gaps between curb rows, lanes that keep clear of medians, plazas

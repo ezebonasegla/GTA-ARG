@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
-import { createTreeMaterial } from './tsl-materials.js?v=q3';
-import { polygonBoxOverlaps } from './building-collision.js?v=q3';
+import { createTreeMaterial } from './tsl-materials.js?v=q4';
+import { polygonBoxOverlaps } from './building-collision.js?v=q4';
 
 // Seeded street and park trees with three geometry levels, regrouped by spatial cell as the camera moves.
 // Bark tubes and leaf cards share a material; atlas mipmaps preserve leaf coverage at a distance.
