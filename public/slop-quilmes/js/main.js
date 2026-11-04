@@ -1,28 +1,28 @@
 import * as THREE from 'three/webgpu';
-import { pass, mrt, output, normalView, positionView, metalness, roughness, vec2, smoothstep } from 'three/tsl';
+import { pass, mrt, output, normalView, positionView, metalness, roughness, vec2, vec4, smoothstep } from 'three/tsl';
 import { ssr } from 'three/addons/tsl/display/SSRNode.js';
-import { createPostProcessing } from './post-processing.js?v=q13';
+import { createPostProcessing } from './post-processing.js?v=q14';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
-import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js?v=q13';
+import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js?v=q14';
 
 const PLAYER_STATE_KEY = 'santafe-player-state';
-import { buildCityGrid } from './city-grid.js?v=q13';
-import { buildBoroughs } from './boroughs.js?v=q13';
-import { buildLandmarks } from './landmarks.js?v=q13';
-import { buildGtaWorld, buildHouses } from './gta-world.js?v=q13';
-import { GAME_FRAME } from './quilmes-places.js?v=q13';
-import { buildCityBlocks } from './buildings.js?v=q13';
-import { buildStreetDetails } from './street-details.js?v=q13';
-import { createTrafficSystem, createHighwayTraffic } from './traffic.js?v=q13';
-import { buildRoadPaint } from './road-paint.js?v=q13';
-import { ThirdPersonControllerManager } from './controllers.js?v=q13';
-import { TouchControls } from './touch-controls.js?v=q13';
-import { GamepadControls } from './gamepad-controls.js?v=q13';
-import { CameraSystem, CAMERA_PRESETS } from './cameras.js?v=q13';
-import { LightingSystem } from './lighting.js?v=q13';
-import { NYCMapSystem } from './nyc-map.js?v=q13';
-import { setupSceneCulling, updateSceneCulling } from './scene-culling.js?v=q13';
-import { CityAudioSystem } from './audio-system.js?v=q13';
+import { buildCityGrid } from './city-grid.js?v=q14';
+import { buildBoroughs } from './boroughs.js?v=q14';
+import { buildLandmarks } from './landmarks.js?v=q14';
+import { buildGtaWorld, buildHouses } from './gta-world.js?v=q14';
+import { GAME_FRAME } from './quilmes-places.js?v=q14';
+import { buildCityBlocks } from './buildings.js?v=q14';
+import { buildStreetDetails } from './street-details.js?v=q14';
+import { createTrafficSystem, createHighwayTraffic } from './traffic.js?v=q14';
+import { buildRoadPaint } from './road-paint.js?v=q14';
+import { ThirdPersonControllerManager } from './controllers.js?v=q14';
+import { TouchControls } from './touch-controls.js?v=q14';
+import { GamepadControls } from './gamepad-controls.js?v=q14';
+import { CameraSystem, CAMERA_PRESETS } from './cameras.js?v=q14';
+import { LightingSystem } from './lighting.js?v=q14';
+import { NYCMapSystem } from './nyc-map.js?v=q14';
+import { setupSceneCulling, updateSceneCulling } from './scene-culling.js?v=q14';
+import { CityAudioSystem } from './audio-system.js?v=q14';
 
 // Application setup, shader warm-up and frame loop.
 
@@ -67,6 +67,7 @@ async function initApp() {
   const renderer = new THREE.WebGPURenderer({
     antialias: true,
     powerPreference: 'high-performance',
+    forceWebGL: /[?&]webgl/.test(location.search), // ?webgl: the WebGL 2 backend instead of WebGPU
     reversedDepthBuffer: true
   });
   renderer.setPixelRatio(1.0);
@@ -105,7 +106,7 @@ async function initApp() {
   // GTA Quilmes: the game's cathedral, churches, stations, stadiums, brewery, plazas and peatonal (src/slop/gtaWorld.js)
   let gtaPlaces = null;
   try {
-    gtaPlaces = await buildGtaWorld(scene, { dataUrl: new URL('./gta-world.json?v=q13', import.meta.url), frame: GAME_FRAME });
+    gtaPlaces = await buildGtaWorld(scene, { dataUrl: new URL('./gta-world.json?v=q14', import.meta.url), frame: GAME_FRAME });
   } catch (err) {
     console.error('[gta-world]', err);
   }
@@ -119,7 +120,7 @@ async function initApp() {
       const e = sv && sv.entities && sv.entities[sv.activeMode];
       if (e && Number.isFinite(e.x) && Number.isFinite(e.z)) center = { x: e.x, z: e.z };
     } catch (err) { /* no saved position */ }
-    gtaHouses = await buildHouses(scene, { dataUrl: new URL('./gta-houses.json?v=q13', import.meta.url), frame: GAME_FRAME, center, radius: lite ? 700 : Infinity });
+    gtaHouses = await buildHouses(scene, { dataUrl: new URL('./gta-houses.json?v=q14', import.meta.url), frame: GAME_FRAME, center, radius: lite ? 700 : Infinity });
   } catch (err) {
     console.error('[gta-houses]', err);
   }
@@ -259,31 +260,35 @@ async function initApp() {
   });
   sceneMRT.setBlendMode('normal', new THREE.BlendMode(THREE.MaterialBlending));
   sceneMRT.setBlendMode('metalRough', new THREE.BlendMode(THREE.MaterialBlending));
-  scenePass.setMRT(sceneMRT);
+  const LITE = !!window.SLOPQ_LITE;
+  if (!LITE) scenePass.setMRT(sceneMRT);
 
   const scenePassColor = scenePass.getTextureNode('output');
   const scenePassDepth = scenePass.getTextureNode('depth');
   const scenePassNormal = scenePass.getTextureNode('normal');
   const scenePassMetalRough = scenePass.getTextureNode('metalRough');
 
-  const ssrPass = ssr(scenePassColor, scenePassDepth, scenePassNormal, {
+  const ssrPass = LITE ? null : ssr(scenePassColor, scenePassDepth, scenePassNormal, {
     metalnessNode: scenePassMetalRough.r,
     roughnessNode: scenePassMetalRough.g,
     camera: cameraSystem.camera
   });
-  ssrPass.resolutionScale = 0.5;
-  ssrPass.blurQuality = 1;
-  ssrPass.maxDistance.value = 42;
-  ssrPass.thickness.value = 0.85;
-  // Fewer coarse steps, then refine detected hits to keep reflection edges precise.
-  ssrPass.quality.value = 0.25;
-  ssrPass.binaryRefine = true;
-  ssrPass.intensity.value = 0.50;
-  ssrPass.screenEdgeFadeBlack = true;
+  let reflections = vec4(0);
+  if (ssrPass) {
+    ssrPass.resolutionScale = 0.5;
+    ssrPass.blurQuality = 1;
+    ssrPass.maxDistance.value = 42;
+    ssrPass.thickness.value = 0.85;
+    // Fewer coarse steps, then refine detected hits to keep reflection edges precise.
+    ssrPass.quality.value = 0.25;
+    ssrPass.binaryRefine = true;
+    ssrPass.intensity.value = 0.50;
+    ssrPass.screenEdgeFadeBlack = true;
 
-  // Roughness mip blur must not spread reflections back onto matte or nonreflective surfaces.
-  const reflectionMask = scenePassMetalRough.r.greaterThan(0).select(smoothstep(maxSSRRoughness, 0.55, scenePassMetalRough.g), 0);
-  const reflections = ssrPass.mul(reflectionMask);
+    // Roughness mip blur must not spread reflections back onto matte or nonreflective surfaces.
+    const reflectionMask = scenePassMetalRough.r.greaterThan(0).select(smoothstep(maxSSRRoughness, 0.55, scenePassMetalRough.g), 0);
+    reflections = ssrPass.mul(reflectionMask);
+  }
   const colorGrade = createPostProcessing(renderer, scenePassColor, reflections);
   const renderPipeline = new THREE.RenderPipeline(renderer, colorGrade.outputNode);
 
@@ -638,6 +643,12 @@ async function initApp() {
   const nextTask = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise((resolve) => setTimeout(resolve, 0)));
   async function precompileShaders() {
     await showLoadingStage('Preparing reflections and bloom...');
+    // light mode: no MRT, so the materials' own MRT outputs (kept for the reflections) go
+    if (LITE) {
+      scene.traverse((o) => {
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m && m.mrtNode) m.mrtNode = null;
+      });
+    }
     // An empty frame first: it sets up the post-processing chain, which configures the scene pass's render target
     // (MSAA samples, depth format), so the pipelines compiled below are the very ones the scene pass asks for
     scene.visible = false;
@@ -680,7 +691,7 @@ async function initApp() {
     await showLoadingStage(`Compiling scene shaders... 0 / ${jobs.length} batches`);
     setLoadingProgress(0);
     renderer.setRenderTarget(scenePass.renderTarget);
-    renderer.setMRT(sceneMRT);
+    if (!LITE) renderer.setMRT(sceneMRT);
     const compile = async (object) => {
       // Each compile starts in a task of its own: compileAsync() keeps one precompilation state on the renderer,
       // which must not be mid-step for two of them in the same microtask checkpoint
@@ -834,4 +845,16 @@ async function initApp() {
   });
 }
 
-initApp();
+// Any error while loading shows on the loading screen (phones have no console)
+function showLoadError(msg) {
+  const el = document.getElementById('loading-status') || document.querySelector('.loader-status, #loader p, .loader p');
+  const box = document.getElementById('slopq-error') || document.createElement('div');
+  box.id = 'slopq-error';
+  box.style.cssText = 'margin-top:12px;font-size:12px;color:#ff8a80;max-width:340px;text-align:center;white-space:pre-wrap;word-break:break-word';
+  box.textContent = 'Error: ' + String(msg).slice(0, 400);
+  if (el && !box.parentNode) el.after(box);
+  else if (!box.parentNode) document.body.appendChild(box);
+}
+addEventListener('error', (e) => showLoadError(e.message || e.error));
+addEventListener('unhandledrejection', (e) => showLoadError((e.reason && (e.reason.stack || e.reason.message)) || e.reason));
+initApp().catch((e) => showLoadError((e && (e.stack || e.message)) || e));

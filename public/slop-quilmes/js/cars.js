@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { cityUniforms } from './tsl-materials.js?v=q13';
+import { cityUniforms } from './tsl-materials.js?v=q14';
 import {
   Fn,
   If,
@@ -36,7 +36,7 @@ import {
 } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LoftGeometry } from 'three/addons/geometries/LoftGeometry.js';
-import { part, mirrorSection, roundedRectShape, roundedBox } from './vehicles.js?v=q13';
+import { part, mirrorSection, roundedRectShape, roundedBox } from './vehicles.js?v=q14';
 
 // Car geometry and materials, lofted with LoftGeometry and adapted from Three.js CarGenerator. The bus (bus.js) lofts
 // its body with the same machinery; the pieces every vehicle uses are in vehicles.js.

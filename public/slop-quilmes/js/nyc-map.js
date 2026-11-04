@@ -1,4 +1,4 @@
-import { GEO } from './nyc-geodata.js?v=q13';
+import { GEO } from './nyc-geodata.js?v=q14';
 import {
   ROADS,
   BLOCKS,
@@ -26,7 +26,7 @@ import {
   OUTER_BRIDGES,
   getLocationLabel,
   isTypingInField
-} from './city-config.js?v=q13';
+} from './city-config.js?v=q14';
 
 // Minimap and full-screen map drawn from the same geography and building footprints as the 3D city.
 // World frame: 1 unit = 1 m, x = Manhattan-grid east, z = grid south. Both maps face grid north,

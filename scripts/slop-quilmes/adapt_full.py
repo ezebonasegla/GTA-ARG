@@ -765,6 +765,52 @@ rep(p, """        console.log(`[init] ${initTimings.join(', ')}`);""", """      
 _files[p] = src(p).replace("""    const lite = /[?&]liviano/.test(location.search) ||
       (!/[?&]completo/.test(location.search) && (matchMedia('(pointer: coarse)').matches || (navigator.deviceMemory || 8) <= 4));""", """    const lite = !!window.SLOPQ_LITE;""")
 
+# light mode: no screen-space reflections (and no MRT for them); errors shown on the loading screen
+p = 'js/main.js'
+rep(p, "import { pass, mrt, output, normalView, positionView, metalness, roughness, vec2, smoothstep } from 'three/tsl';",
+    "import { pass, mrt, output, normalView, positionView, metalness, roughness, vec2, vec4, smoothstep } from 'three/tsl';")
+rep(p, """  scenePass.setMRT(sceneMRT);
+
+  const scenePassColor = scenePass.getTextureNode('output');""", """  const LITE = !!window.SLOPQ_LITE;
+  if (!LITE) scenePass.setMRT(sceneMRT);
+
+  const scenePassColor = scenePass.getTextureNode('output');""")
+rep(p, """  const ssrPass = ssr(scenePassColor, scenePassDepth, scenePassNormal, {""", """  const ssrPass = LITE ? null : ssr(scenePassColor, scenePassDepth, scenePassNormal, {""")
+s = src(p)
+a = s.index("  ssrPass.resolutionScale = 0.5;")
+b = s.index("  const colorGrade = createPostProcessing(renderer, scenePassColor, reflections);")
+block = s[a:b]
+s = s[:a] + "  let reflections = vec4(0);\n  if (ssrPass) {\n" + "\n".join(("  " + l) if l.strip() else l for l in block.replace("  const reflections = ssrPass.mul(reflectionMask);", "  reflections = ssrPass.mul(reflectionMask);").rstrip("\n").split("\n")) + "\n  }\n" + s[b:]
+_files[p] = s
+rep(p, "    renderer.setMRT(sceneMRT);", "    if (!LITE) renderer.setMRT(sceneMRT);")
+rep(p, "\ninitApp();", """
+// Any error while loading shows on the loading screen (phones have no console)
+function showLoadError(msg) {
+  const el = document.getElementById('loading-status') || document.querySelector('.loader-status, #loader p, .loader p');
+  const box = document.getElementById('slopq-error') || document.createElement('div');
+  box.id = 'slopq-error';
+  box.style.cssText = 'margin-top:12px;font-size:12px;color:#ff8a80;max-width:340px;text-align:center;white-space:pre-wrap;word-break:break-word';
+  box.textContent = 'Error: ' + String(msg).slice(0, 400);
+  if (el && !box.parentNode) el.after(box);
+  else if (!box.parentNode) document.body.appendChild(box);
+}
+addEventListener('error', (e) => showLoadError(e.message || e.error));
+addEventListener('unhandledrejection', (e) => showLoadError((e.reason && (e.reason.stack || e.reason.message)) || e.reason));
+initApp().catch((e) => showLoadError((e && (e.stack || e.message)) || e));""")
+
+rep('js/main.js', """    powerPreference: 'high-performance',
+    reversedDepthBuffer: true""", """    powerPreference: 'high-performance',
+    forceWebGL: /[?&]webgl/.test(location.search), // ?webgl: the WebGL 2 backend instead of WebGPU
+    reversedDepthBuffer: true""")
+
+rep('js/main.js', """    await showLoadingStage('Preparing reflections and bloom...');""", """    await showLoadingStage('Preparing reflections and bloom...');
+    // light mode: no MRT, so the materials' own MRT outputs (kept for the reflections) go
+    if (LITE) {
+      scene.traverse((o) => {
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m && m.mrtNode) m.mrtNode = null;
+      });
+    }""")
+
 for p, s in _files.items():
     open(f'{S}/{p}', 'w').write(s)
 print('ok', len(_files), 'files')
